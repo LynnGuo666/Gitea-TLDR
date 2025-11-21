@@ -3,23 +3,23 @@ FROM python:3.11-slim
 # 设置工作目录
 WORKDIR /app
 
-# 安装系统依赖
+# 安装系统依赖和Node.js
 RUN apt-get update && apt-get install -y \
     git \
     curl \
     ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装Claude Code CLI
-# 注意：实际安装方式可能需要根据Claude Code的官方文档调整
-RUN curl -fsSL https://claude.ai/install.sh | sh || \
-    (echo "Claude Code安装失败，请检查安装脚本" && exit 1)
+# 验证Node.js和npm安装
+RUN node --version && npm --version
 
-# 确保claude在PATH中
-ENV PATH="/root/.local/bin:${PATH}"
+# 使用npm全局安装Claude Code CLI
+RUN npm install -g @anthropic-ai/claude-code
 
 # 验证Claude Code安装
-RUN claude --version || echo "警告：Claude Code未正确安装"
+RUN claude --version
 
 # 复制依赖文件
 COPY requirements.txt .
