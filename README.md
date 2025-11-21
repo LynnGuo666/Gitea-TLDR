@@ -252,38 +252,76 @@ server {
 }
 ```
 
-### 使用Docker（可选）
+### 使用Docker部署
 
-创建 `Dockerfile`：
+项目已包含完整的Docker支持，Claude Code CLI已打包在镜像中。
 
-```dockerfile
-FROM python:3.11-slim
+#### 方式1：使用Docker Compose（推荐）
 
-WORKDIR /app
-
-# 安装git
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
-
-# 复制依赖文件
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# 复制应用代码
-COPY app/ ./app/
-
-# 暴露端口
-EXPOSE 8000
-
-# 启动命令
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-构建和运行：
+1. 创建 `.env` 文件：
 
 ```bash
-docker build -t gitea-pr-reviewer .
-docker run -d -p 8000:8000 --env-file .env gitea-pr-reviewer
+cp .env.example .env
+# 编辑.env文件填写配置
 ```
+
+2. 启动服务：
+
+```bash
+docker-compose up -d
+```
+
+3. 查看日志：
+
+```bash
+docker-compose logs -f
+```
+
+4. 停止服务：
+
+```bash
+docker-compose down
+```
+
+#### 方式2：使用Docker命令
+
+```bash
+# 构建镜像
+docker build -t gitea-pr-reviewer .
+
+# 运行容器
+docker run -d \
+  --name gitea-pr-reviewer \
+  -p 8000:8000 \
+  -e GITEA_URL=https://gitea.example.com \
+  -e GITEA_TOKEN=your_token \
+  -e WEBHOOK_SECRET=your_secret \
+  gitea-pr-reviewer
+```
+
+#### 方式3：使用GitHub Container Registry
+
+项目配置了GitHub Actions自动构建，可以直接拉取镜像：
+
+```bash
+# 拉取最新镜像
+docker pull ghcr.io/your-username/gitea-tldr:latest
+
+# 运行
+docker run -d \
+  --name gitea-pr-reviewer \
+  -p 8000:8000 \
+  --env-file .env \
+  ghcr.io/your-username/gitea-tldr:latest
+```
+
+#### Docker镜像特性
+
+- 基于 `python:3.11-slim`
+- 已预装 Claude Code CLI
+- 支持 `linux/amd64` 和 `linux/arm64` 架构
+- 包含健康检查
+- 自动重启策略
 
 ## 故障排查
 
