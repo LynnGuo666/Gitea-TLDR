@@ -18,6 +18,8 @@ services:
 
       # Claude Code配置
       - CLAUDE_CODE_PATH=claude
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}
 
       # 工作目录配置
       - WORK_DIR=/tmp/gitea-pr-reviewer
@@ -28,9 +30,6 @@ services:
 
       # 日志配置
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-
-      # Claude API配置（如果需要）
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     volumes:
       # 持久化工作目录（可选）
       - pr-reviewer-data:/tmp/gitea-pr-reviewer
