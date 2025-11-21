@@ -105,6 +105,16 @@ class WebhookHandler:
                 f"({head_branch} -> {base_branch})"
             )
 
+            # 创建初始评论（如果启用了comment功能）
+            comment_id = None
+            if "comment" in features:
+                initial_comment = "## 自动代码审查\n\n正在审查中，请稍候..."
+                comment_id = await self.gitea_client.create_issue_comment(
+                    owner, repo_name, pr_number, initial_comment
+                )
+                if comment_id:
+                    logger.info(f"已创建初始评论，ID: {comment_id}")
+
             # 设置初始状态
             if "status" in features:
                 await self.gitea_client.create_commit_status(
@@ -122,6 +132,12 @@ class WebhookHandler:
 
             if not diff_content:
                 logger.error("无法获取PR diff")
+                # 更新评论为错误状态
+                if comment_id:
+                    error_comment = "## 自动代码审查\n\n审查失败：无法获取PR diff"
+                    await self.gitea_client.update_issue_comment(
+                        owner, repo_name, comment_id, error_comment
+                    )
                 if "status" in features:
                     await self.gitea_client.create_commit_status(
                         owner,
@@ -156,6 +172,12 @@ class WebhookHandler:
 
             if not analysis_result:
                 logger.error("Claude分析失败")
+                # 更新评论为错误状态
+                if comment_id:
+                    error_comment = "## 自动代码审查\n\n审查失败：Claude分析过程出错"
+                    await self.gitea_client.update_issue_comment(
+                        owner, repo_name, comment_id, error_comment
+                    )
                 if "status" in features:
                     await self.gitea_client.create_commit_status(
                         owner,
@@ -169,12 +191,20 @@ class WebhookHandler:
             # 根据功能标头发布结果
             success = True
 
-            # 发布评论
+            # 更新或创建评论
             if "comment" in features:
-                comment_body = f"## 🤖 自动代码审查报告\n\n{analysis_result}"
-                success &= await self.gitea_client.create_issue_comment(
-                    owner, repo_name, pr_number, comment_body
-                )
+                comment_body = f"## 自动代码审查报告\n\n{analysis_result}"
+                if comment_id:
+                    # 更新已有评论
+                    success &= await self.gitea_client.update_issue_comment(
+                        owner, repo_name, comment_id, comment_body
+                    )
+                else:
+                    # 如果初始评论创建失败，则创建新评论
+                    new_comment_id = await self.gitea_client.create_issue_comment(
+                        owner, repo_name, pr_number, comment_body
+                    )
+                    success &= (new_comment_id is not None)
 
             # 创建Review
             if "review" in features:

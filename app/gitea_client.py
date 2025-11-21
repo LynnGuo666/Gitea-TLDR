@@ -100,7 +100,7 @@ class GiteaClient:
 
     async def create_issue_comment(
         self, owner: str, repo: str, pr_number: int, body: str
-    ) -> bool:
+    ) -> Optional[int]:
         """
         在PR中创建评论
 
@@ -111,7 +111,7 @@ class GiteaClient:
             body: 评论内容
 
         Returns:
-            是否成功
+            评论ID，失败返回None
         """
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/issues/{pr_number}/comments"
         try:
@@ -120,10 +120,40 @@ class GiteaClient:
                     url, headers=self.headers, json={"body": body}
                 )
                 response.raise_for_status()
-                logger.info(f"成功创建PR评论: {owner}/{repo}#{pr_number}")
-                return True
+                comment_data = response.json()
+                comment_id = comment_data.get("id")
+                logger.info(f"成功创建PR评论: {owner}/{repo}#{pr_number}, ID: {comment_id}")
+                return comment_id
         except Exception as e:
             logger.error(f"创建PR评论失败: {e}")
+            return None
+
+    async def update_issue_comment(
+        self, owner: str, repo: str, comment_id: int, body: str
+    ) -> bool:
+        """
+        更新PR评论
+
+        Args:
+            owner: 仓库所有者
+            repo: 仓库名称
+            comment_id: 评论ID
+            body: 新的评论内容
+
+        Returns:
+            是否成功
+        """
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/issues/comments/{comment_id}"
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.patch(
+                    url, headers=self.headers, json={"body": body}
+                )
+                response.raise_for_status()
+                logger.info(f"成功更新PR评论: {owner}/{repo}, 评论ID: {comment_id}")
+                return True
+        except Exception as e:
+            logger.error(f"更新PR评论失败: {e}")
             return False
 
     async def create_review(
