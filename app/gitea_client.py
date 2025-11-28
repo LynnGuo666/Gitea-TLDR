@@ -4,6 +4,7 @@ Gitea API客户端模块
 import httpx
 from typing import Optional, Dict, Any, List
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -11,20 +12,46 @@ logger = logging.getLogger(__name__)
 class GiteaClient:
     """Gitea API客户端"""
 
-    def __init__(self, base_url: str, token: str):
+    def __init__(self, base_url: str, token: str, debug: bool = False):
         """
         初始化Gitea客户端
 
         Args:
             base_url: Gitea服务器URL
             token: 访问令牌
+            debug: 是否开启debug模式
         """
         self.base_url = base_url.rstrip("/")
         self.token = token
+        self.debug = debug
         self.headers = {
             "Authorization": f"token {token}",
             "Content-Type": "application/json",
         }
+
+    def _log_debug(self, method: str, url: str, **kwargs):
+        """记录debug日志"""
+        if self.debug:
+            logger.debug(f"[API请求] {method} {url}")
+            if "json" in kwargs:
+                logger.debug(f"[请求体] {json.dumps(kwargs['json'], ensure_ascii=False, indent=2)}")
+
+    def _log_response(self, response: httpx.Response):
+        """记录响应debug日志"""
+        if self.debug:
+            logger.debug(f"[响应状态] {response.status_code}")
+            logger.debug(f"[响应头] {dict(response.headers)}")
+            try:
+                # 尝试解析JSON响应
+                response_data = response.json()
+                logger.debug(f"[响应体] {json.dumps(response_data, ensure_ascii=False, indent=2)}")
+            except:
+                # 如果不是JSON，记录文本内容（限制长度）
+                text = response.text
+                if len(text) > 1000:
+                    logger.debug(f"[响应体] {text[:1000]}... (truncated)")
+                else:
+                    logger.debug(f"[响应体] {text}")
 
     async def get_pull_request(
         self, owner: str, repo: str, pr_number: int
@@ -42,8 +69,10 @@ class GiteaClient:
         """
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/pulls/{pr_number}"
         try:
+            self._log_debug("GET", url)
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, headers=self.headers)
+                self._log_response(response)
                 response.raise_for_status()
                 return response.json()
         except Exception as e:
@@ -66,8 +95,10 @@ class GiteaClient:
         """
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/pulls/{pr_number}.diff"
         try:
+            self._log_debug("GET", url)
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, headers=self.headers)
+                self._log_response(response)
                 response.raise_for_status()
                 return response.text
         except Exception as e:
@@ -90,8 +121,10 @@ class GiteaClient:
         """
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/pulls/{pr_number}/files"
         try:
+            self._log_debug("GET", url)
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, headers=self.headers)
+                self._log_response(response)
                 response.raise_for_status()
                 return response.json()
         except Exception as e:
@@ -114,11 +147,14 @@ class GiteaClient:
             评论ID，失败返回None
         """
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/issues/{pr_number}/comments"
+        payload = {"body": body}
         try:
+            self._log_debug("POST", url, json=payload)
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    url, headers=self.headers, json={"body": body}
+                    url, headers=self.headers, json=payload
                 )
+                self._log_response(response)
                 response.raise_for_status()
                 comment_data = response.json()
                 comment_id = comment_data.get("id")
@@ -144,11 +180,14 @@ class GiteaClient:
             是否成功
         """
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/issues/comments/{comment_id}"
+        payload = {"body": body}
         try:
+            self._log_debug("PATCH", url, json=payload)
             async with httpx.AsyncClient() as client:
                 response = await client.patch(
-                    url, headers=self.headers, json={"body": body}
+                    url, headers=self.headers, json=payload
                 )
+                self._log_response(response)
                 response.raise_for_status()
                 logger.info(f"成功更新PR评论: {owner}/{repo}, 评论ID: {comment_id}")
                 return True
@@ -185,8 +224,10 @@ class GiteaClient:
             payload["comments"] = comments
 
         try:
+            self._log_debug("POST", url, json=payload)
             async with httpx.AsyncClient() as client:
                 response = await client.post(url, headers=self.headers, json=payload)
+                self._log_response(response)
                 response.raise_for_status()
                 logger.info(f"成功创建PR审查: {owner}/{repo}#{pr_number}")
                 return True
@@ -228,8 +269,10 @@ class GiteaClient:
         }
 
         try:
+            self._log_debug("POST", url, json=payload)
             async with httpx.AsyncClient() as client:
                 response = await client.post(url, headers=self.headers, json=payload)
+                self._log_response(response)
                 response.raise_for_status()
                 logger.info(f"成功设置提交状态: {owner}/{repo}@{sha[:7]} -> {state}")
                 return True

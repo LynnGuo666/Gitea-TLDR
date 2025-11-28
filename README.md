@@ -295,6 +295,8 @@ docker run -d \
   -p 8000:8000 \
   -e GITEA_URL=https://gitea.example.com \
   -e GITEA_TOKEN=your_token \
+  -e ANTHROPIC_BASE_URL=https://api.anthropic.com \
+  -e ANTHROPIC_AUTH_TOKEN=your_anthropic_token \
   -e WEBHOOK_SECRET=your_secret \
   gitea-pr-reviewer
 ```
@@ -307,18 +309,29 @@ docker run -d \
 # 拉取最新镜像
 docker pull ghcr.io/your-username/gitea-tldr:latest
 
-# 运行
+# 运行（推荐使用.env文件）
 docker run -d \
   --name gitea-pr-reviewer \
   -p 8000:8000 \
   --env-file .env \
+  ghcr.io/your-username/gitea-tldr:latest
+
+# 或直接指定环境变量
+docker run -d \
+  --name gitea-pr-reviewer \
+  -p 8000:8000 \
+  -e GITEA_URL=https://gitea.example.com \
+  -e GITEA_TOKEN=your_token \
+  -e ANTHROPIC_BASE_URL=https://api.anthropic.com \
+  -e ANTHROPIC_AUTH_TOKEN=your_anthropic_token \
   ghcr.io/your-username/gitea-tldr:latest
 ```
 
 #### Docker镜像特性
 
 - 基于 `python:3.11-slim`
-- 已预装 Claude Code CLI
+- 已预装 Node.js 20.x 和 npm
+- 已预装 Claude Code CLI（通过npm安装）
 - 支持 `linux/amd64` 和 `linux/arm64` 架构
 - 包含健康检查
 - 自动重启策略

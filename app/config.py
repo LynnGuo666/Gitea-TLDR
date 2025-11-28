@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # 日志配置
     log_level: str = Field("INFO", description="日志级别")
 
+    # Debug模式
+    debug: bool = Field(False, description="Debug模式，开启后输出详细日志")
+
     # 审查配置
     default_review_focus: list[str] = Field(
         default=["quality", "security", "performance", "logic"],

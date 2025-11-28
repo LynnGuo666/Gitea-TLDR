@@ -12,14 +12,16 @@ logger = logging.getLogger(__name__)
 class ClaudeAnalyzer:
     """Claude Code分析器"""
 
-    def __init__(self, claude_code_path: str = "claude"):
+    def __init__(self, claude_code_path: str = "claude", debug: bool = False):
         """
         初始化Claude分析器
 
         Args:
             claude_code_path: Claude Code CLI的路径
+            debug: 是否开启debug模式
         """
         self.claude_code_path = claude_code_path
+        self.debug = debug
 
     def _build_review_prompt(
         self, diff_content: str, focus_areas: List[str], pr_info: dict
@@ -98,6 +100,10 @@ class ClaudeAnalyzer:
 
             logger.info(f"开始使用Claude Code分析PR，仓库路径: {repo_path}")
 
+            # Debug日志：输出提示词
+            if self.debug:
+                logger.debug(f"[Claude Prompt]\n{prompt}")
+
             # 调用Claude Code CLI
             # 使用 --message 参数传递提示词
             process = await asyncio.create_subprocess_exec(
@@ -121,6 +127,13 @@ class ClaudeAnalyzer:
                 return None
 
             result = stdout.decode()
+
+            # Debug日志：输出Claude返回结果
+            if self.debug:
+                logger.debug(f"[Claude Response]\n{result}")
+                if stderr:
+                    logger.debug(f"[Claude Stderr]\n{stderr.decode()}")
+
             logger.info("Claude Code分析完成")
             return result
 
@@ -147,6 +160,10 @@ class ClaudeAnalyzer:
 
             logger.info("开始使用Claude Code分析PR（简单模式）")
 
+            # Debug日志：输出提示词
+            if self.debug:
+                logger.debug(f"[Claude Prompt - Simple Mode]\n{prompt}")
+
             # 调用Claude Code CLI
             process = await asyncio.create_subprocess_exec(
                 self.claude_code_path,
@@ -163,6 +180,13 @@ class ClaudeAnalyzer:
                 return None
 
             result = stdout.decode()
+
+            # Debug日志：输出Claude返回结果
+            if self.debug:
+                logger.debug(f"[Claude Response - Simple Mode]\n{result}")
+                if stderr:
+                    logger.debug(f"[Claude Stderr - Simple Mode]\n{stderr.decode()}")
+
             logger.info("Claude Code分析完成（简单模式）")
             return result
 

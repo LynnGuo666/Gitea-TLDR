@@ -4,6 +4,7 @@ FastAPI主应用
 import logging
 import hmac
 import hashlib
+import json
 from typing import Optional
 from fastapi import FastAPI, Request, Header, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
@@ -15,7 +16,7 @@ from .webhook_handler import WebhookHandler
 
 # 配置日志
 logging.basicConfig(
-    level=settings.log_level,
+    level=settings.log_level if not settings.debug else "DEBUG",
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
@@ -28,9 +29,9 @@ app = FastAPI(
 )
 
 # 初始化组件
-gitea_client = GiteaClient(settings.gitea_url, settings.gitea_token)
+gitea_client = GiteaClient(settings.gitea_url, settings.gitea_token, settings.debug)
 repo_manager = RepoManager(settings.work_dir)
-claude_analyzer = ClaudeAnalyzer(settings.claude_code_path)
+claude_analyzer = ClaudeAnalyzer(settings.claude_code_path, settings.debug)
 webhook_handler = WebhookHandler(gitea_client, repo_manager, claude_analyzer)
 
 
@@ -104,6 +105,10 @@ async def webhook(
 
         # 解析JSON
         payload = await request.json()
+
+        # Debug日志：输出完整的webhook payload
+        if settings.debug:
+            logger.debug(f"[Webhook Payload] {json.dumps(payload, ensure_ascii=False, indent=2)}")
 
         # 检查事件类型
         if x_gitea_event != "pull_request":
