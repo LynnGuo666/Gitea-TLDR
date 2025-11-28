@@ -24,13 +24,12 @@ class ClaudeAnalyzer:
         self.debug = debug
 
     def _build_review_prompt(
-        self, diff_content: str, focus_areas: List[str], pr_info: dict
+        self, focus_areas: List[str], pr_info: dict
     ) -> str:
         """
-        构建审查提示词
+        构建审查提示词（不包含diff内容，diff通过stdin传递）
 
         Args:
-            diff_content: PR的diff内容
             focus_areas: 审查重点领域
             pr_info: PR信息
 
@@ -46,7 +45,7 @@ class ClaudeAnalyzer:
 
         focus_text = "、".join([focus_map.get(f, f) for f in focus_areas])
 
-        prompt = f"""请审查以下Pull Request的代码变更。
+        prompt = f"""请审查以下Pull Request的代码变更（diff内容已通过stdin提供）。
 
 **PR信息：**
 - 标题: {pr_info.get('title', 'N/A')}
@@ -55,11 +54,6 @@ class ClaudeAnalyzer:
 
 **审查重点：**
 {focus_text}
-
-**代码变更（diff）：**
-```diff
-{diff_content}
-```
 
 请提供详细的代码审查报告，包括：
 1. **总体评价**：对这次PR的整体评价
@@ -84,7 +78,7 @@ class ClaudeAnalyzer:
         Args:
             repo_path: 仓库本地路径
             diff_content: PR的diff内容
-            focus_areas: 审查重点领域
+            focus_areas: ���查重点领域
             pr_info: PR信息
 
         Returns:
@@ -92,38 +86,33 @@ class ClaudeAnalyzer:
         """
         try:
             # 构建审查提示词
-            prompt = self._build_review_prompt(diff_content, focus_areas, pr_info)
-
-            # 将提示词写入临时文件
-            prompt_file = repo_path / ".pr_review_prompt.txt"
-            prompt_file.write_text(prompt, encoding="utf-8")
+            prompt = self._build_review_prompt(focus_areas, pr_info)
 
             logger.info(f"开始使用Claude Code分析PR，仓库路径: {repo_path}")
 
-            # Debug日志：输出提示词
+            # Debug日志：输出提示词和diff
             if self.debug:
                 logger.debug(f"[Claude Prompt]\n{prompt}")
+                logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
             # 调用Claude Code CLI
-            # 使用 --message 参数传递提示词
+            # 使用 -p 参数传递提示词，通过stdin传递diff内容
             process = await asyncio.create_subprocess_exec(
                 self.claude_code_path,
-                "--message",
-                prompt,
-                "--cwd",
-                str(repo_path),
+                "-p", prompt,
+                "--output-format", "text",
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                cwd=str(repo_path),
             )
 
-            stdout, stderr = await process.communicate()
-
-            # 清理临时文件
-            if prompt_file.exists():
-                prompt_file.unlink()
+            # 通过stdin传递diff内容
+            stdout, stderr = await process.communicate(input=diff_content.encode('utf-8'))
 
             if process.returncode != 0:
-                logger.error(f"Claude Code执行失败: {stderr.decode()}")
+                logger.error(f"Claude Code执行失败 (返回码: {process.returncode})")
+                logger.error(f"Stderr: {stderr.decode()}")
                 return None
 
             result = stdout.decode()
@@ -138,7 +127,7 @@ class ClaudeAnalyzer:
             return result
 
         except Exception as e:
-            logger.error(f"Claude Code分析异常: {e}")
+            logger.error(f"Claude Code分析异常: {e}", exc_info=True)
             return None
 
     async def analyze_pr_simple(
@@ -156,27 +145,32 @@ class ClaudeAnalyzer:
             分析结果，失败返回None
         """
         try:
-            prompt = self._build_review_prompt(diff_content, focus_areas, pr_info)
+            prompt = self._build_review_prompt(focus_areas, pr_info)
 
             logger.info("开始使用Claude Code分析PR（简单模式）")
 
-            # Debug日志：输出提示词
+            # Debug日志：输出提示词和diff
             if self.debug:
                 logger.debug(f"[Claude Prompt - Simple Mode]\n{prompt}")
+                logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
             # 调用Claude Code CLI
+            # 使用 -p 参数传递提示词，通过stdin传递diff内容
             process = await asyncio.create_subprocess_exec(
                 self.claude_code_path,
-                "--message",
-                prompt,
+                "-p", prompt,
+                "--output-format", "text",
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            stdout, stderr = await process.communicate()
+            # 通过stdin传递diff内容
+            stdout, stderr = await process.communicate(input=diff_content.encode('utf-8'))
 
             if process.returncode != 0:
-                logger.error(f"Claude Code执行失败: {stderr.decode()}")
+                logger.error(f"Claude Code执行失败 (返回码: {process.returncode})")
+                logger.error(f"Stderr: {stderr.decode()}")
                 return None
 
             result = stdout.decode()
@@ -191,5 +185,5 @@ class ClaudeAnalyzer:
             return result
 
         except Exception as e:
-            logger.error(f"Claude Code分析异常: {e}")
+            logger.error(f"Claude Code分析异常: {e}", exc_info=True)
             return None
