@@ -158,6 +158,8 @@ Enable with `DEBUG=true`:
 
 ## Version Management
 
+**IMPORTANT**: Every time you modify code, you MUST update the version number and changelog.
+
 When releasing new versions:
 
 1. Update `app/version.py`:
@@ -170,8 +172,17 @@ When releasing new versions:
        "1.0.0": {...}  # keep old versions
    }
    ```
+   - Do NOT use emojis in version history changes
+   - Use simple text descriptions like "新增：...", "优化：...", "修复：..."
 
 2. Update `CHANGELOG.md` with new entry at top
+   - Add new version section at the beginning
+   - Do NOT use emojis (no ✨, 🔧, ⚙️, etc.)
+   - Use plain text with prefixes: "新增功能", "技术改进", "问题修复"
+   - Follow semantic versioning:
+     - Major (X.0.0): Breaking changes
+     - Minor (0.X.0): New features, backwards compatible
+     - Patch (0.0.X): Bug fixes, backwards compatible
 
 3. Version appears in:
    - Startup banner (ASCII art)

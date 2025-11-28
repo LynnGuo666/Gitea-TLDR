@@ -8,15 +8,15 @@
 
 ### 新增功能 (Added)
 
-- ✨ **自动审查者设置**: 创建PR review后自动将bot添加到审查者列表
-- ✨ **审查者API**: 新增 `GiteaClient.request_reviewer()` 方法，支持通过API请求PR审查者
-- ⚙️ **配置选项**: 新增 `AUTO_REQUEST_REVIEWER` 环境变量，控制是否自动请求审查者（默认为true）
+- **自动审查者设置**: 创建PR review后自动将bot添加到审查者列表
+- **审查者API**: 新增 `GiteaClient.request_reviewer()` 方法，支持通过API请求PR审查者
+- **配置选项**: 新增 `AUTO_REQUEST_REVIEWER` 环境变量，控制是否自动请求审查者（默认为true）
 
 ### 技术改进 (Technical)
 
-- 🔧 在 `webhook_handler.py` 中集成自动请求审查者逻辑
-- 🔧 只有当review创建成功且配置了bot用户名时才会自动请求审查者
-- 🔧 支持自动触发和手动触发两种场景
+- 在 `webhook_handler.py` 中集成自动请求审查者逻辑
+- 只有当review创建成功且配置了bot用户名时才会自动请求审查者
+- 支持自动触发和手动触发两种场景
 
 ### 配置选项 (Configuration)
 
@@ -27,18 +27,18 @@
 
 ### 新增功能 (Added)
 
-- ✨ **自动化审查**: 支持通过Gitea Webhook自动触发PR代码审查
-- ✨ **手动触发**: 支持在PR评论中使用 `/review` 命令手动触发审查
-- ✨ **完整上下文分析**: 克隆完整代码库，提供完整上下文给Claude Code进行分析
-- ✨ **多种反馈机制**: 支持PR评论（Comment）、PR审查（Review）、提交状态（Status）三种反馈方式
-- ✨ **多维度审查**: 支持代码质量、安全漏洞、性能问题、逻辑错误四个维度的审查
-- ✨ **Debug模式**: 支持详细日志输出，包括所有API请求/响应、Webhook payload、Claude提示词和响应
-- ✨ **命令解析器**: 模块化的命令解析系统，支持 `--features` 和 `--focus` 参数
-- ✨ **版本管理系统**: 完整的版本号和更新日志管理
+- **自动化审查**: 支持通过Gitea Webhook自动触发PR代码审查
+- **手动触发**: 支持在PR评论中使用 `/review` 命令手动触发审查
+- **完整上下文分析**: 克隆完整代码库，提供完整上下文给Claude Code进行分析
+- **多种反馈机制**: 支持PR评论（Comment）、PR审查（Review）、提交状态（Status）三种反馈方式
+- **多维度审查**: 支持代码质量、安全漏洞、性能问题、逻辑错误四个维度的审查
+- **Debug模式**: 支持详细日志输出，包括所有API请求/响应、Webhook payload、Claude提示词和响应
+- **命令解析器**: 模块化的命令解析系统，支持 `--features` 和 `--focus` 参数
+- **版本管理系统**: 完整的版本号和更新日志管理
 
 ### 技术特性 (Technical)
 
-- 🏗️ **模块化架构**: 清晰的模块划分，便于维护和扩展
+- **模块化架构**: 清晰的模块划分，便于维护和扩展
   - `main.py`: FastAPI应用入口
   - `config.py`: 配置管理
   - `gitea_client.py`: Gitea API客户端，支持debug日志
@@ -48,9 +48,9 @@
   - `command_parser.py`: 命令解析器
   - `version.py`: 版本信息管理
 
-- ⚡ **异步处理**: 使用FastAPI异步框架，webhook立即返回202，后台处理审查任务
-- 🔒 **安全验证**: 支持Webhook签名验证
-- 🎯 **灵活配置**:
+- **异步处理**: 使用FastAPI异步框架，webhook立即返回202，后台处理审查任务
+- **安全验证**: 支持Webhook签名验证
+- **灵活配置**:
   - 支持环境变量配置
   - 支持HTTP标头配置（自动触发）
   - 支持命令参数配置（手动触发）
