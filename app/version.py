@@ -2,12 +2,21 @@
 版本信息模块
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __release_date__ = "2025-11-28"
 __author__ = "Gitea-TLDR Team"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.1.0": {
+        "date": "2025-11-28",
+        "changes": [
+            "新增：自动将bot设置为PR审查者",
+            "新增：AUTO_REQUEST_REVIEWER配置项，控制是否自动请求审查者",
+            "新增：GiteaClient.request_reviewer()方法，支持请求PR审查者",
+            "优化：创建review后自动将bot添加到审查者列表",
+        ]
+    },
     "1.0.0": {
         "date": "2025-11-28",
         "changes": [

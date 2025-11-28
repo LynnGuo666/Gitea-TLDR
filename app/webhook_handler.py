@@ -212,13 +212,23 @@ class WebhookHandler:
 
             # 创建Review
             if "review" in features:
-                success &= await self.gitea_client.create_review(
+                review_success = await self.gitea_client.create_review(
                     owner,
                     repo_name,
                     pr_number,
                     analysis_result,
                     event="COMMENT",
                 )
+                success &= review_success
+
+                # 如果review创建成功且配置了bot_username且启用了auto_request_reviewer，则自动请求审查者
+                if review_success and settings.auto_request_reviewer and settings.bot_username:
+                    await self.gitea_client.request_reviewer(
+                        owner,
+                        repo_name,
+                        pr_number,
+                        [settings.bot_username]
+                    )
 
             # 设置状态
             if "status" in features:
@@ -466,13 +476,23 @@ class WebhookHandler:
 
             # 创建Review
             if "review" in features:
-                success &= await self.gitea_client.create_review(
+                review_success = await self.gitea_client.create_review(
                     owner,
                     repo_name,
                     pr_number,
                     analysis_result,
                     event="COMMENT",
                 )
+                success &= review_success
+
+                # 如果review创建成功且配置了bot_username且启用了auto_request_reviewer，则自动请求审查者
+                if review_success and settings.auto_request_reviewer and settings.bot_username:
+                    await self.gitea_client.request_reviewer(
+                        owner,
+                        repo_name,
+                        pr_number,
+                        [settings.bot_username]
+                    )
 
             # 设置状态
             if "status" in features:

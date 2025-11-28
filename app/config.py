@@ -42,6 +42,9 @@ class Settings(BaseSettings):
         description="默认审查重点"
     )
 
+    # 自动请求审查者
+    auto_request_reviewer: bool = Field(True, description="创建review后是否自动将bot设置为审查者")
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

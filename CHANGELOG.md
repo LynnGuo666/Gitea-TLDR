@@ -4,6 +4,25 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.1.0] - 2025-11-28
+
+### 新增功能 (Added)
+
+- ✨ **自动审查者设置**: 创建PR review后自动将bot添加到审查者列表
+- ✨ **审查者API**: 新增 `GiteaClient.request_reviewer()` 方法，支持通过API请求PR审查者
+- ⚙️ **配置选项**: 新增 `AUTO_REQUEST_REVIEWER` 环境变量，控制是否自动请求审查者（默认为true）
+
+### 技术改进 (Technical)
+
+- 🔧 在 `webhook_handler.py` 中集成自动请求审查者逻辑
+- 🔧 只有当review创建成功且配置了bot用户名时才会自动请求审查者
+- 🔧 支持自动触发和手动触发两种场景
+
+### 配置选项 (Configuration)
+
+- `AUTO_REQUEST_REVIEWER`: 是否自动将bot设置为审查者（默认: true）
+- `BOT_USERNAME`: Bot用户名，自动请求审查者时必需
+
 ## [1.0.0] - 2025-11-28
 
 ### 新增功能 (Added)

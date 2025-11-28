@@ -280,6 +280,40 @@ class GiteaClient:
             logger.error(f"设置提交状态失败: {e}")
             return False
 
+    async def request_reviewer(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        reviewers: List[str],
+    ) -> bool:
+        """
+        请求PR审查者
+
+        Args:
+            owner: 仓库所有者
+            repo: 仓库名称
+            pr_number: PR编号
+            reviewers: 审查者用户名列表
+
+        Returns:
+            是否成功
+        """
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/pulls/{pr_number}/requested_reviewers"
+        payload = {"reviewers": reviewers}
+
+        try:
+            self._log_debug("POST", url, json=payload)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, headers=self.headers, json=payload)
+                self._log_response(response)
+                response.raise_for_status()
+                logger.info(f"成功请求审查者: {owner}/{repo}#{pr_number} <- {reviewers}")
+                return True
+        except Exception as e:
+            logger.error(f"请求审查者失败: {e}")
+            return False
+
     def get_clone_url(self, owner: str, repo: str) -> str:
         """
         获取仓库克隆URL（带认证）
