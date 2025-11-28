@@ -5,8 +5,9 @@
 ## 功能特性
 
 - **自动化审查**：接收Gitea webhook，自动触发PR代码审查
+- **手动触发**：通过评论 `/review` 命令手动触发审查
 - **完整上下文分析**：克隆完整代码库，提供完整上下文给Claude Code
-- **灵活的反馈机制**：通过HTTP标头控制审查功能
+- **灵活的反馈机制**：通过HTTP标头或命令参数控制审查功能
   - PR评论（Comment）
   - PR审查（Review）
   - 提交状态（Status）
@@ -32,13 +33,16 @@ gitea-tldr/
 │   ├── __init__.py
 │   ├── main.py              # FastAPI应用入口
 │   ├── config.py            # 配置管理
+│   ├── version.py           # 版本信息管理
 │   ├── gitea_client.py      # Gitea API客户端
 │   ├── repo_manager.py      # 代码库克隆和管理
 │   ├── claude_analyzer.py   # Claude Code CLI调用
-│   └── webhook_handler.py   # Webhook处理逻辑
+│   ├── webhook_handler.py   # Webhook处理逻辑
+│   └── command_parser.py    # 命令解析器（手动触发）
 ├── requirements.txt
 ├── .env.example
-└── README.md
+├── README.md
+└── CHANGELOG.md             # 更新日志
 ```
 
 ## 安装部署
@@ -96,6 +100,12 @@ PORT=8000
 
 # 日志配置
 LOG_LEVEL=INFO
+
+# Debug模式（可选，开启详细日志）
+DEBUG=false
+
+# Bot配置（可选，用于手动触发功能）
+BOT_USERNAME=pr-reviewer-bot
 ```
 
 ### 4. 启动服务
@@ -118,12 +128,62 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
    - **HTTP方法**: POST
    - **内容类型**: application/json
    - **密钥**（可选）: 与 `.env` 中的 `WEBHOOK_SECRET` 一致
-   - **触发事件**: 选择 "Pull Request"
-   - **自定义标头**（可选）:
+   - **触发事件**:
+     - ✅ 选择 "Pull Request"（用于自动触发）
+     - ✅ 选择 "Issue Comment"（用于手动触发）
+   - **自定义标头**（可选，仅用于自动触发）:
      - `X-Review-Features: comment,review,status`
      - `X-Review-Focus: quality,security,performance,logic`
 
 ## 使用说明
+
+### 1. 自动触发（Webhook）
+
+当PR被创建或更新时，工具会自动触发审查。
+
+### 2. 手动触发（评论命令）
+
+在PR评论中使用 `/review` 命令可以手动触发审查：
+
+#### 基本用法
+
+```
+/review
+```
+
+如果配置了 `BOT_USERNAME`，需要@bot：
+
+```
+@pr-reviewer-bot /review
+```
+
+#### 高级用法
+
+指定审查功能：
+
+```
+@pr-reviewer-bot /review --features comment,status
+```
+
+指定审查重点：
+
+```
+@pr-reviewer-bot /review --focus security,performance
+```
+
+完整示例：
+
+```
+@pr-reviewer-bot /review --features comment,review,status --focus security,quality
+```
+
+#### 命令参数说明
+
+- `--features`: 指定启用的功能（comment, review, status）
+  - 默认值：`comment`
+
+- `--focus`: 指定审查重点（quality, security, performance, logic）
+  - 默认值：`quality,security,performance,logic`
 
 ### Webhook标头配置
 
@@ -164,10 +224,19 @@ X-Review-Focus: security,performance
 
 #### GET /
 
-健康检查端点
+健康检查端点，返回服务状态和版本信息
 
 ```bash
 curl http://localhost:8000/
+```
+
+响应示例：
+```json
+{
+  "status": "ok",
+  "service": "Gitea PR Reviewer",
+  "version": "1.0.0"
+}
 ```
 
 #### GET /health
@@ -178,20 +247,47 @@ curl http://localhost:8000/
 curl http://localhost:8000/health
 ```
 
+#### GET /version
+
+查询版本信息和当前版本更新日志
+
+```bash
+curl http://localhost:8000/version
+```
+
+响应示例：
+```json
+{
+  "version": "1.0.0",
+  "info": "Gitea PR Reviewer v1.0.0 (2025-11-28)",
+  "changelog": "..."
+}
+```
+
+#### GET /changelog
+
+查询完整更新日志
+
+```bash
+curl http://localhost:8000/changelog
+```
+
 #### POST /webhook
 
 Gitea Webhook接收端点
 
 请求标头：
 - `X-Gitea-Signature`: Webhook签名（如果配置了密钥）
-- `X-Gitea-Event`: 事件类型（应为 `pull_request`）
-- `X-Review-Features`: 审查功能配置（可选）
-- `X-Review-Focus`: 审查重点配置（可选）
+- `X-Gitea-Event`: 事件类型（`pull_request` 或 `issue_comment`）
+- `X-Review-Features`: 审查功能配置（可选，仅用于PR事件）
+- `X-Review-Focus`: 审查重点配置（可选，仅用于PR事件）
 
 ## 工作流程
 
+### 自动触发流程
+
 1. 用户在Gitea中创建或更新PR
-2. Gitea发送webhook到本服务
+2. Gitea发送 `pull_request` webhook到本服务
 3. 服务验证webhook签名（如果配置）
 4. 解析标头获取功能和重点配置
 5. 返回202响应，启动后台任务
@@ -203,6 +299,15 @@ Gitea Webhook接收端点
    - 根据配置发布评论/审查/状态
    - 清理临时文件
 7. 审查结果显示在Gitea PR页面
+
+### 手动触发流程
+
+1. 用户在PR评论中输入 `/review` 命令（可能需要@bot）
+2. Gitea发送 `issue_comment` webhook到本服务
+3. 服务解析评论内容，识别命令和参数
+4. 如果是有效命令，返回202响应，启动后台任务
+5. 后台任务执行（与自动触发相同）
+6. 审查结果显示在Gitea PR页面
 
 ## 生产部署建议
 
@@ -337,6 +442,16 @@ docker run -d \
 - 自动重启策略
 
 ## 故障排查
+
+### 查看版本信息
+
+```bash
+# 方式1：访问API端点
+curl http://localhost:8000/version
+
+# 方式2：查看启动日志
+# 服务启动时会打印版本横幅
+```
 
 ### Claude Code调用失败
 

@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # Debug模式
     debug: bool = Field(False, description="Debug模式，开启后输出详细日志")
 
+    # Bot配置
+    bot_username: Optional[str] = Field(None, description="Bot用户名，用于识别@提及")
+
     # 审查配置
     default_review_focus: list[str] = Field(
         default=["quality", "security", "performance", "logic"],

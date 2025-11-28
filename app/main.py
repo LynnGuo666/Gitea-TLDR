@@ -13,6 +13,7 @@ from .gitea_client import GiteaClient
 from .repo_manager import RepoManager
 from .claude_analyzer import ClaudeAnalyzer
 from .webhook_handler import WebhookHandler
+from .version import __version__, get_version_banner, get_version_info, get_changelog, get_all_changelogs
 
 # 配置日志
 logging.basicConfig(
@@ -21,18 +22,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 打印版本横幅
+print(get_version_banner())
+logger.info(get_version_info())
+
 # 创建FastAPI应用
 app = FastAPI(
     title="Gitea PR Reviewer",
-    description="自动化PR代码审查工具",
-    version="0.1.0",
+    description="基于Claude Code的Gitea Pull Request自动审查工具",
+    version=__version__,
 )
 
 # 初始化组件
 gitea_client = GiteaClient(settings.gitea_url, settings.gitea_token, settings.debug)
 repo_manager = RepoManager(settings.work_dir)
 claude_analyzer = ClaudeAnalyzer(settings.claude_code_path, settings.debug)
-webhook_handler = WebhookHandler(gitea_client, repo_manager, claude_analyzer)
+webhook_handler = WebhookHandler(
+    gitea_client, repo_manager, claude_analyzer, settings.bot_username
+)
 
 
 def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> bool:
@@ -63,7 +70,7 @@ async def root():
     return {
         "status": "ok",
         "service": "Gitea PR Reviewer",
-        "version": "0.1.0",
+        "version": __version__,
     }
 
 
@@ -71,6 +78,25 @@ async def root():
 async def health():
     """健康检查端点"""
     return {"status": "healthy"}
+
+
+@app.get("/version")
+async def version():
+    """版本信息端点"""
+    return {
+        "version": __version__,
+        "info": get_version_info(),
+        "changelog": get_changelog()
+    }
+
+
+@app.get("/changelog")
+async def changelog():
+    """完整更新日志端点"""
+    return {
+        "version": __version__,
+        "changelog": get_all_changelogs()
+    }
 
 
 @app.post("/webhook")
@@ -110,33 +136,52 @@ async def webhook(
         if settings.debug:
             logger.debug(f"[Webhook Payload] {json.dumps(payload, ensure_ascii=False, indent=2)}")
 
-        # 检查事件类型
-        if x_gitea_event != "pull_request":
-            logger.info(f"忽略非PR事件: {x_gitea_event}")
+        # 处理Pull Request事件
+        if x_gitea_event == "pull_request":
+            # 解析功能和重点
+            features = webhook_handler.parse_review_features(x_review_features)
+            focus_areas = webhook_handler.parse_review_focus(x_review_focus)
+
+            logger.info(f"收到PR webhook，功能: {features}, 重点: {focus_areas}")
+
+            # 添加后台任务
+            background_tasks.add_task(
+                webhook_handler.process_webhook_async, payload, features, focus_areas
+            )
+
+            # 立即返回202
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "message": "Webhook received, processing in background",
+                    "features": features,
+                    "focus_areas": focus_areas,
+                },
+            )
+
+        # 处理Issue评论事件（用于手动触发）
+        elif x_gitea_event == "issue_comment":
+            logger.info("收到issue_comment webhook")
+
+            # 添加后台任务
+            background_tasks.add_task(
+                webhook_handler.process_comment_async, payload
+            )
+
+            # 立即返回202
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "message": "Comment webhook received, processing in background",
+                },
+            )
+
+        # 其他事件类型
+        else:
+            logger.info(f"忽略事件: {x_gitea_event}")
             return JSONResponse(
                 status_code=200, content={"message": "Event ignored"}
             )
-
-        # 解析功能和重点
-        features = webhook_handler.parse_review_features(x_review_features)
-        focus_areas = webhook_handler.parse_review_focus(x_review_focus)
-
-        logger.info(f"收到PR webhook，功能: {features}, 重点: {focus_areas}")
-
-        # 添加后台任务
-        background_tasks.add_task(
-            webhook_handler.process_webhook_async, payload, features, focus_areas
-        )
-
-        # 立即返回202
-        return JSONResponse(
-            status_code=202,
-            content={
-                "message": "Webhook received, processing in background",
-                "features": features,
-                "focus_areas": focus_areas,
-            },
-        )
 
     except HTTPException:
         raise
