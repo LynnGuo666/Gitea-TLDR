@@ -80,33 +80,72 @@ a {
   color: #6e6e73;
 }
 
-.user-chip {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border: 1px solid #e5e5ea;
-  border-radius: 12px;
-  padding: 0.6rem 0.8rem;
-  gap: 0.6rem;
+.user-profile {
+  position: relative;
 }
 
-.user-chip strong {
+.user-profile-trigger {
+  width: 100%;
+  border: 1px solid #e5e5ea;
+  border-radius: 12px;
+  padding: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+.user-profile-trigger img,
+.user-profile-trigger .avatar-placeholder {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: #1c1c1e;
+}
+
+.user-profile-trigger strong {
   display: block;
   font-size: 0.95rem;
 }
 
-.user-chip span {
+.user-profile-trigger span {
   display: block;
   font-size: 0.8rem;
   color: #6e6e73;
 }
 
-.user-chip button {
+.user-menu {
+  position: absolute;
+  bottom: calc(100% + 0.3rem);
+  left: 0;
+  width: 100%;
+  border: 1px solid #e5e5ea;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 30px -10px rgba(15, 23, 42, 0.25);
+  padding: 0.4rem;
+}
+
+.user-menu button {
+  width: 100%;
   border: none;
   background: transparent;
-  color: #0a84ff;
+  padding: 0.5rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
   cursor: pointer;
-  font-size: 0.85rem;
+  text-align: left;
+}
+
+.user-menu button:hover {
+  background: #f5f5f7;
 }
 
 .sidebar-nav {

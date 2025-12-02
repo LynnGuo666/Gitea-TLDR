@@ -73,6 +73,7 @@ def create_app() -> FastAPI:
         logger.info(f"Gitea URL: {settings.gitea_url}")
         logger.info(f"工作目录: {settings.work_dir}")
         logger.info(f"Claude Code路径: {settings.claude_code_path}")
+        logger.info(f"Debug模式: {'开启' if settings.debug else '关闭'}")
         try:
             yield
         finally:
@@ -117,7 +118,7 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        app,
+        "app.main:app",
         host=settings.host,
         port=settings.port,
         reload=settings.debug,

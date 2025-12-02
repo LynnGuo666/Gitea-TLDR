@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import { DashboardIcon, UsageIcon, UserIcon } from './icons';
 import {
   AuthContext,
@@ -23,6 +24,7 @@ const navItems = [
 export default function Layout({ children }: LayoutProps) {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState(defaultAuthStatus);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const refreshAuth = useCallback(() => {
     fetchAuthStatus()
       .then(setAuthStatus)
@@ -45,6 +47,7 @@ export default function Layout({ children }: LayoutProps) {
 
   const logout = useCallback(async () => {
     await requestLogout();
+    setShowUserMenu(false);
     refreshAuth();
   }, [refreshAuth]);
 
@@ -91,14 +94,35 @@ export default function Layout({ children }: LayoutProps) {
           <div className="sidebar-footer">
             {authStatus.enabled ? (
               authStatus.loggedIn ? (
-                <div className="user-chip">
-                  <div>
-                    <strong>
-                      {authStatus.user?.full_name || authStatus.user?.username || '已登录'}
-                    </strong>
-                    <span>@{authStatus.user?.username || ''}</span>
-                  </div>
-                  <button onClick={logout}>退出</button>
+                <div className="user-profile">
+                  <button
+                    className="user-profile-trigger"
+                    onClick={() => setShowUserMenu((prev) => !prev)}
+                  >
+                    {authStatus.user?.avatar_url ? (
+                      <Image
+                        src={authStatus.user.avatar_url}
+                        alt={authStatus.user.username || 'avatar'}
+                        width={32}
+                        height={32}
+                      />
+                    ) : (
+                      <span className="avatar-placeholder">
+                        {(authStatus.user?.username || 'U')[0]}
+                      </span>
+                    )}
+                    <div>
+                      <strong>
+                        {authStatus.user?.full_name || authStatus.user?.username || '已登录'}
+                      </strong>
+                      <span>@{authStatus.user?.username || ''}</span>
+                    </div>
+                  </button>
+                  {showUserMenu && (
+                    <div className="user-menu">
+                      <button onClick={logout}>退出登录</button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <button className="sidebar-login" onClick={beginLogin}>
