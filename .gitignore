@@ -10,7 +10,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -52,3 +52,4 @@ frontend/node_modules/
 _next/
 .next/
 out/
+AGENTS.md
