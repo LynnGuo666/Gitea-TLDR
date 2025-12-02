@@ -3,7 +3,7 @@
 """
 from pathlib import Path
 from typing import Optional
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -52,6 +52,32 @@ class Settings(BaseSettings):
 
     # 自动请求审查者
     auto_request_reviewer: bool = Field(True, description="创建review后是否自动将bot设置为审查者")
+
+    # OAuth 配置
+    oauth_client_id: Optional[str] = Field(None, description="Gitea OAuth Client ID")
+    oauth_client_secret: Optional[str] = Field(
+        None, description="Gitea OAuth Client Secret"
+    )
+    oauth_redirect_url: Optional[str] = Field(
+        None, description="OAuth回调地址，通常指向 /api/auth/callback"
+    )
+    oauth_scopes: list[str] | str = Field(
+        default_factory=lambda: ["read:user", "read:repository"],
+        description="OAuth申请的scope列表"
+    )
+    session_cookie_name: str = Field("gitea_session", description="会话Cookie名称")
+    session_cookie_secure: bool = Field(
+        False, description="是否仅通过HTTPS发送会话Cookie"
+    )
+
+    @field_validator("oauth_scopes", mode="after")
+    @classmethod
+    def _parse_scopes(cls, value):
+        if value is None or value == "":
+            return []
+        if isinstance(value, str):
+            return [scope.strip() for scope in value.split(",") if scope.strip()]
+        return value
 
     # 可选：允许从不同环境文件加载
     @classmethod

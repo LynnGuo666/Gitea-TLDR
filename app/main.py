@@ -29,6 +29,7 @@ from app.services import (
     ClaudeAnalyzer,
     WebhookHandler,
     RepoRegistry,
+    AuthManager,
 )
 
 # 配置日志
@@ -48,12 +49,14 @@ def build_context() -> AppContext:
         gitea_client, repo_manager, claude_analyzer, settings.bot_username
     )
     repo_registry = RepoRegistry(settings.work_dir)
+    auth_manager = AuthManager()
     return AppContext(
         gitea_client=gitea_client,
         repo_manager=repo_manager,
         claude_analyzer=claude_analyzer,
         webhook_handler=webhook_handler,
         repo_registry=repo_registry,
+        auth_manager=auth_manager,
     )
 
 

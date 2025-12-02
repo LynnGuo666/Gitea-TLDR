@@ -107,6 +107,15 @@ DEBUG=false
 
 # Bot配置（可选，用于手动触发功能）
 BOT_USERNAME=pr-reviewer-bot
+
+# OAuth（可选，用于用户登录）
+OAUTH_CLIENT_ID=
+OAUTH_CLIENT_SECRET=
+OAUTH_REDIRECT_URL=http://localhost:8000/api/auth/callback
+# 逗号分隔的scope列表
+OAUTH_SCOPES=read:user,read:repository
+SESSION_COOKIE_NAME=gitea_session
+SESSION_COOKIE_SECURE=false
 ```
 
 ### 4. 启动服务
@@ -197,6 +206,15 @@ npm run build  # 生成 out/ 目录
   - 默认值：`quality,security,performance,logic`
 
 ### Webhook标头配置
+
+### 使用 OAuth 登录（可选）
+
+若希望前端用户使用自己的 Gitea 账号登录并下发仓库访问权限，需要在 Gitea 中创建 OAuth2 Application，并填写上文的 `OAUTH_*` 配置：
+
+1. 在 Gitea `Settings → Applications → Manage OAuth2 Applications` 中创建应用，记录 **Client ID** / **Client Secret**，并将 Redirect URL 指向 `http(s)://your-server/api/auth/callback`。
+2. 确保 Gitea OAuth 授权端点为 `https://<gitea>/login/oauth/authorize`，令牌端点为 `https://<gitea>/login/oauth/access_token`（参考官方文档: https://docs.gitea.com/development/oauth2-provider ）。
+3. 将得到的 Client 信息写入 `.env`，并按需调整 `OAUTH_SCOPES`（默认申请 `read:user`、`read:repository`）。
+4. 重启服务后，前端侧边栏会出现 “连接 Gitea” 按钮；登录完成后，仓库列表及 Webhook 配置均将使用用户自身的访问令牌调用 Gitea API。
 
 通过自定义HTTP标头控制审查行为：
 

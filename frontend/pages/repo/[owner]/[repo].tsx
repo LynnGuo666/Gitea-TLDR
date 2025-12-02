@@ -1,8 +1,9 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { RepoIcon, BotIcon, SettingsIcon } from '../../../components/icons';
 import { PublicConfig } from '../../../lib/types';
+import { AuthContext } from '../../../lib/auth';
 
 const defaultEvents = ['pull_request', 'issue_comment'];
 const reviewCatalog = [
@@ -41,6 +42,8 @@ export default function RepoConfigPage() {
     'security',
     'performance',
   ]);
+  const { status: authStatus, beginLogin } = useContext(AuthContext);
+  const requiresLogin = authStatus.enabled && !authStatus.loggedIn;
 
   useEffect(() => {
     fetch('/api/config/public')
@@ -62,7 +65,7 @@ export default function RepoConfigPage() {
   };
 
   const setupRepo = async () => {
-    if (!owner || !repo) return;
+    if (requiresLogin || !owner || !repo) return;
 
     setLoading(true);
     setMessage('');
@@ -172,10 +175,17 @@ export default function RepoConfigPage() {
             </div>
           </div>
           <div className="automation-footer">
-            <button className="primary-button" onClick={setupRepo} disabled={loading}>
-              {loading ? '配置中…' : '自动配置 Webhook'}
+            <button
+              className="primary-button"
+              onClick={requiresLogin ? beginLogin : setupRepo}
+              disabled={loading || requiresLogin}
+            >
+              {requiresLogin ? '登录以继续' : loading ? '配置中…' : '自动配置 Webhook'}
             </button>
             {message && <p className="muted">{message}</p>}
+            {requiresLogin && (
+              <p className="muted">连接 Gitea 后才能为仓库配置 Webhook。</p>
+            )}
           </div>
         </section>
 

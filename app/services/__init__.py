@@ -8,6 +8,7 @@ from .repo_manager import RepoManager
 from .repo_registry import RepoRegistry
 from .claude_analyzer import ClaudeAnalyzer
 from .webhook_handler import WebhookHandler
+from .auth_manager import AuthManager
 
 __all__ = [
     "GiteaClient",
@@ -15,4 +16,5 @@ __all__ = [
     "RepoRegistry",
     "ClaudeAnalyzer",
     "WebhookHandler",
+    "AuthManager",
 ]

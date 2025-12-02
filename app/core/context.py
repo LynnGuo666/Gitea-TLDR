@@ -8,6 +8,7 @@ from app.services import (
     RepoRegistry,
     ClaudeAnalyzer,
     WebhookHandler,
+    AuthManager,
 )
 
 
@@ -20,3 +21,4 @@ class AppContext:
     claude_analyzer: ClaudeAnalyzer
     webhook_handler: WebhookHandler
     repo_registry: RepoRegistry
+    auth_manager: AuthManager

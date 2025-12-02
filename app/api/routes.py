@@ -9,7 +9,14 @@ import json
 import logging
 import secrets
 from typing import Optional
-from fastapi import APIRouter, Request, Header, HTTPException, BackgroundTasks
+from fastapi import (
+    APIRouter,
+    Request,
+    Header,
+    HTTPException,
+    BackgroundTasks,
+    Response,
+)
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from app.core import (
@@ -101,12 +108,44 @@ def create_api_router(context: AppContext) -> APIRouter:
             "gitea_url": settings.gitea_url,
             "bot_username": settings.bot_username,
             "debug": settings.debug,
+            "oauth_enabled": context.auth_manager.enabled,
         }
 
+    @router.get("/api/auth/status")
+    async def auth_status(request: Request):
+        """返回当前会话状态"""
+        return context.auth_manager.get_status_payload(request)
+
+    @router.get("/api/auth/login-url")
+    async def auth_login_url():
+        """生成OAuth授权地址"""
+        if not context.auth_manager.enabled:
+            raise HTTPException(status_code=404, detail="OAuth 未启用")
+        return {"url": context.auth_manager.build_authorize_url()}
+
+    @router.post("/api/auth/logout")
+    async def auth_logout(request: Request, response: Response):
+        """注销当前会话"""
+        context.auth_manager.logout(request, response)
+        return {"success": True}
+
+    @router.get("/api/auth/callback")
+    async def auth_callback(code: str, state: str):
+        """OAuth回调，设置登录会话后重定向到主页"""
+        redirect = RedirectResponse(url="/", status_code=303)
+        return await context.auth_manager.handle_callback(code, state, redirect)
+
     @router.get("/api/repos")
-    async def list_repos():
+    async def list_repos(request: Request):
         """列出当前token可访问的仓库"""
-        repos = await context.gitea_client.list_user_repos()
+        client = (
+            context.auth_manager.build_user_client(
+                context.auth_manager.require_session(request)
+            )
+            if context.auth_manager.enabled
+            else context.gitea_client
+        )
+        repos = await client.list_user_repos()
         if repos is None:
             raise HTTPException(status_code=502, detail="无法从Gitea获取仓库列表")
         return {"repos": repos}
@@ -131,15 +170,21 @@ def create_api_router(context: AppContext) -> APIRouter:
             "active": True,
         }
 
-        hook_id = await context.gitea_client.ensure_repo_webhook(
-            owner, repo, webhook_config
+        client = (
+            context.auth_manager.build_user_client(
+                context.auth_manager.require_session(request)
+            )
+            if context.auth_manager.enabled
+            else context.gitea_client
         )
+
+        hook_id = await client.ensure_repo_webhook(owner, repo, webhook_config)
         if hook_id is None:
             raise HTTPException(status_code=502, detail="创建或更新Webhook失败")
 
         bot_added = False
         if payload.bring_bot and settings.bot_username:
-            bot_added = await context.gitea_client.add_collaborator(
+            bot_added = await client.add_collaborator(
                 owner, repo, settings.bot_username
             )
 
