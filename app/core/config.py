@@ -1,14 +1,22 @@
 """
 配置管理模块
 """
-import os
+from pathlib import Path
 from typing import Optional
-from pydantic_settings import BaseSettings
 from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BASE_DIR = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
     """应用配置"""
+    model_config = SettingsConfigDict(
+        env_file=str(BASE_DIR / ".env"),
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
     # Gitea配置
     gitea_url: str = Field(..., description="Gitea服务器URL")
@@ -45,10 +53,21 @@ class Settings(BaseSettings):
     # 自动请求审查者
     auto_request_reviewer: bool = Field(True, description="创建review后是否自动将bot设置为审查者")
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    # 可选：允许从不同环境文件加载
+    @classmethod
+    def from_env(cls, env_file: Optional[str] = None) -> "Settings":
+        """
+        构造一个Settings实例，允许覆盖默认的env文件路径。
+        """
+        if env_file:
+            env_path = Path(env_file)
+            if not env_path.is_absolute():
+                env_path = (BASE_DIR / env_path).resolve()
+            return cls(
+                _env_file=str(env_path),
+                _env_file_encoding="utf-8",
+            )
+        return cls()
 
 
 # 全局配置实例

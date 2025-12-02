@@ -46,3 +46,9 @@ Thumbs.db
 # Temporary files
 /tmp/
 *.tmp
+
+# NExtjs
+frontend/node_modules/
+_next/
+.next/
+out/
