@@ -4,11 +4,11 @@ Webhook处理模块
 import asyncio
 import logging
 from typing import Dict, Any, List, Optional
-from .gitea_client import GiteaClient
-from .repo_manager import RepoManager
-from .claude_analyzer import ClaudeAnalyzer
-from .config import settings
-from .command_parser import CommandParser
+from app.services.gitea_client import GiteaClient
+from app.services.repo_manager import RepoManager
+from app.services.claude_analyzer import ClaudeAnalyzer
+from app.core import settings
+from app.services.command_parser import CommandParser
 
 logger = logging.getLogger(__name__)
 

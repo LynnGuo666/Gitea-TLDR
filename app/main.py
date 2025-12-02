@@ -1,24 +1,36 @@
 """
 FastAPI主应用
 """
+from __future__ import annotations
+
 import logging
-import hmac
-import hashlib
-import json
-import secrets
+import sys
 from pathlib import Path
-from typing import Optional
-from fastapi import FastAPI, Request, Header, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
-from .config import settings
-from .gitea_client import GiteaClient
-from .repo_manager import RepoManager
-from .claude_analyzer import ClaudeAnalyzer
-from .webhook_handler import WebhookHandler
-from .repo_registry import RepoRegistry
-from .version import __version__, get_version_banner, get_version_info, get_changelog, get_all_changelogs
+
+if __package__ in (None, ""):
+    # When executed as `python app/main.py`, ensure project root is importable
+    project_root = Path(__file__).resolve().parent.parent
+    sys.path.insert(0, str(project_root))
+
+from app.api import create_api_router
+from app.core import (
+    settings,
+    __version__,
+    get_version_banner,
+    get_version_info,
+)
+from app.core.context import AppContext
+from app.services import (
+    GiteaClient,
+    RepoManager,
+    ClaudeAnalyzer,
+    WebhookHandler,
+    RepoRegistry,
+    AuthManager,
+)
 
 # 配置日志
 logging.basicConfig(
@@ -27,276 +39,79 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# 打印版本横幅
-print(get_version_banner())
-logger.info(get_version_info())
 
-# 创建FastAPI应用
-app = FastAPI(
-    title="Gitea PR Reviewer",
-    description="基于Claude Code的Gitea Pull Request自动审查工具",
-    version=__version__,
-)
-
-frontend_out_dir = Path(__file__).resolve().parent.parent / "frontend" / "out"
-if frontend_out_dir.exists():
-    app.mount(
-        "/ui", StaticFiles(directory=str(frontend_out_dir), html=True), name="ui"
+def build_context() -> AppContext:
+    """初始化所有服务组件并封装为应用上下文。"""
+    gitea_client = GiteaClient(settings.gitea_url, settings.gitea_token, settings.debug)
+    repo_manager = RepoManager(settings.work_dir)
+    claude_analyzer = ClaudeAnalyzer(settings.claude_code_path, settings.debug)
+    webhook_handler = WebhookHandler(
+        gitea_client, repo_manager, claude_analyzer, settings.bot_username
     )
-else:
-    logger.warning("前端静态资源未构建，未挂载 /ui")
-
-# 初始化组件
-gitea_client = GiteaClient(settings.gitea_url, settings.gitea_token, settings.debug)
-repo_manager = RepoManager(settings.work_dir)
-claude_analyzer = ClaudeAnalyzer(settings.claude_code_path, settings.debug)
-webhook_handler = WebhookHandler(
-    gitea_client, repo_manager, claude_analyzer, settings.bot_username
-)
-repo_registry = RepoRegistry(settings.work_dir)
-
-
-class WebhookSetupRequest(BaseModel):
-    """前端用于配置Webhook的请求体"""
-
-    callback_url: Optional[str] = Field(
-        default=None, description="可选覆盖webhook回调URL"
-    )
-    events: list[str] = Field(
-        default_factory=lambda: ["pull_request", "issue_comment"],
-        description="需要监听的事件列表",
-    )
-    bring_bot: bool = Field(
-        default=True, description="是否自动邀请bot账号协作"
+    repo_registry = RepoRegistry(settings.work_dir)
+    auth_manager = AuthManager()
+    return AppContext(
+        gitea_client=gitea_client,
+        repo_manager=repo_manager,
+        claude_analyzer=claude_analyzer,
+        webhook_handler=webhook_handler,
+        repo_registry=repo_registry,
+        auth_manager=auth_manager,
     )
 
 
-def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> bool:
-    """
-    验证webhook签名
+def create_app() -> FastAPI:
+    """创建FastAPI应用并绑定生命周期事件。"""
+    context = build_context()
 
-    Args:
-        payload: 请求体
-        signature: 签名
-        secret: 密钥
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        # 启动时输出版本信息
+        print(get_version_banner())
+        logger.info(get_version_info())
+        logger.info("Gitea PR Reviewer 启动")
+        logger.info(f"Gitea URL: {settings.gitea_url}")
+        logger.info(f"工作目录: {settings.work_dir}")
+        logger.info(f"Claude Code路径: {settings.claude_code_path}")
+        logger.info(f"Debug模式: {'开启' if settings.debug else '关闭'}")
+        try:
+            yield
+        finally:
+            logger.info("Gitea PR Reviewer 关闭")
+            # 可选：清理临时文件
+            # context.repo_manager.cleanup_all()
 
-    Returns:
-        是否验证通过
-    """
-    if not secret:
-        return True  # 如果没有配置密钥，跳过验证
+    app = FastAPI(
+        title="Gitea PR Reviewer",
+        description="基于Claude Code的Gitea Pull Request自动审查工具",
+        version=__version__,
+        lifespan=lifespan,
+    )
 
-    expected_signature = hmac.new(
-        secret.encode(), payload, hashlib.sha256
-    ).hexdigest()
+    api_router, public_router = create_api_router(context)
+    app.include_router(public_router)
+    app.include_router(api_router, prefix="/api")
 
-    return hmac.compare_digest(signature, expected_signature)
+    frontend_out_dir = Path(__file__).resolve().parent.parent / "frontend" / "out"
+    if frontend_out_dir.exists():
+        static_app = StaticFiles(directory=str(frontend_out_dir), html=True)
 
-
-@app.get("/")
-async def root():
-    """健康检查端点"""
-    return {
-        "status": "ok",
-        "service": "Gitea PR Reviewer",
-        "version": __version__,
-    }
-
-
-@app.get("/health")
-async def health():
-    """健康检查端点"""
-    return {"status": "healthy"}
-
-
-@app.get("/version")
-async def version():
-    """版本信息端点"""
-    return {
-        "version": __version__,
-        "info": get_version_info(),
-        "changelog": get_changelog()
-    }
-
-
-@app.get("/changelog")
-async def changelog():
-    """完整更新日志端点"""
-    return {
-        "version": __version__,
-        "changelog": get_all_changelogs()
-    }
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def serve_frontend(full_path: str, request: Request):
+            if full_path.startswith("api"):
+                raise HTTPException(status_code=404)
+            target = full_path or "index.html"
+            response = await static_app.get_response(target, request.scope)
+            if response.status_code == 404:
+                return await static_app.get_response("index.html", request.scope)
+            return response
+    else:
+        logger.warning("前端静态资源未构建，未挂载静态站点")
+    app.state.context = context
+    return app
 
 
-@app.get("/api/config/public")
-async def public_config():
-    """提供前端需要的只读配置"""
-    return {
-        "gitea_url": settings.gitea_url,
-        "bot_username": settings.bot_username,
-        "debug": settings.debug,
-    }
-
-
-@app.get("/api/repos")
-async def list_repos():
-    """列出当前token可访问的仓库"""
-    repos = await gitea_client.list_user_repos()
-    if repos is None:
-        raise HTTPException(status_code=502, detail="无法从Gitea获取仓库列表")
-    return {"repos": repos}
-
-
-@app.post("/api/repos/{owner}/{repo}/setup")
-async def setup_repo_review(owner: str, repo: str, payload: WebhookSetupRequest, request: Request):
-    """为指定仓库配置Webhook并可选邀请Bot账号"""
-    callback_url = payload.callback_url or str(request.url_for("webhook"))
-    secret = repo_registry.get_secret(owner, repo) or secrets.token_hex(20)
-    repo_registry.set_secret(owner, repo, secret)
-
-    webhook_config = {
-        "type": "gitea",
-        "config": {
-            "url": callback_url,
-            "content_type": "json",
-            "secret": secret,
-        },
-        "events": payload.events,
-        "active": True,
-    }
-
-    hook_id = await gitea_client.ensure_repo_webhook(owner, repo, webhook_config)
-    if hook_id is None:
-        raise HTTPException(status_code=502, detail="创建或更新Webhook失败")
-
-    bot_added = False
-    if payload.bring_bot and settings.bot_username:
-        bot_added = await gitea_client.add_collaborator(owner, repo, settings.bot_username)
-
-    return {
-        "owner": owner,
-        "repo": repo,
-        "webhook_id": hook_id,
-        "webhook_url": callback_url,
-        "bot_invited": bot_added,
-        "events": payload.events,
-    }
-
-
-@app.post("/webhook")
-async def webhook(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    x_gitea_signature: Optional[str] = Header(None),
-    x_gitea_event: Optional[str] = Header(None),
-    x_review_features: Optional[str] = Header(None),
-    x_review_focus: Optional[str] = Header(None),
-):
-    """
-    Gitea Webhook端点
-
-    Headers:
-        X-Gitea-Signature: Webhook签名
-        X-Gitea-Event: 事件类型
-        X-Review-Features: 审查功能（comment,review,status）
-        X-Review-Focus: 审查重点（quality,security,performance,logic）
-    """
-    try:
-        # 读取请求体
-        body = await request.body()
-
-        # 解析JSON以确定仓库信息，从而选择对应的密钥
-        payload = await request.json()
-        repo_info = payload.get("repository", {}) if isinstance(payload, dict) else {}
-        owner_info = repo_info.get("owner", {}) if isinstance(repo_info, dict) else {}
-        owner_name = owner_info.get("username") or owner_info.get("login")
-        repo_name = repo_info.get("name")
-        repo_secret = (
-            repo_registry.get_secret(owner_name, repo_name)
-            if owner_name and repo_name
-            else None
-        )
-
-        # 验证签名
-        secret_for_validation = repo_secret or settings.webhook_secret
-        if secret_for_validation and x_gitea_signature:
-            if not verify_webhook_signature(body, x_gitea_signature, secret_for_validation):
-                logger.warning("Webhook签名验证失败")
-                raise HTTPException(status_code=401, detail="Invalid signature")
-
-        # Debug日志：输出完整的webhook payload
-        if settings.debug:
-            logger.debug(f"[Webhook Payload] {json.dumps(payload, ensure_ascii=False, indent=2)}")
-
-        # 处理Pull Request事件
-        if x_gitea_event == "pull_request":
-            # 解析功能和重点
-            features = webhook_handler.parse_review_features(x_review_features)
-            focus_areas = webhook_handler.parse_review_focus(x_review_focus)
-
-            logger.info(f"收到PR webhook，功能: {features}, 重点: {focus_areas}")
-
-            # 添加后台任务
-            background_tasks.add_task(
-                webhook_handler.process_webhook_async, payload, features, focus_areas
-            )
-
-            # 立即返回202
-            return JSONResponse(
-                status_code=202,
-                content={
-                    "message": "Webhook received, processing in background",
-                    "features": features,
-                    "focus_areas": focus_areas,
-                },
-            )
-
-        # 处理Issue评论事件（用于手动触发）
-        elif x_gitea_event == "issue_comment":
-            logger.info("收到issue_comment webhook")
-
-            # 添加后台任务
-            background_tasks.add_task(
-                webhook_handler.process_comment_async, payload
-            )
-
-            # 立即返回202
-            return JSONResponse(
-                status_code=202,
-                content={
-                    "message": "Comment webhook received, processing in background",
-                },
-            )
-
-        # 其他事件类型
-        else:
-            logger.info(f"忽略事件: {x_gitea_event}")
-            return JSONResponse(
-                status_code=200, content={"message": "Event ignored"}
-            )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"处理webhook异常: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.on_event("startup")
-async def startup_event():
-    """应用启动事件"""
-    logger.info("Gitea PR Reviewer 启动")
-    logger.info(f"Gitea URL: {settings.gitea_url}")
-    logger.info(f"工作目录: {settings.work_dir}")
-    logger.info(f"Claude Code路径: {settings.claude_code_path}")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """应用关闭事件"""
-    logger.info("Gitea PR Reviewer 关闭")
-    # 可选：清理临时文件
-    # repo_manager.cleanup_all()
+app = create_app()
 
 
 if __name__ == "__main__":
@@ -306,5 +121,5 @@ if __name__ == "__main__":
         "app.main:app",
         host=settings.host,
         port=settings.port,
-        reload=True,
+        reload=settings.debug,
     )
