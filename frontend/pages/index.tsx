@@ -21,18 +21,17 @@ export default function Home() {
       });
   }, []);
 
+  const repoCountLabel = loading ? '同步中...' : `${repos.length} 个仓库`;
   return (
     <>
       <Head>
         <title>仪表盘 - Gitea PR Reviewer</title>
       </Head>
-      <main className="dashboard">
-        <section className="card">
-          <div className="panel-header">
+      <main className="dashboard home-dashboard">
+        <section className="repo-section">
+          <div className="repo-section-header">
             <h2>我的仓库</h2>
-            <span className="badge-soft">
-              {loading ? '加载中...' : `${repos.length} 个仓库`}
-            </span>
+            <span className="repo-count-badge">{repoCountLabel}</span>
           </div>
           {loading ? (
             <div className="empty-state">

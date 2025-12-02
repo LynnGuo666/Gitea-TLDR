@@ -18,20 +18,26 @@ export default function RepoList({ repos }: RepoListProps) {
 
   return (
     <div className="repo-list">
-      {repos.map((repo) => {
-        const fullName = repo.full_name || `${repo.owner?.username || repo.owner?.login}/${repo.name}`;
+      {repos.map((repo, index) => {
+        const owner = repo.owner?.username || repo.owner?.login || '未知';
+        const fullName = repo.full_name || `${owner}/${repo.name}`;
+        const visibility = repo.private ? '私有' : '公开';
         return (
           <Link
             key={repo.id}
             href={`/repo/${repo.owner?.username || repo.owner?.login}/${repo.name}`}
             className="repo-item"
+            style={{ animationDelay: `${index * 60}ms` }}
           >
             <div className="repo-item-icon">
               <RepoIcon size={20} />
             </div>
             <div className="repo-item-content">
               <h3>{fullName}</h3>
-              {repo.private && <span className="badge-private">私有</span>}
+              <p>
+                <span className="repo-meta-pill">{visibility}</span>
+                <span>{owner}</span>
+              </p>
             </div>
             <ChevronRightIcon size={20} className="repo-item-arrow" />
           </Link>
