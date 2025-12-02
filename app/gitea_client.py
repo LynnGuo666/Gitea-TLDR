@@ -314,6 +314,100 @@ class GiteaClient:
             logger.error(f"请求审查者失败: {e}")
             return False
 
+    async def list_user_repos(self) -> Optional[List[Dict[str, Any]]]:
+        """列出当前token可访问的仓库"""
+
+        url = f"{self.base_url}/api/v1/user/repos"
+        try:
+            self._log_debug("GET", url)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=self.headers)
+                self._log_response(response)
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            logger.error(f"获取仓库列表失败: {e}")
+            return None
+
+    async def list_repo_hooks(self, owner: str, repo: str) -> Optional[List[Dict[str, Any]]]:
+        """列出仓库的webhooks"""
+
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/hooks"
+        try:
+            self._log_debug("GET", url)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=self.headers)
+                self._log_response(response)
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            logger.error(f"获取仓库webhooks失败: {e}")
+            return None
+
+    async def create_repo_hook(
+        self, owner: str, repo: str, hook: Dict[str, Any]
+    ) -> Optional[int]:
+        """创建仓库webhook，返回hook ID"""
+
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/hooks"
+        try:
+            self._log_debug("POST", url, json=hook)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, headers=self.headers, json=hook)
+                self._log_response(response)
+                response.raise_for_status()
+                hook_data = response.json()
+                return hook_data.get("id")
+        except Exception as e:
+            logger.error(f"创建仓库webhook失败: {e}")
+            return None
+
+    async def update_repo_hook(
+        self, owner: str, repo: str, hook_id: int, hook: Dict[str, Any]
+    ) -> bool:
+        """更新已有仓库webhook"""
+
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/hooks/{hook_id}"
+        try:
+            self._log_debug("PATCH", url, json=hook)
+            async with httpx.AsyncClient() as client:
+                response = await client.patch(url, headers=self.headers, json=hook)
+                self._log_response(response)
+                response.raise_for_status()
+                return True
+        except Exception as e:
+            logger.error(f"更新仓库webhook失败: {e}")
+            return False
+
+    async def add_collaborator(self, owner: str, repo: str, username: str) -> bool:
+        """邀请指定用户协作仓库"""
+
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/collaborators/{username}"
+        try:
+            self._log_debug("PUT", url)
+            async with httpx.AsyncClient() as client:
+                response = await client.put(url, headers=self.headers)
+                self._log_response(response)
+                response.raise_for_status()
+                return True
+        except Exception as e:
+            logger.error(f"邀请协作者失败: {e}")
+            return False
+
+    async def ensure_repo_webhook(
+        self, owner: str, repo: str, hook_definition: Dict[str, Any]
+    ) -> Optional[int]:
+        """确保仓库存在符合配置的webhook，返回hook id"""
+
+        existing_hooks = await self.list_repo_hooks(owner, repo) or []
+        target_url = hook_definition.get("config", {}).get("url")
+        for hook in existing_hooks:
+            if hook.get("config", {}).get("url") == target_url:
+                updated = await self.update_repo_hook(owner, repo, hook.get("id"), hook_definition)
+                return hook.get("id") if updated else None
+
+        return await self.create_repo_hook(owner, repo, hook_definition)
+
     def get_clone_url(self, owner: str, repo: str) -> str:
         """
         获取仓库克隆URL（带认证）

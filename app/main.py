@@ -5,14 +5,19 @@ import logging
 import hmac
 import hashlib
 import json
+import secrets
+from pathlib import Path
 from typing import Optional
 from fastapi import FastAPI, Request, Header, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 from .config import settings
 from .gitea_client import GiteaClient
 from .repo_manager import RepoManager
 from .claude_analyzer import ClaudeAnalyzer
 from .webhook_handler import WebhookHandler
+from .repo_registry import RepoRegistry
 from .version import __version__, get_version_banner, get_version_info, get_changelog, get_all_changelogs
 
 # 配置日志
@@ -33,6 +38,14 @@ app = FastAPI(
     version=__version__,
 )
 
+frontend_out_dir = Path(__file__).resolve().parent.parent / "frontend" / "out"
+if frontend_out_dir.exists():
+    app.mount(
+        "/ui", StaticFiles(directory=str(frontend_out_dir), html=True), name="ui"
+    )
+else:
+    logger.warning("前端静态资源未构建，未挂载 /ui")
+
 # 初始化组件
 gitea_client = GiteaClient(settings.gitea_url, settings.gitea_token, settings.debug)
 repo_manager = RepoManager(settings.work_dir)
@@ -40,6 +53,22 @@ claude_analyzer = ClaudeAnalyzer(settings.claude_code_path, settings.debug)
 webhook_handler = WebhookHandler(
     gitea_client, repo_manager, claude_analyzer, settings.bot_username
 )
+repo_registry = RepoRegistry(settings.work_dir)
+
+
+class WebhookSetupRequest(BaseModel):
+    """前端用于配置Webhook的请求体"""
+
+    callback_url: Optional[str] = Field(
+        default=None, description="可选覆盖webhook回调URL"
+    )
+    events: list[str] = Field(
+        default_factory=lambda: ["pull_request", "issue_comment"],
+        description="需要监听的事件列表",
+    )
+    bring_bot: bool = Field(
+        default=True, description="是否自动邀请bot账号协作"
+    )
 
 
 def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> bool:
@@ -99,6 +128,61 @@ async def changelog():
     }
 
 
+@app.get("/api/config/public")
+async def public_config():
+    """提供前端需要的只读配置"""
+    return {
+        "gitea_url": settings.gitea_url,
+        "bot_username": settings.bot_username,
+        "debug": settings.debug,
+    }
+
+
+@app.get("/api/repos")
+async def list_repos():
+    """列出当前token可访问的仓库"""
+    repos = await gitea_client.list_user_repos()
+    if repos is None:
+        raise HTTPException(status_code=502, detail="无法从Gitea获取仓库列表")
+    return {"repos": repos}
+
+
+@app.post("/api/repos/{owner}/{repo}/setup")
+async def setup_repo_review(owner: str, repo: str, payload: WebhookSetupRequest, request: Request):
+    """为指定仓库配置Webhook并可选邀请Bot账号"""
+    callback_url = payload.callback_url or str(request.url_for("webhook"))
+    secret = repo_registry.get_secret(owner, repo) or secrets.token_hex(20)
+    repo_registry.set_secret(owner, repo, secret)
+
+    webhook_config = {
+        "type": "gitea",
+        "config": {
+            "url": callback_url,
+            "content_type": "json",
+            "secret": secret,
+        },
+        "events": payload.events,
+        "active": True,
+    }
+
+    hook_id = await gitea_client.ensure_repo_webhook(owner, repo, webhook_config)
+    if hook_id is None:
+        raise HTTPException(status_code=502, detail="创建或更新Webhook失败")
+
+    bot_added = False
+    if payload.bring_bot and settings.bot_username:
+        bot_added = await gitea_client.add_collaborator(owner, repo, settings.bot_username)
+
+    return {
+        "owner": owner,
+        "repo": repo,
+        "webhook_id": hook_id,
+        "webhook_url": callback_url,
+        "bot_invited": bot_added,
+        "events": payload.events,
+    }
+
+
 @app.post("/webhook")
 async def webhook(
     request: Request,
@@ -121,16 +205,24 @@ async def webhook(
         # 读取请求体
         body = await request.body()
 
+        # 解析JSON以确定仓库信息，从而选择对应的密钥
+        payload = await request.json()
+        repo_info = payload.get("repository", {}) if isinstance(payload, dict) else {}
+        owner_info = repo_info.get("owner", {}) if isinstance(repo_info, dict) else {}
+        owner_name = owner_info.get("username") or owner_info.get("login")
+        repo_name = repo_info.get("name")
+        repo_secret = (
+            repo_registry.get_secret(owner_name, repo_name)
+            if owner_name and repo_name
+            else None
+        )
+
         # 验证签名
-        if settings.webhook_secret and x_gitea_signature:
-            if not verify_webhook_signature(
-                body, x_gitea_signature, settings.webhook_secret
-            ):
+        secret_for_validation = repo_secret or settings.webhook_secret
+        if secret_for_validation and x_gitea_signature:
+            if not verify_webhook_signature(body, x_gitea_signature, secret_for_validation):
                 logger.warning("Webhook签名验证失败")
                 raise HTTPException(status_code=401, detail="Invalid signature")
-
-        # 解析JSON
-        payload = await request.json()
 
         # Debug日志：输出完整的webhook payload
         if settings.debug:

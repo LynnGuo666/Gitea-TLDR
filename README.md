@@ -21,6 +21,7 @@
 ## 技术栈
 
 - **FastAPI**：高性能异步Web框架
+- **Next.js 静态导出**：构建 `/ui` 前端控制台
 - **Claude Code CLI**：代码分析引擎
 - **httpx**：异步HTTP客户端
 - **Pydantic**：配置管理和数据验证
@@ -117,6 +118,16 @@ python -m app.main
 # 或使用uvicorn
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+前端控制台位于 `frontend` 目录，可通过 Next.js 静态导出后与 FastAPI 一并托管：
+
+```bash
+cd frontend
+npm install
+npm run build  # 生成 out/ 目录
+```
+
+如果检测到 `frontend/out`，FastAPI 将自动在 `/ui` 路径挂载静态资源。
 
 ### 5. 配置Gitea Webhook
 
