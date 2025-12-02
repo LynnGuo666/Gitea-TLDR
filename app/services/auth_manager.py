@@ -181,4 +181,3 @@ class AuthManager:
 
     def build_user_client(self, session: SessionData) -> GiteaClient:
         return GiteaClient(settings.gitea_url, session.access_token, settings.debug)
-*** End of File

@@ -68,23 +68,18 @@ def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> boo
     return hmac.compare_digest(signature, expected_signature)
 
 
-def create_api_router(context: AppContext) -> APIRouter:
-    """
-    创建包含所有业务端点的APIRouter。
-    """
-    router = APIRouter()
+def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
+    """创建API与公开端点的路由集合。"""
 
-    @router.get("/")
-    async def root():
-        """根路径重定向到前端页面"""
-        return RedirectResponse(url="/ui/", status_code=307)
+    api_router = APIRouter()
+    public_router = APIRouter()
 
-    @router.get("/health")
+    @public_router.get("/health")
     async def health():
         """健康检查端点"""
         return {"status": "healthy"}
 
-    @router.get("/version")
+    @public_router.get("/version")
     async def version():
         """版本信息端点"""
         return {
@@ -93,7 +88,7 @@ def create_api_router(context: AppContext) -> APIRouter:
             "changelog": get_changelog(),
         }
 
-    @router.get("/changelog")
+    @public_router.get("/changelog")
     async def changelog():
         """完整更新日志端点"""
         return {
@@ -101,7 +96,7 @@ def create_api_router(context: AppContext) -> APIRouter:
             "changelog": get_all_changelogs(),
         }
 
-    @router.get("/api/config/public")
+    @api_router.get("/config/public")
     async def public_config():
         """提供前端需要的只读配置"""
         return {
@@ -111,31 +106,31 @@ def create_api_router(context: AppContext) -> APIRouter:
             "oauth_enabled": context.auth_manager.enabled,
         }
 
-    @router.get("/api/auth/status")
+    @api_router.get("/auth/status")
     async def auth_status(request: Request):
         """返回当前会话状态"""
         return context.auth_manager.get_status_payload(request)
 
-    @router.get("/api/auth/login-url")
+    @api_router.get("/auth/login-url")
     async def auth_login_url():
         """生成OAuth授权地址"""
         if not context.auth_manager.enabled:
             raise HTTPException(status_code=404, detail="OAuth 未启用")
         return {"url": context.auth_manager.build_authorize_url()}
 
-    @router.post("/api/auth/logout")
+    @api_router.post("/auth/logout")
     async def auth_logout(request: Request, response: Response):
         """注销当前会话"""
         context.auth_manager.logout(request, response)
         return {"success": True}
 
-    @router.get("/api/auth/callback")
+    @api_router.get("/auth/callback")
     async def auth_callback(code: str, state: str):
         """OAuth回调，设置登录会话后重定向到主页"""
         redirect = RedirectResponse(url="/", status_code=303)
         return await context.auth_manager.handle_callback(code, state, redirect)
 
-    @router.get("/api/repos")
+    @api_router.get("/repos")
     async def list_repos(request: Request):
         """列出当前token可访问的仓库"""
         client = (
@@ -150,7 +145,7 @@ def create_api_router(context: AppContext) -> APIRouter:
             raise HTTPException(status_code=502, detail="无法从Gitea获取仓库列表")
         return {"repos": repos}
 
-    @router.post("/api/repos/{owner}/{repo}/setup")
+    @api_router.post("/repos/{owner}/{repo}/setup")
     async def setup_repo_review(
         owner: str, repo: str, payload: WebhookSetupRequest, request: Request
     ):
@@ -197,7 +192,7 @@ def create_api_router(context: AppContext) -> APIRouter:
             "events": payload.events,
         }
 
-    @router.post("/webhook")
+    @public_router.post("/webhook")
     async def webhook(
         request: Request,
         background_tasks: BackgroundTasks,
@@ -309,4 +304,4 @@ def create_api_router(context: AppContext) -> APIRouter:
             logger.error(f"处理webhook异常: {exc}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(exc))
 
-    return router
+    return api_router, public_router

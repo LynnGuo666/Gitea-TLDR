@@ -31,6 +31,8 @@ export default function Layout({ children }: LayoutProps) {
 
   useEffect(() => {
     refreshAuth();
+    const id = setInterval(refreshAuth, 5000);
+    return () => clearInterval(id);
   }, [refreshAuth]);
 
   const beginLogin = useCallback(async () => {
@@ -56,6 +58,8 @@ export default function Layout({ children }: LayoutProps) {
     [authStatus, refreshAuth, beginLogin, logout]
   );
 
+  const requiresLogin = authStatus.enabled && !authStatus.loggedIn;
+
   return (
     <AuthContext.Provider value={authContextValue}>
       <div className="app-container">
@@ -66,27 +70,6 @@ export default function Layout({ children }: LayoutProps) {
                 <DashboardIcon size={18} />
               </span>
               <strong>Gitea PR Reviewer</strong>
-            </div>
-            <div className="sidebar-auth">
-              {authStatus.enabled ? (
-                authStatus.loggedIn ? (
-                  <div className="user-chip">
-                    <div>
-                      <strong>
-                        {authStatus.user?.full_name || authStatus.user?.username || '已登录'}
-                      </strong>
-                      <span>{authStatus.user?.username || ''}</span>
-                    </div>
-                    <button onClick={logout}>退出</button>
-                  </div>
-                ) : (
-                  <button className="sidebar-login" onClick={beginLogin}>
-                    连接 Gitea
-                  </button>
-                )
-              ) : (
-                <p className="sidebar-hint">使用默认 PAT</p>
-              )}
             </div>
           </div>
           <nav className="sidebar-nav">
@@ -105,8 +88,44 @@ export default function Layout({ children }: LayoutProps) {
               );
             })}
           </nav>
+          <div className="sidebar-footer">
+            {authStatus.enabled ? (
+              authStatus.loggedIn ? (
+                <div className="user-chip">
+                  <div>
+                    <strong>
+                      {authStatus.user?.full_name || authStatus.user?.username || '已登录'}
+                    </strong>
+                    <span>@{authStatus.user?.username || ''}</span>
+                  </div>
+                  <button onClick={logout}>退出</button>
+                </div>
+              ) : (
+                <button className="sidebar-login" onClick={beginLogin}>
+                  连接 PKUGit
+                </button>
+              )
+            ) : (
+              <p className="sidebar-hint">使用默认 PAT</p>
+            )}
+          </div>
         </aside>
-        <main className="main-content">{children}</main>
+        <main className="main-content">
+          {requiresLogin ? (
+            <section className="card auth-gate">
+              <h1>连接 PKUGit</h1>
+              <p>
+                需要先授权 PKUGit 帐号后，才能加载仓库列表与审查配置。
+                该授权仅用于读取你有权限的仓库，并为其创建 Webhook。
+              </p>
+              <button className="primary-button" onClick={beginLogin}>
+                立即连接
+              </button>
+            </section>
+          ) : (
+            children
+          )}
+        </main>
       </div>
     </AuthContext.Provider>
   );

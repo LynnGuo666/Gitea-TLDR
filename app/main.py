@@ -7,7 +7,7 @@ import logging
 import sys
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 
 if __package__ in (None, ""):
@@ -87,15 +87,25 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    api_router, public_router = create_api_router(context)
+    app.include_router(public_router)
+    app.include_router(api_router, prefix="/api")
+
     frontend_out_dir = Path(__file__).resolve().parent.parent / "frontend" / "out"
     if frontend_out_dir.exists():
-        app.mount(
-            "/ui", StaticFiles(directory=str(frontend_out_dir), html=True), name="ui"
-        )
-    else:
-        logger.warning("前端静态资源未构建，未挂载 /ui")
+        static_app = StaticFiles(directory=str(frontend_out_dir), html=True)
 
-    app.include_router(create_api_router(context))
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def serve_frontend(full_path: str, request: Request):
+            if full_path.startswith("api"):
+                raise HTTPException(status_code=404)
+            target = full_path or "index.html"
+            response = await static_app.get_response(target, request.scope)
+            if response.status_code == 404:
+                return await static_app.get_response("index.html", request.scope)
+            return response
+    else:
+        logger.warning("前端静态资源未构建，未挂载静态站点")
     app.state.context = context
     return app
 
