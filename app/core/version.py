@@ -2,12 +2,18 @@
 版本信息模块
 """
 
-__version__ = "1.1.0"
-__release_date__ = "2025-11-28"
-__author__ = "Gitea-TLDR Team"
+__version__ = "1.1.1"
+__release_date__ = "2025-11-29"
+__author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.2.0": {
+        "date": "2025-11-29",
+        "changes": [
+            "更新：最低 Python 版本要求提升至 3.11+，与依赖栈保持一致"
+        ]
+    },
     "1.1.0": {
         "date": "2025-11-28",
         "changes": [
