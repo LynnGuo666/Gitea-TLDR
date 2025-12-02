@@ -4,6 +4,25 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.2.0] - 2025-11-29
+
+### 新增 (Added)
+
+- `AGENTS.md`：新增贡献者/agent 指南，说明项目结构、开发命令、提交流程与版本同步规范
+- 前端：头像 + 用户下拉菜单组件，提升仪表盘可用性
+- OAuth：新增登录入口与配置说明，前端 UI 同步展示登录状态
+
+### 改进 (Improved)
+
+- API 路由拆分为公共与私有两组，前端仪表盘布局随之调整，仓库列表交互体验优化
+- 启动日志输出 `Debug模式: 开启/关闭`，首屏即可确认运行模式
+- README 运行要求更新为 **Python 3.11+**，并同步记录在 `app/core/version.py`
+
+### 修复 (Fixed)
+
+- `python app/main.py` 运行方式改为使用 `app.main:app` import string，解决 Uvicorn 在 debug 模式下的 reload 警告
+- 更新依赖与样式资源，避免旧版前端包导致的布局混乱
+
 ## [1.1.0] - 2025-11-28
 
 ### 新增功能 (Added)

@@ -50,7 +50,7 @@ gitea-tldr/
 
 ### 1. 环境要求
 
-- Python 3.9+
+- Python 3.11+
 - Git
 - Claude Code CLI（已安装并配置）
 
