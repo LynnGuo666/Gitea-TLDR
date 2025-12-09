@@ -2,12 +2,20 @@
 版本信息模块
 """
 
-__version__ = "1.1.1"
-__release_date__ = "2025-11-29"
+__version__ = "1.3.0"
+__release_date__ = "2025-12-09"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.3.0": {
+        "date": "2025-12-09",
+        "changes": [
+            "新增：Claude输出结构化JSON，并可生成精确到文件/行的审查意见",
+            "新增：自动向PR Review附加行级评论并携带对应commit id",
+            "优化：审查状态根据整体严重程度自动标记"
+        ]
+    },
     "1.2.0": {
         "date": "2025-11-29",
         "changes": [

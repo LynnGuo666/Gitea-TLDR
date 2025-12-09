@@ -203,6 +203,7 @@ class GiteaClient:
         body: str,
         event: str = "COMMENT",
         comments: Optional[List[Dict[str, Any]]] = None,
+        commit_id: Optional[str] = None,
     ) -> bool:
         """
         创建PR审查
@@ -214,6 +215,7 @@ class GiteaClient:
             body: 审查内容
             event: 审查事件类型 (APPROVE, REQUEST_CHANGES, COMMENT)
             comments: 行级评论列表
+            commit_id: 对应的提交SHA（用于精准定位行级评论）
 
         Returns:
             是否成功
@@ -222,6 +224,8 @@ class GiteaClient:
         payload = {"body": body, "event": event}
         if comments:
             payload["comments"] = comments
+        if commit_id:
+            payload["commit_id"] = commit_id
 
         try:
             self._log_debug("POST", url, json=payload)
