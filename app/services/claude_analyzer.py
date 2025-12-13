@@ -35,7 +35,7 @@ class InlineCommentSuggestion:
 
         suggestion_text = (self.suggestion or "").strip()
         if suggestion_text:
-            parts.append(f"建议：{suggestion_text}")
+            parts.append(f"**建议**：{suggestion_text}")
 
         return "\n\n".join(parts).strip()
 
@@ -133,6 +133,7 @@ class ClaudeAnalyzer:
 - `summary_markdown` 字段使用Markdown编写上述内容，结构清晰
 - `overall_severity` 取值：critical/high/medium/low/info
 - `inline_comments` 最多5条，逐条包含精确的 `path`、`new_line` (新增行号) 或 `old_line` (删除行号)、`comment`，可选 `suggestion` 与 `severity`
+- `suggestion` 字段如果包含代码，必须使用 Markdown 代码块格式（```语言...```）
 - 对无法定位的建议，省略该条，确保所有行号与diff一致
 
 JSON结构示例：
@@ -146,7 +147,7 @@ JSON结构示例：
       "old_line": null,
       "severity": "high",
       "comment": "描述问题与影响",
-      "suggestion": "可执行的修复方案"
+      "suggestion": "建议修改为：\\n```python\\nresult = safe_function(user_input)\\n```"
     }}
   ]
 }}

@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "1.3.0"
-__release_date__ = "2025-12-09"
+__version__ = "1.3.1"
+__release_date__ = "2025-12-13"
 __author__ = "LynnGuo666"
 
 # 版本历史
