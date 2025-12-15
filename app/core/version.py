@@ -2,12 +2,19 @@
 版本信息模块
 """
 
-__version__ = "1.5.0"
+__version__ = "1.5.1"
 __release_date__ = "2025-12-15"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.5.1": {
+        "date": "2025-12-15",
+        "changes": [
+            "优化：仓库列表API只返回用户有admin权限的仓库",
+            "修复：添加greenlet依赖，修复SQLAlchemy异步引擎初始化失败问题"
+        ]
+    },
     "1.5.0": {
         "date": "2025-12-15",
         "changes": [

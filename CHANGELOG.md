@@ -4,6 +4,16 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.5.1] - 2025-12-15
+
+### 优化 (Improved)
+
+- **仓库列表过滤**: `/api/repos` 接口只返回用户有admin权限的仓库，因为只有admin才能配置webhook
+
+### 问题修复 (Fixed)
+
+- **数据库初始化**: 添加greenlet依赖，修复SQLAlchemy异步引擎初始化时报错 "the greenlet library is required"
+
 ## [1.5.0] - 2025-12-15
 
 ### 新增功能 (Added)
