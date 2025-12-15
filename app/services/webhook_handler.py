@@ -6,12 +6,14 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from app.core import settings
+from app.core.database import Database
 from app.services.claude_analyzer import (
     ClaudeAnalyzer,
     ClaudeReviewResult,
     InlineCommentSuggestion,
 )
 from app.services.command_parser import CommandParser
+from app.services.db_service import DBService
 from app.services.gitea_client import GiteaClient
 from app.services.repo_manager import RepoManager
 
@@ -26,6 +28,7 @@ class WebhookHandler:
         gitea_client: GiteaClient,
         repo_manager: RepoManager,
         claude_analyzer: ClaudeAnalyzer,
+        database: Optional[Database] = None,
         bot_username: Optional[str] = None,
     ):
         """
@@ -35,11 +38,13 @@ class WebhookHandler:
             gitea_client: Gitea客户端
             repo_manager: 仓库管理器
             claude_analyzer: Claude分析器
+            database: 数据库管理器（可选）
             bot_username: Bot用户名
         """
         self.gitea_client = gitea_client
         self.repo_manager = repo_manager
         self.claude_analyzer = claude_analyzer
+        self.database = database
         self.command_parser = CommandParser(bot_username)
 
     def parse_review_features(self, features_header: Optional[str]) -> List[str]:
@@ -120,6 +125,7 @@ class WebhookHandler:
                 pr_data=pr_data,
                 features=features,
                 focus_areas=focus_areas,
+                trigger_type="auto",
             )
 
         except Exception as e:
@@ -205,7 +211,8 @@ class WebhookHandler:
                 pr_number=pr_number,
                 pr_data=pr_data,
                 features=command.features,
-                focus_areas=command.focus_areas
+                focus_areas=command.focus_areas,
+                trigger_type="manual",
             )
 
         except Exception as e:
@@ -219,7 +226,8 @@ class WebhookHandler:
         pr_number: int,
         pr_data: Dict[str, Any],
         features: List[str],
-        focus_areas: List[str]
+        focus_areas: List[str],
+        trigger_type: str = "auto",
     ) -> bool:
         """
         执行PR审查（核心逻辑，被自动和手动触发共用）
@@ -231,12 +239,21 @@ class WebhookHandler:
             pr_data: PR详细数据
             features: 启用的功能列表
             focus_areas: 审查重点列表
+            trigger_type: 触发类型 (auto/manual)
 
         Returns:
             是否处理成功
         """
+        review_session_id = None
+        repository_id = None
+        analysis_mode = None
+        diff_size = 0
+        gitea_api_calls = 0
+        clone_operations = 0
+
         try:
             pr_title = pr_data.get("title")
+            pr_author = pr_data.get("user", {}).get("login")
             head_branch = pr_data.get("head", {}).get("ref")
             base_branch = pr_data.get("base", {}).get("ref")
             head_sha = pr_data.get("head", {}).get("sha")
@@ -246,6 +263,27 @@ class WebhookHandler:
                 f"({head_branch} -> {base_branch})"
             )
 
+            # 创建数据库记录
+            if self.database:
+                async with self.database.session() as session:
+                    db_service = DBService(session)
+                    repo = await db_service.get_or_create_repository(owner, repo_name)
+                    repository_id = repo.id
+
+                    review_session = await db_service.create_review_session(
+                        repository_id=repository_id,
+                        pr_number=pr_number,
+                        trigger_type=trigger_type,
+                        pr_title=pr_title,
+                        pr_author=pr_author,
+                        head_branch=head_branch,
+                        base_branch=base_branch,
+                        head_sha=head_sha,
+                        enabled_features=features,
+                        focus_areas=focus_areas,
+                    )
+                    review_session_id = review_session.id
+
             # 创建初始评论（如果启用了comment功能）
             comment_id = None
             if "comment" in features:
@@ -253,6 +291,7 @@ class WebhookHandler:
                 comment_id = await self.gitea_client.create_issue_comment(
                     owner, repo_name, pr_number, initial_comment
                 )
+                gitea_api_calls += 1
                 if comment_id:
                     logger.info(f"已创建初始评论，ID: {comment_id}")
 
@@ -265,11 +304,13 @@ class WebhookHandler:
                     "pending",
                     description="代码审查进行中...",
                 )
+                gitea_api_calls += 1
 
             # 获取PR diff
             diff_content = await self.gitea_client.get_pull_request_diff(
                 owner, repo_name, pr_number
             )
+            gitea_api_calls += 1
 
             if not diff_content:
                 logger.error("无法获取PR diff")
@@ -279,6 +320,7 @@ class WebhookHandler:
                     await self.gitea_client.update_issue_comment(
                         owner, repo_name, comment_id, error_comment
                     )
+                    gitea_api_calls += 1
                 if "status" in features:
                     await self.gitea_client.create_commit_status(
                         owner,
@@ -287,23 +329,40 @@ class WebhookHandler:
                         "error",
                         description="无法获取PR diff",
                     )
+                    gitea_api_calls += 1
+
+                # 更新数据库记录
+                if self.database and review_session_id:
+                    async with self.database.session() as session:
+                        db_service = DBService(session)
+                        await db_service.update_review_session(
+                            review_session_id,
+                            overall_success=False,
+                            error_message="无法获取PR diff",
+                            completed=True,
+                        )
                 return False
+
+            diff_size = len(diff_content)
 
             # 克隆仓库
             clone_url = self.gitea_client.get_clone_url(owner, repo_name)
             repo_path = await self.repo_manager.clone_repository(
                 clone_url, owner, repo_name, pr_number, head_branch
             )
+            clone_operations += 1
 
             if not repo_path:
                 logger.error("无法克隆仓库")
                 # 降级到简单模式
                 logger.info("降级到简单模式（仅分析diff）")
+                analysis_mode = "simple"
                 analysis_result = await self.claude_analyzer.analyze_pr_simple(
                     diff_content, focus_areas, pr_data
                 )
             else:
                 # 使用完整代码库分析
+                analysis_mode = "full"
                 analysis_result = await self.claude_analyzer.analyze_pr(
                     repo_path, diff_content, focus_areas, pr_data
                 )
@@ -319,6 +378,7 @@ class WebhookHandler:
                     await self.gitea_client.update_issue_comment(
                         owner, repo_name, comment_id, error_comment
                     )
+                    gitea_api_calls += 1
                 if "status" in features:
                     await self.gitea_client.create_commit_status(
                         owner,
@@ -327,6 +387,20 @@ class WebhookHandler:
                         "error",
                         description="代码审查失败",
                     )
+                    gitea_api_calls += 1
+
+                # 更新数据库记录
+                if self.database and review_session_id:
+                    async with self.database.session() as session:
+                        db_service = DBService(session)
+                        await db_service.update_review_session(
+                            review_session_id,
+                            analysis_mode=analysis_mode,
+                            diff_size_bytes=diff_size,
+                            overall_success=False,
+                            error_message="Claude分析失败",
+                            completed=True,
+                        )
                 return False
 
             # 根据功能标头发布结果
@@ -348,6 +422,7 @@ class WebhookHandler:
                         owner, repo_name, pr_number, comment_body
                     )
                     success &= (new_comment_id is not None)
+                gitea_api_calls += 1
 
             # 创建Review
             if "review" in features:
@@ -361,6 +436,7 @@ class WebhookHandler:
                     comments=review_comments if review_comments else None,
                     commit_id=head_sha,
                 )
+                gitea_api_calls += 1
                 success &= review_success
 
                 # 如果review创建成功且配置了bot_username且启用了auto_request_reviewer，则自动请求审查者
@@ -371,6 +447,7 @@ class WebhookHandler:
                         pr_number,
                         [settings.bot_username]
                     )
+                    gitea_api_calls += 1
 
             # 设置状态
             if "status" in features:
@@ -382,12 +459,76 @@ class WebhookHandler:
                     state,
                     description="代码审查完成",
                 )
+                gitea_api_calls += 1
+
+            # 更新数据库记录
+            if self.database and review_session_id:
+                async with self.database.session() as session:
+                    db_service = DBService(session)
+
+                    # 更新审查会话
+                    await db_service.update_review_session(
+                        review_session_id,
+                        analysis_mode=analysis_mode,
+                        diff_size_bytes=diff_size,
+                        overall_severity=analysis_result.overall_severity,
+                        summary_markdown=summary_markdown,
+                        inline_comments_count=len(analysis_result.inline_comments),
+                        overall_success=success,
+                        completed=True,
+                    )
+
+                    # 保存行级评论
+                    if analysis_result.inline_comments:
+                        comments_data = [
+                            {
+                                "path": c.path,
+                                "new_line": c.new_line,
+                                "old_line": c.old_line,
+                                "severity": c.severity,
+                                "comment": c.comment,
+                                "suggestion": c.suggestion,
+                            }
+                            for c in analysis_result.inline_comments
+                        ]
+                        await db_service.save_inline_comments(
+                            review_session_id, comments_data
+                        )
+
+                    # 记录使用量
+                    if repository_id:
+                        estimated_input = diff_size // 4 + 500  # 粗略估算
+                        estimated_output = len(summary_markdown) // 4
+                        await db_service.record_usage(
+                            repository_id=repository_id,
+                            review_session_id=review_session_id,
+                            estimated_input_tokens=estimated_input,
+                            estimated_output_tokens=estimated_output,
+                            gitea_api_calls=gitea_api_calls,
+                            claude_api_calls=1,
+                            clone_operations=clone_operations,
+                        )
 
             logger.info(f"PR审查完成: {owner}/{repo_name}#{pr_number}")
             return success
 
         except Exception as e:
             logger.error(f"执行审查异常: {e}", exc_info=True)
+
+            # 更新数据库记录
+            if self.database and review_session_id:
+                try:
+                    async with self.database.session() as session:
+                        db_service = DBService(session)
+                        await db_service.update_review_session(
+                            review_session_id,
+                            overall_success=False,
+                            error_message=str(e),
+                            completed=True,
+                        )
+                except Exception as db_error:
+                    logger.error(f"更新数据库记录失败: {db_error}")
+
             return False
 
     async def process_comment_async(self, payload: Dict[str, Any]):

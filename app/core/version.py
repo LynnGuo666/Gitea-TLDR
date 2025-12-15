@@ -2,12 +2,35 @@
 版本信息模块
 """
 
-__version__ = "1.3.1"
-__release_date__ = "2025-12-13"
+__version__ = "1.5.0"
+__release_date__ = "2025-12-15"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.5.0": {
+        "date": "2025-12-15",
+        "changes": [
+            "新增：仓库权限检查API，支持OAuth用户权限验证",
+            "新增：GiteaClient.get_repository()方法，获取仓库详细信息",
+            "新增：GiteaClient.check_repo_permissions()方法，检查用户权限",
+            "新增：API端点 /api/repos/{owner}/{repo}/permissions",
+            "优化：所有写操作的错误处理，区分权限错误和其他错误",
+            "优化：权限不足时记录warning级别日志，便于排查问题"
+        ]
+    },
+    "1.4.0": {
+        "date": "2025-12-13",
+        "changes": [
+            "新增：SQLite数据库支持，使用SQLAlchemy ORM管理数据",
+            "新增：审查历史记录，完整保存每次PR审查的详细信息",
+            "新增：使用量统计，追踪API调用次数和token消耗估算",
+            "新增：模型配置管理，支持全局和仓库级别的AI配置",
+            "新增：API端点 /api/reviews、/api/stats、/api/configs、/api/repositories",
+            "优化：仓库注册表支持数据库存储，自动从JSON迁移",
+            "优化：Webhook处理器自动记录审查会话到数据库"
+        ]
+    },
     "1.3.0": {
         "date": "2025-12-09",
         "changes": [

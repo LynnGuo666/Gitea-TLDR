@@ -4,6 +4,75 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.5.0] - 2025-12-15
+
+### 新增功能 (Added)
+
+- **权限检查API**: 新增仓库权限检查功能，支持OAuth用户权限验证
+- **仓库信息获取**: 新增 `GiteaClient.get_repository()` 方法，获取仓库详细信息（包含权限）
+- **权限验证方法**: 新增 `GiteaClient.check_repo_permissions()` 方法，检查用户对仓库的admin/push/pull权限
+
+### API端点 (Endpoints)
+
+- `GET /api/repos/{owner}/{repo}/permissions`: 检查当前用户对指定仓库的权限，返回权限详情和是否可设置webhook
+
+### 技术改进 (Technical)
+
+- 优化所有写操作的错误处理，区分权限错误（401/403）和其他错误
+- 权限不足时记录warning级别日志，便于排查问题
+- 改进以下方法的错误处理：
+  - `create_issue_comment()`: 创建PR评论
+  - `update_issue_comment()`: 更新PR评论
+  - `create_review()`: 创建PR审查
+  - `create_commit_status()`: 设置提交状态
+  - `request_reviewer()`: 请求审查者
+  - `add_collaborator()`: 邀请协作者
+
+### 使用场景 (Use Cases)
+
+- OAuth用户登录后，前端可通过权限API判断是否显示webhook设置按钮
+- 只有具有admin权限的用户才能看到仓库管理功能
+- 权限不足时，系统会优雅降级，记录警告日志而不是错误
+
+## [1.4.0] - 2025-12-13
+
+### 新增功能 (Added)
+
+- **数据库支持**: 新增SQLite数据库，使用SQLAlchemy ORM管理所有数据
+- **审查历史**: 完整记录每次PR审查的详细信息，包括触发类型、分析模式、审查结果
+- **行级评论存储**: 保存Claude返回的所有行级评论，支持后续查询和分析
+- **使用量统计**: 追踪API调用次数、token消耗估算、克隆操作次数
+- **模型配置管理**: 支持全局和仓库级别的AI模型配置
+
+### API端点 (Endpoints)
+
+- `GET /api/reviews`: 获取审查历史列表，支持按仓库筛选和分页
+- `GET /api/reviews/{id}`: 获取审查详情，包含行级评论
+- `GET /api/stats`: 获取使用量统计汇总和详情
+- `GET /api/configs`: 获取所有模型配置
+- `POST /api/configs`: 创建或更新模型配置
+- `GET /api/repositories`: 获取所有已配置的仓库
+
+### 技术改进 (Technical)
+
+- 新增 `app/core/database.py`: 异步数据库连接管理
+- 新增 `app/models/`: ORM模型目录，包含5个数据表模型
+- 新增 `app/services/db_service.py`: 数据库操作服务层
+- 仓库注册表支持数据库存储，启动时自动从JSON迁移
+- Webhook处理器自动记录审查会话和使用量到数据库
+
+### 数据库表结构 (Database Schema)
+
+- `repositories`: 仓库基础信息和webhook密钥
+- `model_configs`: AI模型配置（全局/仓库级别）
+- `review_sessions`: 审查会话记录
+- `inline_comments`: 行级评论详情
+- `usage_stats`: 使用量统计
+
+### 配置选项 (Configuration)
+
+- `DATABASE_URL`: 数据库连接URL（可选，默认使用工作目录下的SQLite文件）
+
 ## [1.3.0] - 2025-12-09
 
 ### 新增功能 (Added)

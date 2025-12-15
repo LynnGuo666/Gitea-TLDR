@@ -31,6 +31,19 @@ class Settings(BaseSettings):
     # 工作目录配置
     work_dir: str = Field("/tmp/gitea-pr-reviewer", description="临时工作目录")
 
+    # 数据库配置
+    database_url: Optional[str] = Field(
+        None,
+        description="数据库连接URL，默认为工作目录下的SQLite文件"
+    )
+
+    @property
+    def effective_database_url(self) -> str:
+        """获取实际的数据库URL，如果未配置则使用默认SQLite路径"""
+        if self.database_url:
+            return self.database_url
+        return f"sqlite+aiosqlite:///{self.work_dir}/gitea_pr_reviewer.db"
+
     # 服务器配置
     host: str = Field("0.0.0.0", description="服务器监听地址")
     port: int = Field(8000, description="服务器端口")

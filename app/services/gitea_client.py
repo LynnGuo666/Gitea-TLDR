@@ -160,6 +160,12 @@ class GiteaClient:
                 comment_id = comment_data.get("id")
                 logger.info(f"成功创建PR评论: {owner}/{repo}#{pr_number}, ID: {comment_id}")
                 return comment_id
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (401, 403):
+                logger.warning(f"权限不足，无法创建PR评论: {owner}/{repo}#{pr_number} (HTTP {e.response.status_code})")
+            else:
+                logger.error(f"创建PR评论失败: {e}")
+            return None
         except Exception as e:
             logger.error(f"创建PR评论失败: {e}")
             return None
@@ -191,6 +197,12 @@ class GiteaClient:
                 response.raise_for_status()
                 logger.info(f"成功更新PR评论: {owner}/{repo}, 评论ID: {comment_id}")
                 return True
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (401, 403):
+                logger.warning(f"权限不足，无法更新PR评论: {owner}/{repo}, 评论ID: {comment_id} (HTTP {e.response.status_code})")
+            else:
+                logger.error(f"更新PR评论失败: {e}")
+            return False
         except Exception as e:
             logger.error(f"更新PR评论失败: {e}")
             return False
@@ -235,6 +247,12 @@ class GiteaClient:
                 response.raise_for_status()
                 logger.info(f"成功创建PR审查: {owner}/{repo}#{pr_number}")
                 return True
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (401, 403):
+                logger.warning(f"权限不足，无法创建PR审查: {owner}/{repo}#{pr_number} (HTTP {e.response.status_code})")
+            else:
+                logger.error(f"创建PR审查失败: {e}")
+            return False
         except Exception as e:
             logger.error(f"创建PR审查失败: {e}")
             return False
@@ -280,6 +298,12 @@ class GiteaClient:
                 response.raise_for_status()
                 logger.info(f"成功设置提交状态: {owner}/{repo}@{sha[:7]} -> {state}")
                 return True
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (401, 403):
+                logger.warning(f"权限不足，无法设置提交状态: {owner}/{repo}@{sha[:7]} (HTTP {e.response.status_code})")
+            else:
+                logger.error(f"设置提交状态失败: {e}")
+            return False
         except Exception as e:
             logger.error(f"设置提交状态失败: {e}")
             return False
@@ -314,9 +338,60 @@ class GiteaClient:
                 response.raise_for_status()
                 logger.info(f"成功请求审查者: {owner}/{repo}#{pr_number} <- {reviewers}")
                 return True
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (401, 403):
+                logger.warning(f"权限不足，无法请求审查者: {owner}/{repo}#{pr_number} (HTTP {e.response.status_code})")
+            else:
+                logger.error(f"请求审查者失败: {e}")
+            return False
         except Exception as e:
             logger.error(f"请求审查者失败: {e}")
             return False
+
+    async def get_repository(self, owner: str, repo: str) -> Optional[Dict[str, Any]]:
+        """
+        获取仓库详细信息（包含权限）
+
+        Args:
+            owner: 仓库所有者
+            repo: 仓库名称
+
+        Returns:
+            仓库信息字典，包含permissions字段
+        """
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}"
+        try:
+            self._log_debug("GET", url)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=self.headers)
+                self._log_response(response)
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            logger.error(f"获取仓库信息失败: {e}")
+            return None
+
+    async def check_repo_permissions(self, owner: str, repo: str) -> Optional[Dict[str, bool]]:
+        """
+        检查当前用户对仓库的权限
+
+        Args:
+            owner: 仓库所有者
+            repo: 仓库名称
+
+        Returns:
+            权限字典 {"admin": bool, "push": bool, "pull": bool}，失败返回None
+        """
+        repo_info = await self.get_repository(owner, repo)
+        if not repo_info:
+            return None
+
+        permissions = repo_info.get("permissions", {})
+        return {
+            "admin": permissions.get("admin", False),
+            "push": permissions.get("push", False),
+            "pull": permissions.get("pull", False),
+        }
 
     async def list_user_repos(self) -> Optional[List[Dict[str, Any]]]:
         """列出当前token可访问的仓库"""
@@ -394,6 +469,12 @@ class GiteaClient:
                 self._log_response(response)
                 response.raise_for_status()
                 return True
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (401, 403):
+                logger.warning(f"权限不足，无法邀请协作者: {owner}/{repo} <- {username} (HTTP {e.response.status_code})")
+            else:
+                logger.error(f"邀请协作者失败: {e}")
+            return False
         except Exception as e:
             logger.error(f"邀请协作者失败: {e}")
             return False
