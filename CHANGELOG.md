@@ -4,6 +4,40 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.6.0] - 2025-12-16
+
+### 新增功能 (Added)
+
+- **暗色模式**: 前端支持亮色/暗色主题切换，可通过侧边栏按钮切换，偏好自动保存到本地
+- **CSS变量系统**: 引入完整的CSS变量体系，统一颜色、间距、圆角、阴影等设计规范
+- **骨架屏加载**: 新增Skeleton组件，仓库列表和卡片加载时显示平滑的骨架屏动画
+- **Toast通知**: 新增Toast组件，支持success/error/warning/info四种类型，操作反馈更直观
+- **仓库搜索**: 首页新增搜索框，支持按仓库名称实时筛选（仓库数超过3个时显示）
+- **刷新按钮**: 仓库列表和用量统计页面新增手动刷新按钮，带旋转动画
+- **Webhook状态检测**: 仓库配置页面自动检测Webhook是否已配置
+- **Toggle开关**: 新增Toggle Switch组件，直观展示和控制Webhook启用状态
+
+### API端点 (Endpoints)
+
+- `GET /api/repos/{owner}/{repo}/webhook-status`: 获取仓库Webhook配置状态，返回是否已配置、是否激活、监听事件列表
+- `DELETE /api/repos/{owner}/{repo}/webhook`: 删除仓库的Webhook配置
+
+### 技术改进 (Technical)
+
+- **自定义Hooks**: 新增 `useLocalStorage`、`useTheme`、`useDebounce`、`useWindowFocus` 等React Hooks
+- **智能轮询**: auth状态轮询从5秒改为10-30秒，窗口聚焦时自动刷新，降低不必要的请求
+- **响应式优化**: 改进移动端布局，侧边栏在小屏幕上显示为顶部导航
+- **用量统计**: 用量页面从硬编码数据改为连接真实 `/api/stats` API
+- **组件库**: 新增 `components/ui/` 目录，包含Skeleton、Toast等通用组件
+
+### 前端文件结构 (Frontend Structure)
+
+- `lib/hooks.ts`: 自定义React Hooks
+- `components/ui/Skeleton.tsx`: 骨架屏组件
+- `components/ui/Toast.tsx`: Toast通知组件
+- `components/ui/index.ts`: 组件导出
+- `components/icons.tsx`: 新增SunIcon、MoonIcon、SearchIcon、RefreshIcon图标
+
 ## [1.5.1] - 2025-12-15
 
 ### 优化 (Improved)

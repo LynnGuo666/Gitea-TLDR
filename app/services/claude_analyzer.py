@@ -200,6 +200,7 @@ JSON结构示例：
 
             if process.returncode != 0:
                 logger.error(f"Claude Code执行失败 (返回码: {process.returncode})")
+                logger.error(f"Stdout: {stdout.decode()}")
                 logger.error(f"Stderr: {stderr.decode()}")
                 return None
 
@@ -262,6 +263,7 @@ JSON结构示例：
 
             if process.returncode != 0:
                 logger.error(f"Claude Code执行失败 (返回码: {process.returncode})")
+                logger.error(f"Stdout: {stdout.decode()}")
                 logger.error(f"Stderr: {stderr.decode()}")
                 return None
 

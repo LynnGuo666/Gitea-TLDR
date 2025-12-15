@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
-import { DashboardIcon, UsageIcon, UserIcon } from './icons';
+import { DashboardIcon, UsageIcon, UserIcon, SunIcon, MoonIcon } from './icons';
 import {
   AuthContext,
   defaultAuthStatus,
@@ -10,6 +10,7 @@ import {
   beginOAuthLogin,
   requestLogout,
 } from '../lib/auth';
+import { useTheme, useWindowFocus } from '../lib/hooks';
 
 type LayoutProps = {
   children: ReactNode;
@@ -21,10 +22,16 @@ const navItems = [
   { href: '/settings', label: '用户中心', icon: UserIcon },
 ];
 
+const AUTH_POLL_INTERVAL = 30000; // 30 seconds instead of 5
+const AUTH_POLL_INTERVAL_FOCUSED = 10000; // 10 seconds when window is focused
+
 export default function Layout({ children }: LayoutProps) {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState(defaultAuthStatus);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const { resolvedTheme, toggleTheme } = useTheme();
+  const isWindowFocused = useWindowFocus();
+
   const refreshAuth = useCallback(() => {
     fetchAuthStatus()
       .then(setAuthStatus)
@@ -33,9 +40,21 @@ export default function Layout({ children }: LayoutProps) {
 
   useEffect(() => {
     refreshAuth();
-    const id = setInterval(refreshAuth, 5000);
-    return () => clearInterval(id);
   }, [refreshAuth]);
+
+  // Smart polling: more frequent when focused, less when not
+  useEffect(() => {
+    const interval = isWindowFocused ? AUTH_POLL_INTERVAL_FOCUSED : AUTH_POLL_INTERVAL;
+    const id = setInterval(refreshAuth, interval);
+    return () => clearInterval(id);
+  }, [refreshAuth, isWindowFocused]);
+
+  // Refresh on window focus
+  useEffect(() => {
+    if (isWindowFocused) {
+      refreshAuth();
+    }
+  }, [isWindowFocused, refreshAuth]);
 
   const beginLogin = useCallback(async () => {
     try {
@@ -74,6 +93,14 @@ export default function Layout({ children }: LayoutProps) {
               </span>
               <strong>Gitea PR Reviewer</strong>
             </div>
+            <button
+              className="theme-toggle"
+              onClick={toggleTheme}
+              title={resolvedTheme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
+              aria-label="切换主题"
+            >
+              {resolvedTheme === 'dark' ? <SunIcon size={18} /> : <MoonIcon size={18} />}
+            </button>
           </div>
           <nav className="sidebar-nav">
             {navItems.map((item) => {

@@ -1,14 +1,44 @@
 import Head from 'next/head';
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useState, useMemo } from 'react';
 import RepoList from '../components/RepoList';
+import { RepoSkeleton } from '../components/ui';
+import { SearchIcon, RefreshIcon, RepoIcon } from '../components/icons';
 import { Repo } from '../lib/types';
 import { AuthContext } from '../lib/auth';
+import { useDebounce } from '../lib/hooks';
 
 export default function Home() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [needsAuth, setNeedsAuth] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { status: authStatus, beginLogin } = useContext(AuthContext);
+
+  const debouncedSearch = useDebounce(searchQuery, 300);
+
+  const fetchRepos = async (showRefreshing = false) => {
+    if (showRefreshing) setRefreshing(true);
+    else setLoading(true);
+
+    try {
+      const res = await fetch('/api/repos');
+      if (res.status === 401) {
+        setNeedsAuth(true);
+        setRepos([]);
+      } else {
+        const data = await res.json();
+        setNeedsAuth(false);
+        setRepos(data.repos || []);
+      }
+    } catch {
+      setRepos([]);
+      setNeedsAuth(false);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     if (authStatus.enabled && !authStatus.loggedIn) {
@@ -17,36 +47,24 @@ export default function Home() {
       setLoading(false);
       return;
     }
-
-    setLoading(true);
-    fetch('/api/repos')
-      .then(async (res) => {
-        if (res.status === 401) {
-          setNeedsAuth(true);
-          setRepos([]);
-          setLoading(false);
-          return null;
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (!data) return;
-        setNeedsAuth(false);
-        setRepos(data.repos || []);
-        setLoading(false);
-      })
-      .catch(() => {
-        setRepos([]);
-        setLoading(false);
-        setNeedsAuth(false);
-      });
+    fetchRepos();
   }, [authStatus.enabled, authStatus.loggedIn]);
+
+  const filteredRepos = useMemo(() => {
+    if (!debouncedSearch.trim()) return repos;
+    const query = debouncedSearch.toLowerCase();
+    return repos.filter((repo) => {
+      const fullName = repo.full_name || `${repo.owner?.username || repo.owner?.login}/${repo.name}`;
+      return fullName.toLowerCase().includes(query);
+    });
+  }, [repos, debouncedSearch]);
 
   const repoCountLabel = needsAuth
     ? '等待登录'
     : loading
     ? '同步中...'
-    : `${repos.length} 个仓库`;
+    : `${filteredRepos.length} 个仓库${debouncedSearch ? ` (筛选自 ${repos.length})` : ''}`;
+
   return (
     <>
       <Head>
@@ -56,21 +74,60 @@ export default function Home() {
         <section className="repo-section">
           <div className="repo-section-header">
             <h2>我的仓库</h2>
-            <span className="repo-count-badge">{repoCountLabel}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span className="repo-count-badge">{repoCountLabel}</span>
+              {!needsAuth && !loading && (
+                <button
+                  className={`refresh-button ${refreshing ? 'spinning' : ''}`}
+                  onClick={() => fetchRepos(true)}
+                  disabled={refreshing}
+                  title="刷新仓库列表"
+                >
+                  <RefreshIcon size={18} />
+                </button>
+              )}
+            </div>
           </div>
+
           {needsAuth ? (
             <div className="empty-state">
+              <div className="empty-state-icon">
+                <RepoIcon size={32} />
+              </div>
+              <h3>连接 Gitea 以开始</h3>
               <p>请先连接 Gitea，才可同步仓库列表。</p>
               <button className="primary-button" onClick={beginLogin}>
                 使用 Gitea 登录
               </button>
             </div>
           ) : loading ? (
-            <div className="empty-state">
-              <p>加载中...</p>
-            </div>
+            <RepoSkeleton />
           ) : (
-            <RepoList repos={repos} />
+            <>
+              {repos.length > 3 && (
+                <div className="search-container">
+                  <SearchIcon size={18} className="search-icon" />
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="搜索仓库..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+              )}
+              {filteredRepos.length === 0 && debouncedSearch ? (
+                <div className="empty-state">
+                  <div className="empty-state-icon">
+                    <SearchIcon size={32} />
+                  </div>
+                  <h3>未找到匹配的仓库</h3>
+                  <p>尝试使用不同的搜索词</p>
+                </div>
+              ) : (
+                <RepoList repos={filteredRepos} />
+              )}
+            </>
           )}
         </section>
       </main>

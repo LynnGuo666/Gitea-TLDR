@@ -237,6 +237,105 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             "events": payload.events,
         }
 
+    @api_router.get("/repos/{owner}/{repo}/webhook-status")
+    async def get_webhook_status(owner: str, repo: str, request: Request):
+        """获取仓库的 Webhook 配置状态"""
+        client = (
+            context.auth_manager.build_user_client(
+                context.auth_manager.require_session(request)
+            )
+            if context.auth_manager.enabled
+            else context.gitea_client
+        )
+
+        # 获取当前服务的回调 URL
+        try:
+            callback_url = str(request.url_for("webhook"))
+        except Exception:
+            callback_url = None
+
+        hooks = await client.list_repo_hooks(owner, repo)
+        if hooks is None:
+            raise HTTPException(status_code=502, detail="无法获取仓库Webhook列表")
+
+        # 查找匹配当前服务的 webhook
+        matched_hook = None
+        for hook in hooks:
+            hook_url = hook.get("config", {}).get("url", "")
+            # 检查是否匹配当前服务的回调 URL
+            if callback_url and hook_url == callback_url:
+                matched_hook = hook
+                break
+            # 也检查是否包含 pr-reviewer 相关的 URL（兼容不同部署）
+            if "webhook" in hook_url or "pr-review" in hook_url.lower():
+                matched_hook = hook
+
+        if matched_hook:
+            return {
+                "configured": True,
+                "active": matched_hook.get("active", False),
+                "webhook_id": matched_hook.get("id"),
+                "events": matched_hook.get("events", []),
+                "url": matched_hook.get("config", {}).get("url", ""),
+                "created_at": matched_hook.get("created_at"),
+                "updated_at": matched_hook.get("updated_at"),
+            }
+        else:
+            return {
+                "configured": False,
+                "active": False,
+                "webhook_id": None,
+                "events": [],
+                "url": None,
+            }
+
+    @api_router.delete("/repos/{owner}/{repo}/webhook")
+    async def delete_webhook(owner: str, repo: str, request: Request):
+        """删除仓库的 Webhook"""
+        client = (
+            context.auth_manager.build_user_client(
+                context.auth_manager.require_session(request)
+            )
+            if context.auth_manager.enabled
+            else context.gitea_client
+        )
+
+        # 先获取 webhook 状态
+        try:
+            callback_url = str(request.url_for("webhook"))
+        except Exception:
+            callback_url = None
+
+        hooks = await client.list_repo_hooks(owner, repo)
+        if hooks is None:
+            raise HTTPException(status_code=502, detail="无法获取仓库Webhook列表")
+
+        # 查找并删除匹配的 webhook
+        deleted = False
+        for hook in hooks:
+            hook_url = hook.get("config", {}).get("url", "")
+            if (callback_url and hook_url == callback_url) or "webhook" in hook_url:
+                hook_id = hook.get("id")
+                if hook_id:
+                    # 调用 Gitea API 删除 webhook
+                    delete_url = f"{client.base_url}/api/v1/repos/{owner}/{repo}/hooks/{hook_id}"
+                    try:
+                        import httpx
+                        async with httpx.AsyncClient() as http_client:
+                            response = await http_client.delete(delete_url, headers=client.headers)
+                            if response.status_code in (200, 204):
+                                deleted = True
+                                # 同时清除本地保存的 secret
+                                context.repo_registry.set_secret(owner, repo, None)
+                                break
+                    except Exception as e:
+                        logger.error(f"删除webhook失败: {e}")
+
+        if deleted:
+            return {"success": True, "message": "Webhook 已删除"}
+        else:
+            raise HTTPException(status_code=404, detail="未找到匹配的Webhook")
+
     # ==================== 审查历史 API ====================
 
     @api_router.get("/reviews")
