@@ -1,6 +1,7 @@
 """
 FastAPI主应用
 """
+
 from __future__ import annotations
 
 import logging
@@ -16,12 +17,14 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(project_root))
 
 from app.api import create_api_router
+from app.api.admin_routes import create_admin_router
 from app.core import (
     settings,
     __version__,
     get_version_banner,
     get_version_info,
 )
+from app.core.admin_auth import ensure_initial_admin
 from app.core.context import AppContext
 from app.core.database import Database
 from app.services import (
@@ -129,6 +132,17 @@ def create_app() -> FastAPI:
             except Exception as e:
                 logger.warning(f"JSON数据迁移失败: {e}")
 
+            # 初始化管理员用户
+            if settings.admin_enabled and settings.initial_admin_username:
+                try:
+                    async with database.session() as session:
+                        await ensure_initial_admin(
+                            session, settings.initial_admin_username
+                        )
+                        logger.info("管理后台已启用")
+                except Exception as e:
+                    logger.warning(f"管理员初始化失败: {e}")
+
         except Exception as e:
             logger.error(f"数据库初始化失败: {e}", exc_info=True)
             logger.warning("服务将以无数据库模式运行")
@@ -153,6 +167,12 @@ def create_app() -> FastAPI:
     api_router, public_router = create_api_router(context)
     app.include_router(public_router)
     app.include_router(api_router, prefix="/api")
+
+    # 创建管理后台路由
+    if settings.admin_enabled:
+        admin_router = create_admin_router(context)
+        app.include_router(admin_router, prefix="/api")
+        logger.info("管理后台路由已注册")
 
     frontend_out_dir = Path(__file__).resolve().parent.parent / "frontend" / "out"
     if frontend_out_dir.exists():
