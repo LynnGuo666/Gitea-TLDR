@@ -397,7 +397,9 @@ export default function RepoConfigPage() {
           ) : claudeConfigLoading ? (
             <div style={{ padding: 'var(--spacing-md)' }}>
               <Skeleton width="100%" height={40} />
-              <Skeleton width="100%" height={40} style={{ marginTop: 'var(--spacing-sm)' }} />
+              <div style={{ marginTop: 'var(--spacing-sm)' }}>
+                <Skeleton width="100%" height={40} />
+              </div>
             </div>
           ) : (
             <>
