@@ -263,12 +263,24 @@ class WebhookHandler:
                 f"({head_branch} -> {base_branch})"
             )
 
+            # 查询仓库的 Anthropic 配置
+            anthropic_base_url = None
+            anthropic_auth_token = None
+
             # 创建数据库记录
             if self.database:
                 async with self.database.session() as session:
                     db_service = DBService(session)
                     repo = await db_service.get_or_create_repository(owner, repo_name)
                     repository_id = repo.id
+
+                    # 查询仓库的 ModelConfig 获取 Anthropic 配置
+                    model_config = await db_service.get_model_config(repository_id)
+                    if model_config:
+                        anthropic_base_url = model_config.anthropic_base_url
+                        anthropic_auth_token = model_config.anthropic_auth_token
+                        if anthropic_base_url or anthropic_auth_token:
+                            logger.info(f"使用仓库 {owner}/{repo_name} 的自定义 Anthropic 配置")
 
                     review_session = await db_service.create_review_session(
                         repository_id=repository_id,
@@ -358,13 +370,17 @@ class WebhookHandler:
                 logger.info("降级到简单模式（仅分析diff）")
                 analysis_mode = "simple"
                 analysis_result = await self.claude_analyzer.analyze_pr_simple(
-                    diff_content, focus_areas, pr_data
+                    diff_content, focus_areas, pr_data,
+                    anthropic_base_url=anthropic_base_url,
+                    anthropic_auth_token=anthropic_auth_token,
                 )
             else:
                 # 使用完整代码库分析
                 analysis_mode = "full"
                 analysis_result = await self.claude_analyzer.analyze_pr(
-                    repo_path, diff_content, focus_areas, pr_data
+                    repo_path, diff_content, focus_areas, pr_data,
+                    anthropic_base_url=anthropic_base_url,
+                    anthropic_auth_token=anthropic_auth_token,
                 )
 
                 # 清理仓库

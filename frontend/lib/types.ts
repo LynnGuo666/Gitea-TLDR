@@ -10,4 +10,20 @@ export type PublicConfig = {
   gitea_url: string;
   bot_username?: string | null;
   debug: boolean;
+  oauth_enabled?: boolean;
+};
+
+export type RepoClaudeConfig = {
+  configured: boolean;
+  anthropic_base_url?: string | null;
+  has_auth_token: boolean;
+};
+
+export type UsageSummary = {
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_gitea_calls: number;
+  total_claude_calls: number;
+  total_clones: number;
+  record_count: number;
 };

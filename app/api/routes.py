@@ -62,6 +62,13 @@ class ModelConfigRequest(BaseModel):
     is_default: bool = Field(False, description="是否为默认配置")
 
 
+class ClaudeConfigRequest(BaseModel):
+    """Claude 配置请求体"""
+
+    anthropic_base_url: Optional[str] = Field(None, description="Anthropic API Base URL")
+    anthropic_auth_token: Optional[str] = Field(None, description="Anthropic Auth Token")
+
+
 def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> bool:
     """
     验证webhook签名
@@ -565,6 +572,125 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             }
 
     # ==================== 仓库管理 API ====================
+
+    @api_router.get("/repos/{owner}/{repo}/claude-config")
+    async def get_repo_claude_config(owner: str, repo: str, request: Request):
+        """获取仓库的 Claude 配置"""
+        if not context.database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        async with context.database.session() as session:
+            db_service = DBService(session)
+            repo_obj = await db_service.get_repository(owner, repo)
+
+            if not repo_obj:
+                return {
+                    "configured": False,
+                    "anthropic_base_url": None,
+                    "has_auth_token": False,
+                }
+
+            model_config = await db_service.get_model_config(repo_obj.id)
+            if not model_config:
+                return {
+                    "configured": False,
+                    "anthropic_base_url": None,
+                    "has_auth_token": False,
+                }
+
+            return {
+                "configured": True,
+                "anthropic_base_url": model_config.anthropic_base_url,
+                "has_auth_token": bool(model_config.anthropic_auth_token),
+            }
+
+    @api_router.put("/repos/{owner}/{repo}/claude-config")
+    async def update_repo_claude_config(
+        owner: str, repo: str, payload: ClaudeConfigRequest, request: Request
+    ):
+        """保存仓库的 Claude 配置"""
+        if not context.database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        async with context.database.session() as session:
+            db_service = DBService(session)
+
+            # 获取或创建仓库
+            repo_obj = await db_service.get_or_create_repository(owner, repo)
+
+            # 获取或创建模型配置
+            model_config = await db_service.get_model_config(repo_obj.id)
+            if not model_config:
+                # 创建新的配置
+                model_config = await db_service.create_or_update_model_config(
+                    config_name=f"{owner}/{repo}",
+                    repository_id=repo_obj.id,
+                )
+
+            # 更新 Anthropic 配置
+            if payload.anthropic_base_url is not None:
+                model_config.anthropic_base_url = payload.anthropic_base_url or None
+            if payload.anthropic_auth_token is not None:
+                model_config.anthropic_auth_token = payload.anthropic_auth_token or None
+
+            await session.flush()
+
+            return {
+                "success": True,
+                "message": "Claude 配置已保存",
+                "anthropic_base_url": model_config.anthropic_base_url,
+                "has_auth_token": bool(model_config.anthropic_auth_token),
+            }
+
+    @api_router.get("/repos/{owner}/{repo}/webhook-secret")
+    async def get_webhook_secret(owner: str, repo: str, request: Request):
+        """获取仓库的 Webhook Secret"""
+        if not context.database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        async with context.database.session() as session:
+            db_service = DBService(session)
+            repo_obj = await db_service.get_repository(owner, repo)
+
+            if not repo_obj:
+                return {
+                    "has_secret": False,
+                    "webhook_secret": None,
+                }
+
+            return {
+                "has_secret": bool(repo_obj.webhook_secret),
+                "webhook_secret": repo_obj.webhook_secret,
+            }
+
+    @api_router.post("/repos/{owner}/{repo}/webhook-secret/regenerate")
+    async def regenerate_webhook_secret(owner: str, repo: str, request: Request):
+        """重新生成仓库的 Webhook Secret"""
+        if not context.database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        new_secret = secrets.token_hex(20)
+
+        async with context.database.session() as session:
+            db_service = DBService(session)
+            await db_service.update_repository_secret(owner, repo, new_secret)
+
+        # 同时更新 repo_registry 缓存
+        context.repo_registry.set_secret(owner, repo, new_secret)
+
+        return {
+            "success": True,
+            "webhook_secret": new_secret,
+            "message": "Webhook Secret 已重新生成，请同步更新 Gitea 中的配置",
+        }
 
     @api_router.get("/repositories")
     async def list_repositories():

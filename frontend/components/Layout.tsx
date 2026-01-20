@@ -22,8 +22,8 @@ const navItems = [
   { href: '/settings', label: '用户中心', icon: UserIcon },
 ];
 
-const AUTH_POLL_INTERVAL = 30000; // 30 seconds instead of 5
-const AUTH_POLL_INTERVAL_FOCUSED = 10000; // 10 seconds when window is focused
+const AUTH_POLL_INTERVAL = 60000; // 60 seconds when window is not focused
+const AUTH_POLL_INTERVAL_FOCUSED = 30000; // 30 seconds when window is focused
 
 export default function Layout({ children }: LayoutProps) {
   const router = useRouter();

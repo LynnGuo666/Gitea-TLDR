@@ -4,6 +4,7 @@ Claude Code CLI调用模块
 import asyncio
 import json
 import logging
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -160,6 +161,8 @@ JSON结构示例：
         diff_content: str,
         focus_areas: List[str],
         pr_info: dict,
+        anthropic_base_url: Optional[str] = None,
+        anthropic_auth_token: Optional[str] = None,
     ) -> Optional[ClaudeReviewResult]:
         """
         使用Claude Code分析PR
@@ -169,6 +172,8 @@ JSON结构示例：
             diff_content: PR的diff内容
             focus_areas: 审查重点领域
             pr_info: PR信息
+            anthropic_base_url: 自定义Anthropic API Base URL
+            anthropic_auth_token: 自定义Anthropic Auth Token
 
         Returns:
             ClaudeReviewResult
@@ -182,6 +187,17 @@ JSON结构示例：
                 logger.debug(f"[Claude Prompt]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
+            # 构建自定义环境变量
+            custom_env = os.environ.copy()
+            if anthropic_base_url:
+                custom_env["ANTHROPIC_BASE_URL"] = anthropic_base_url
+                if self.debug:
+                    logger.debug(f"[Custom ANTHROPIC_BASE_URL] {anthropic_base_url}")
+            if anthropic_auth_token:
+                custom_env["ANTHROPIC_AUTH_TOKEN"] = anthropic_auth_token
+                if self.debug:
+                    logger.debug("[Custom ANTHROPIC_AUTH_TOKEN] (set)")
+
             process = await asyncio.create_subprocess_exec(
                 self.claude_code_path,
                 "-p",
@@ -192,6 +208,7 @@ JSON结构示例：
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(repo_path),
+                env=custom_env,
             )
 
             stdout, stderr = await process.communicate(
@@ -224,7 +241,12 @@ JSON结构示例：
             return None
 
     async def analyze_pr_simple(
-        self, diff_content: str, focus_areas: List[str], pr_info: dict
+        self,
+        diff_content: str,
+        focus_areas: List[str],
+        pr_info: dict,
+        anthropic_base_url: Optional[str] = None,
+        anthropic_auth_token: Optional[str] = None,
     ) -> Optional[ClaudeReviewResult]:
         """
         简单模式：不依赖完整代码库，仅分析diff
@@ -233,6 +255,8 @@ JSON结构示例：
             diff_content: PR的diff内容
             focus_areas: 审查重点领域
             pr_info: PR信息
+            anthropic_base_url: 自定义Anthropic API Base URL
+            anthropic_auth_token: 自定义Anthropic Auth Token
 
         Returns:
             ClaudeReviewResult
@@ -246,6 +270,17 @@ JSON结构示例：
                 logger.debug(f"[Claude Prompt - Simple Mode]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
+            # 构建自定义环境变量
+            custom_env = os.environ.copy()
+            if anthropic_base_url:
+                custom_env["ANTHROPIC_BASE_URL"] = anthropic_base_url
+                if self.debug:
+                    logger.debug(f"[Custom ANTHROPIC_BASE_URL] {anthropic_base_url}")
+            if anthropic_auth_token:
+                custom_env["ANTHROPIC_AUTH_TOKEN"] = anthropic_auth_token
+                if self.debug:
+                    logger.debug("[Custom ANTHROPIC_AUTH_TOKEN] (set)")
+
             process = await asyncio.create_subprocess_exec(
                 self.claude_code_path,
                 "-p",
@@ -255,6 +290,7 @@ JSON结构示例：
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=custom_env,
             )
 
             stdout, stderr = await process.communicate(

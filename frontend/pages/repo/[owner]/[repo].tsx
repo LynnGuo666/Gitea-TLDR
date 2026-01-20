@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { useContext, useEffect, useState, useCallback } from 'react';
 import { RepoIcon, BotIcon, SettingsIcon, RefreshIcon } from '../../../components/icons';
 import { useToast, Skeleton } from '../../../components/ui';
-import { PublicConfig } from '../../../lib/types';
+import { PublicConfig, RepoClaudeConfig } from '../../../lib/types';
 import { AuthContext } from '../../../lib/auth';
 
 const defaultEvents = ['pull_request', 'issue_comment'];
@@ -52,6 +52,13 @@ export default function RepoConfigPage() {
     'security',
     'performance',
   ]);
+  // Claude 配置状态
+  const [claudeConfig, setClaudeConfig] = useState<RepoClaudeConfig | null>(null);
+  const [claudeBaseUrl, setClaudeBaseUrl] = useState('');
+  const [claudeAuthToken, setClaudeAuthToken] = useState('');
+  const [claudeConfigLoading, setClaudeConfigLoading] = useState(true);
+  const [claudeSaving, setClaudeSaving] = useState(false);
+
   const { status: authStatus, beginLogin } = useContext(AuthContext);
   const { addToast } = useToast();
   const requiresLogin = authStatus.enabled && !authStatus.loggedIn;
@@ -79,6 +86,28 @@ export default function RepoConfigPage() {
     }
   }, [owner, repo, requiresLogin]);
 
+  const fetchClaudeConfig = useCallback(async () => {
+    if (!owner || !repo || requiresLogin) return;
+
+    setClaudeConfigLoading(true);
+    try {
+      const res = await fetch(`/api/repos/${owner}/${repo}/claude-config`);
+      if (res.ok) {
+        const data = await res.json();
+        setClaudeConfig(data);
+        if (data.anthropic_base_url) {
+          setClaudeBaseUrl(data.anthropic_base_url);
+        }
+      } else {
+        setClaudeConfig(null);
+      }
+    } catch {
+      setClaudeConfig(null);
+    } finally {
+      setClaudeConfigLoading(false);
+    }
+  }, [owner, repo, requiresLogin]);
+
   useEffect(() => {
     fetch('/api/config/public')
       .then((res) => res.json())
@@ -89,10 +118,12 @@ export default function RepoConfigPage() {
   useEffect(() => {
     if (owner && repo && !requiresLogin) {
       fetchWebhookStatus();
+      fetchClaudeConfig();
     } else {
       setStatusLoading(false);
+      setClaudeConfigLoading(false);
     }
-  }, [owner, repo, requiresLogin, fetchWebhookStatus]);
+  }, [owner, repo, requiresLogin, fetchWebhookStatus, fetchClaudeConfig]);
 
   const toggleEvent = (event: string) => {
     setEvents((prev) =>
@@ -163,6 +194,39 @@ export default function RepoConfigPage() {
       disableWebhook();
     } else {
       enableWebhook();
+    }
+  };
+
+  const saveClaudeConfig = async () => {
+    if (requiresLogin || !owner || !repo) return;
+
+    setClaudeSaving(true);
+    try {
+      const res = await fetch(`/api/repos/${owner}/${repo}/claude-config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          anthropic_base_url: claudeBaseUrl || null,
+          anthropic_auth_token: claudeAuthToken || null,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addToast('Claude 配置已保存', 'success');
+        setClaudeConfig({
+          configured: true,
+          anthropic_base_url: data.anthropic_base_url,
+          has_auth_token: data.has_auth_token,
+        });
+        // 清空 token 输入框（安全考虑）
+        setClaudeAuthToken('');
+      } else {
+        addToast(data.detail || '保存失败', 'error');
+      }
+    } catch {
+      addToast('无法连接后端', 'error');
+    } finally {
+      setClaudeSaving(false);
     }
   };
 
@@ -312,6 +376,65 @@ export default function RepoConfigPage() {
               </button>
             ))}
           </div>
+        </section>
+
+        {/* Claude 配置 */}
+        <section className="card">
+          <div className="panel-header">
+            <div className="section-title">
+              <span className="icon-badge">
+                <SettingsIcon size={18} />
+              </span>
+              <h2>Claude 配置</h2>
+            </div>
+            {claudeConfig?.has_auth_token && (
+              <span className="badge-soft success">已配置 Token</span>
+            )}
+          </div>
+
+          {requiresLogin ? (
+            <p className="muted">登录后可配置 Claude API</p>
+          ) : claudeConfigLoading ? (
+            <div style={{ padding: 'var(--spacing-md)' }}>
+              <Skeleton width="100%" height={40} />
+              <Skeleton width="100%" height={40} style={{ marginTop: 'var(--spacing-sm)' }} />
+            </div>
+          ) : (
+            <>
+              <div className="input-grid">
+                <label className="input-field">
+                  <span>Base URL</span>
+                  <input
+                    type="text"
+                    value={claudeBaseUrl}
+                    onChange={(e) => setClaudeBaseUrl(e.target.value)}
+                    placeholder="https://api.anthropic.com (留空使用默认)"
+                  />
+                </label>
+                <label className="input-field">
+                  <span>API Key</span>
+                  <input
+                    type="password"
+                    value={claudeAuthToken}
+                    onChange={(e) => setClaudeAuthToken(e.target.value)}
+                    placeholder={claudeConfig?.has_auth_token ? '已配置（输入新值覆盖）' : 'sk-ant-...'}
+                  />
+                </label>
+              </div>
+              <div style={{ marginTop: 'var(--spacing-md)', display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center' }}>
+                <button
+                  className="primary-button"
+                  onClick={saveClaudeConfig}
+                  disabled={claudeSaving}
+                >
+                  {claudeSaving ? '保存中...' : '保存配置'}
+                </button>
+                <span className="muted small">
+                  配置后，审查 PR 时将使用此仓库的 API Key
+                </span>
+              </div>
+            </>
+          )}
         </section>
 
         {/* 服务信息 */}

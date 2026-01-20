@@ -39,6 +39,18 @@ class ModelConfig(Base, TimestampMixin):
     )
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
+    # Anthropic API 配置（仓库级别）
+    anthropic_base_url: Mapped[Optional[str]] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="Anthropic API Base URL"
+    )
+    anthropic_auth_token: Mapped[Optional[str]] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="Anthropic Auth Token"
+    )
+
     # 关系
     repository: Mapped[Optional["Repository"]] = relationship(
         "Repository",
