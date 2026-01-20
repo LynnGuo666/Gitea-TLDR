@@ -1,6 +1,7 @@
 """
 配置管理模块
 """
+
 from pathlib import Path
 from typing import Optional
 from pydantic import Field, field_validator
@@ -11,6 +12,7 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 
 class Settings(BaseSettings):
     """应用配置"""
+
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),
         env_file_encoding="utf-8",
@@ -33,8 +35,7 @@ class Settings(BaseSettings):
 
     # 数据库配置
     database_url: Optional[str] = Field(
-        None,
-        description="数据库连接URL，默认为工作目录下的SQLite文件"
+        None, description="数据库连接URL，默认为工作目录下的SQLite文件"
     )
 
     @property
@@ -60,11 +61,13 @@ class Settings(BaseSettings):
     # 审查配置
     default_review_focus: list[str] = Field(
         default=["quality", "security", "performance", "logic"],
-        description="默认审查重点"
+        description="默认审查重点",
     )
 
     # 自动请求审查者
-    auto_request_reviewer: bool = Field(True, description="创建review后是否自动将bot设置为审查者")
+    auto_request_reviewer: bool = Field(
+        True, description="创建review后是否自动将bot设置为审查者"
+    )
 
     # OAuth 配置
     oauth_client_id: Optional[str] = Field(None, description="Gitea OAuth Client ID")
@@ -76,11 +79,21 @@ class Settings(BaseSettings):
     )
     oauth_scopes: list[str] | str = Field(
         default_factory=lambda: ["read:user", "read:repository"],
-        description="OAuth申请的scope列表"
+        description="OAuth申请的scope列表",
     )
     session_cookie_name: str = Field("gitea_session", description="会话Cookie名称")
     session_cookie_secure: bool = Field(
         False, description="是否仅通过HTTPS发送会话Cookie"
+    )
+
+    # 管理后台配置
+    admin_enabled: bool = Field(True, description="是否启用管理后台")
+    initial_admin_username: Optional[str] = Field(
+        None, description="初始管理员用户名（首次启动时自动创建）"
+    )
+    webhook_log_retention_days: int = Field(30, description="Webhook日志保留天数")
+    webhook_log_retention_days_failed: int = Field(
+        90, description="失败的Webhook日志保留天数"
     )
 
     @field_validator("oauth_scopes", mode="after")
