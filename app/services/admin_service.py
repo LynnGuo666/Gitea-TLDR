@@ -214,7 +214,8 @@ class AdminService:
     ) -> int:
         """统计 Token 消耗"""
         stmt = select(
-            func.sum(UsageStat.input_tokens) + func.sum(UsageStat.output_tokens)
+            func.sum(UsageStat.estimated_input_tokens)
+            + func.sum(UsageStat.estimated_output_tokens)
         )
         if start_date:
             stmt = stmt.where(UsageStat.created_at >= start_date)

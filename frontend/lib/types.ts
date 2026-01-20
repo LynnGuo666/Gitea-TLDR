@@ -4,6 +4,7 @@ export type Repo = {
   owner: { username?: string; login?: string; full_name?: string };
   full_name?: string;
   private?: boolean;
+  permissions?: { admin?: boolean; push?: boolean; pull?: boolean };
 };
 
 export type PublicConfig = {

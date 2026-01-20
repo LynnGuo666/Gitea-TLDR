@@ -160,7 +160,26 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # 使用 app.state 引用 context，lifespan 中会更新其 database 属性
+    @app.middleware("http")
+    async def auth_middleware(request: Request, call_next):
+        app_context = getattr(request.app.state, "context", None)
+        if app_context:
+            session = app_context.auth_manager.get_session(request)
+            request.state.auth_status = {
+                "loggedIn": bool(session),
+                "user": session.user if session else None,
+            }
+        response = await call_next(request)
+        return response
+
+    @app.middleware("http")
+    async def database_middleware(request: Request, call_next):
+        app_context = getattr(request.app.state, "context", None)
+        if app_context and hasattr(app_context, "database"):
+            request.state.database = app_context.database
+        response = await call_next(request)
+        return response
+
     app.state.context = context
 
     # 创建路由

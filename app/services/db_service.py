@@ -1,6 +1,7 @@
 """
 数据库操作服务
 """
+
 import json
 import logging
 from datetime import date, datetime
@@ -34,13 +35,10 @@ class DBService:
 
     # ==================== Repository 操作 ====================
 
-    async def get_or_create_repository(
-        self, owner: str, repo_name: str
-    ) -> Repository:
+    async def get_or_create_repository(self, owner: str, repo_name: str) -> Repository:
         """获取或创建仓库记录"""
         stmt = select(Repository).where(
-            Repository.owner == owner,
-            Repository.repo_name == repo_name
+            Repository.owner == owner, Repository.repo_name == repo_name
         )
         result = await self.session.execute(stmt)
         repo = result.scalar_one_or_none()
@@ -53,19 +51,16 @@ class DBService:
 
         return repo
 
-    async def get_repository(
-        self, owner: str, repo_name: str
-    ) -> Optional[Repository]:
+    async def get_repository(self, owner: str, repo_name: str) -> Optional[Repository]:
         """获取仓库记录"""
         stmt = select(Repository).where(
-            Repository.owner == owner,
-            Repository.repo_name == repo_name
+            Repository.owner == owner, Repository.repo_name == repo_name
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def update_repository_secret(
-        self, owner: str, repo_name: str, webhook_secret: str
+        self, owner: str, repo_name: str, webhook_secret: Optional[str]
     ) -> Optional[Repository]:
         """更新仓库的webhook密钥"""
         repo = await self.get_or_create_repository(owner, repo_name)
@@ -91,9 +86,7 @@ class DBService:
     ) -> Optional[ModelConfig]:
         """获取模型配置（优先仓库级别，否则全局默认）"""
         if repository_id:
-            stmt = select(ModelConfig).where(
-                ModelConfig.repository_id == repository_id
-            )
+            stmt = select(ModelConfig).where(ModelConfig.repository_id == repository_id)
             result = await self.session.execute(stmt)
             config = result.scalar_one_or_none()
             if config:
@@ -101,8 +94,7 @@ class DBService:
 
         # 获取全局默认配置
         stmt = select(ModelConfig).where(
-            ModelConfig.repository_id.is_(None),
-            ModelConfig.is_default == True
+            ModelConfig.repository_id.is_(None), ModelConfig.is_default == True
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
@@ -122,13 +114,11 @@ class DBService:
         """创建或更新模型配置"""
         # 查找现有配置
         if repository_id:
-            stmt = select(ModelConfig).where(
-                ModelConfig.repository_id == repository_id
-            )
+            stmt = select(ModelConfig).where(ModelConfig.repository_id == repository_id)
         else:
             stmt = select(ModelConfig).where(
                 ModelConfig.repository_id.is_(None),
-                ModelConfig.config_name == config_name
+                ModelConfig.config_name == config_name,
             )
         result = await self.session.execute(stmt)
         config = result.scalar_one_or_none()
@@ -195,7 +185,9 @@ class DBService:
 
         self.session.add(session)
         await self.session.flush()
-        logger.info(f"创建审查会话: repository_id={repository_id}, pr_number={pr_number}")
+        logger.info(
+            f"创建审查会话: repository_id={repository_id}, pr_number={pr_number}"
+        )
         return session
 
     async def update_review_session(
@@ -263,8 +255,7 @@ class DBService:
             stmt = stmt.where(ReviewSession.repository_id == repository_id)
         elif owner and repo_name:
             stmt = stmt.join(Repository).where(
-                Repository.owner == owner,
-                Repository.repo_name == repo_name
+                Repository.owner == owner, Repository.repo_name == repo_name
             )
 
         stmt = stmt.order_by(ReviewSession.started_at.desc())
@@ -299,9 +290,7 @@ class DBService:
         logger.info(f"保存 {len(saved_comments)} 条行级评论")
         return saved_comments
 
-    async def get_inline_comments(
-        self, review_session_id: int
-    ) -> List[InlineComment]:
+    async def get_inline_comments(self, review_session_id: int) -> List[InlineComment]:
         """获取审查会话的行级评论"""
         stmt = select(InlineComment).where(
             InlineComment.review_session_id == review_session_id

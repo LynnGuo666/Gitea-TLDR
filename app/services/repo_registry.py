@@ -1,4 +1,5 @@
 """简单的仓库配置和密钥存储"""
+
 from __future__ import annotations
 
 import asyncio
@@ -76,6 +77,7 @@ class RepoRegistry:
                 if loop.is_running():
                     # 在已运行的事件循环中，创建新任务
                     import concurrent.futures
+
                     with concurrent.futures.ThreadPoolExecutor() as pool:
                         future = pool.submit(
                             asyncio.run, self._get_secret_async(owner, repo)
@@ -93,6 +95,9 @@ class RepoRegistry:
 
     async def _get_secret_async(self, owner: str, repo: str) -> Optional[str]:
         """异步获取仓库密钥"""
+        if not self.database:
+            return None
+
         from app.services.db_service import DBService
 
         async with self.database.session() as session:
@@ -110,13 +115,14 @@ class RepoRegistry:
                 repo_info = self._data.get(key, {})
                 return repo_info.get("webhook_secret")
 
-    def set_secret(self, owner: str, repo: str, secret: str) -> None:
+    def set_secret(self, owner: str, repo: str, secret: Optional[str]) -> None:
         """设置仓库的 webhook 密钥（同步方法，兼容现有代码）"""
         if self.database:
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
                     import concurrent.futures
+
                     with concurrent.futures.ThreadPoolExecutor() as pool:
                         future = pool.submit(
                             asyncio.run, self._set_secret_async(owner, repo, secret)
@@ -130,19 +136,33 @@ class RepoRegistry:
             key = self._key(owner, repo)
             with self._lock:
                 repo_info = self._data.get(key, {})
-                repo_info["webhook_secret"] = secret
+                if secret is None:
+                    repo_info.pop("webhook_secret", None)
+                else:
+                    repo_info["webhook_secret"] = secret
                 self._data[key] = repo_info
                 self._save()
 
-    async def _set_secret_async(self, owner: str, repo: str, secret: str) -> None:
+    def delete_secret(self, owner: str, repo: str) -> None:
+        """删除仓库的 webhook 密钥（同步方法）"""
+        self.set_secret(owner, repo, None)
+
+    async def _set_secret_async(
+        self, owner: str, repo: str, secret: Optional[str]
+    ) -> None:
         """异步设置仓库密钥"""
+        if not self.database:
+            return
+
         from app.services.db_service import DBService
 
         async with self.database.session() as session:
             db_service = DBService(session)
             await db_service.update_repository_secret(owner, repo, secret)
 
-    async def set_secret_async(self, owner: str, repo: str, secret: str) -> None:
+    async def set_secret_async(
+        self, owner: str, repo: str, secret: Optional[str]
+    ) -> None:
         """异步设置仓库的 webhook 密钥"""
         if self.database:
             await self._set_secret_async(owner, repo, secret)
@@ -150,7 +170,10 @@ class RepoRegistry:
             key = self._key(owner, repo)
             with self._lock:
                 repo_info = self._data.get(key, {})
-                repo_info["webhook_secret"] = secret
+                if secret is None:
+                    repo_info.pop("webhook_secret", None)
+                else:
+                    repo_info["webhook_secret"] = secret
                 self._data[key] = repo_info
                 self._save()
 
@@ -161,13 +184,16 @@ class RepoRegistry:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
                     import concurrent.futures
+
                     with concurrent.futures.ThreadPoolExecutor() as pool:
                         future = pool.submit(
                             asyncio.run, self._get_repo_info_async(owner, repo)
                         )
                         return future.result()
                 else:
-                    return loop.run_until_complete(self._get_repo_info_async(owner, repo))
+                    return loop.run_until_complete(
+                        self._get_repo_info_async(owner, repo)
+                    )
             except RuntimeError:
                 return asyncio.run(self._get_repo_info_async(owner, repo))
         else:
@@ -177,6 +203,9 @@ class RepoRegistry:
 
     async def _get_repo_info_async(self, owner: str, repo: str) -> Dict[str, str]:
         """异步获取仓库信息"""
+        if not self.database:
+            return {}
+
         from app.services.db_service import DBService
 
         async with self.database.session() as session:
@@ -205,6 +234,7 @@ class RepoRegistry:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
                     import concurrent.futures
+
                     with concurrent.futures.ThreadPoolExecutor() as pool:
                         future = pool.submit(asyncio.run, self._list_all_async())
                         return future.result()
@@ -218,6 +248,9 @@ class RepoRegistry:
 
     async def _list_all_async(self) -> Dict[str, Dict[str, str]]:
         """异步列出所有仓库"""
+        if not self.database:
+            return {}
+
         from app.services.db_service import DBService
 
         async with self.database.session() as session:

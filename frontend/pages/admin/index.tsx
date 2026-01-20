@@ -5,6 +5,7 @@ import { ChartIcon, RepoIcon, UsageIcon, RefreshIcon } from '../../components/ic
 import { AuthContext } from '../../lib/auth';
 
 type DashboardStats = {
+  database_available?: boolean;
   reviews: {
     total: number;
     today: number;
@@ -34,13 +35,14 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [databaseAvailable, setDatabaseAvailable] = useState(true);
 
   const fetchStats = async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch('/api/admin/dashboard/stats');
-      if (res.status === 403) {
+      if (res.status === 401 || res.status === 403) {
         router.push('/');
         return;
       }
@@ -49,6 +51,7 @@ export default function AdminDashboard() {
       }
       const data = await res.json();
       setStats(data);
+      setDatabaseAvailable(data?.database_available ?? true);
     } catch (err) {
       setError(err instanceof Error ? err.message : '未知错误');
     } finally {
@@ -79,6 +82,8 @@ export default function AdminDashboard() {
     return num.toLocaleString();
   };
 
+  const showDatabaseWarning = stats && !databaseAvailable;
+
   return (
     <>
       <Head>
@@ -100,6 +105,12 @@ export default function AdminDashboard() {
           {error && (
             <div className="error-message" style={{ marginTop: '1rem' }}>
               {error}
+            </div>
+          )}
+
+          {showDatabaseWarning && (
+            <div className="error-message" style={{ marginTop: '1rem' }}>
+              数据库未启用，当前展示的是空统计数据。请检查 `DATABASE_URL` 或 `WORK_DIR` 配置并重启服务。
             </div>
           )}
 

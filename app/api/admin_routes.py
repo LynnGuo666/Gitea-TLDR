@@ -59,6 +59,7 @@ class SettingUpdate(BaseModel):
 class DashboardStats(BaseModel):
     """Dashboard 统计数据"""
 
+    database_available: bool = True
     reviews: Dict[str, int]
     tokens: Dict[str, int]
     webhooks: Dict[str, Any]
@@ -79,12 +80,21 @@ def create_admin_router(context: AppContext) -> APIRouter:
         request: Request, admin: AdminUser = Depends(admin_required())
     ):
         """获取 Dashboard 统计数据"""
-        if not context.database:
-            raise HTTPException(status_code=503, detail="数据库未启用")
+        database = getattr(request.state, "database", None)
+        if not database:
+            logger.warning("数据库未初始化，返回空统计数据")
+            return {
+                "database_available": False,
+                "reviews": {"total": 0, "today": 0, "week": 0, "month": 0},
+                "tokens": {"total": 0, "today": 0, "week": 0, "month": 0},
+                "webhooks": {"total": 0, "today": 0, "success_rate": 0.0},
+                "repositories": {"total": 0, "active": 0},
+            }
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             service = AdminService(session)
             stats = await service.get_dashboard_stats()
+            stats["database_available"] = True
             return stats
 
     # ==================== 管理员用户管理 ====================
@@ -95,11 +105,11 @@ def create_admin_router(context: AppContext) -> APIRouter:
         is_active: Optional[bool] = None,
         admin: AdminUser = Depends(admin_required("users", "read")),
     ):
-        """获取管理员列表"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             service = AdminService(session)
             users = await service.list_admin_users(is_active=is_active)
             return [
@@ -123,17 +133,16 @@ def create_admin_router(context: AppContext) -> APIRouter:
         admin: AdminUser = Depends(admin_required("users", "write")),
     ):
         """创建管理员用户"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
-        # 只有 super_admin 可以创建其他管理员
         if admin.role != "super_admin":
             raise HTTPException(status_code=403, detail="需要超级管理员权限")
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             service = AdminService(session)
 
-            # 检查用户名是否已存在
             existing = await service.get_admin_user(payload.username)
             if existing:
                 raise HTTPException(status_code=400, detail="用户名已存在")
@@ -163,14 +172,15 @@ def create_admin_router(context: AppContext) -> APIRouter:
         admin: AdminUser = Depends(admin_required("users", "write")),
     ):
         """更新管理员用户"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
         # 只有 super_admin 可以更新其他管理员
         if admin.role != "super_admin" and admin.username != username:
             raise HTTPException(status_code=403, detail="只能修改自己的信息")
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             service = AdminService(session)
             user = await service.update_admin_user(
                 username=username,
@@ -202,7 +212,8 @@ def create_admin_router(context: AppContext) -> APIRouter:
         admin: AdminUser = Depends(admin_required("users", "delete")),
     ):
         """删除管理员用户"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
         # 只有 super_admin 可以删除管理员
@@ -213,7 +224,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
         if admin.username == username:
             raise HTTPException(status_code=400, detail="不能删除自己")
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             service = AdminService(session)
             deleted = await service.delete_admin_user(username)
             if not deleted:
@@ -231,10 +242,11 @@ def create_admin_router(context: AppContext) -> APIRouter:
         admin: AdminUser = Depends(admin_required("config", "read")),
     ):
         """获取全局配置"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             service = AdminService(session)
             settings = await service.get_all_settings(category=category)
 
@@ -259,10 +271,11 @@ def create_admin_router(context: AppContext) -> APIRouter:
         admin: AdminUser = Depends(admin_required("config", "write")),
     ):
         """更新全局配置"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             service = AdminService(session)
             setting = await service.set_setting(
                 key=key,
@@ -289,10 +302,11 @@ def create_admin_router(context: AppContext) -> APIRouter:
         admin: AdminUser = Depends(admin_required("config", "delete")),
     ):
         """删除全局配置"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             service = AdminService(session)
             deleted = await service.delete_setting(key)
             if not deleted:
@@ -313,10 +327,11 @@ def create_admin_router(context: AppContext) -> APIRouter:
         admin: AdminUser = Depends(admin_required("webhooks", "read")),
     ):
         """获取 Webhook 日志列表"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             service = AdminService(session)
             logs = await service.list_webhook_logs(
                 repository_id=repository_id,
@@ -347,10 +362,11 @@ def create_admin_router(context: AppContext) -> APIRouter:
         admin: AdminUser = Depends(admin_required("webhooks", "read")),
     ):
         """获取 Webhook 日志详情"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             from app.models import WebhookLog
             from sqlalchemy import select
 

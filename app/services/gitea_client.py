@@ -1,6 +1,7 @@
 """
 Gitea API客户端模块
 """
+
 import httpx
 from typing import Optional, Dict, Any, List
 import logging
@@ -34,7 +35,9 @@ class GiteaClient:
         if self.debug:
             logger.debug(f"[API请求] {method} {url}")
             if "json" in kwargs:
-                logger.debug(f"[请求体] {json.dumps(kwargs['json'], ensure_ascii=False, indent=2)}")
+                logger.debug(
+                    f"[请求体] {json.dumps(kwargs['json'], ensure_ascii=False, indent=2)}"
+                )
 
     def _log_response(self, response: httpx.Response):
         """记录响应debug日志"""
@@ -44,7 +47,9 @@ class GiteaClient:
             try:
                 # 尝试解析JSON响应
                 response_data = response.json()
-                logger.debug(f"[响应体] {json.dumps(response_data, ensure_ascii=False, indent=2)}")
+                logger.debug(
+                    f"[响应体] {json.dumps(response_data, ensure_ascii=False, indent=2)}"
+                )
             except:
                 # 如果不是JSON，记录文本内容（限制长度）
                 text = response.text
@@ -151,18 +156,20 @@ class GiteaClient:
         try:
             self._log_debug("POST", url, json=payload)
             async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    url, headers=self.headers, json=payload
-                )
+                response = await client.post(url, headers=self.headers, json=payload)
                 self._log_response(response)
                 response.raise_for_status()
                 comment_data = response.json()
                 comment_id = comment_data.get("id")
-                logger.info(f"成功创建PR评论: {owner}/{repo}#{pr_number}, ID: {comment_id}")
+                logger.info(
+                    f"成功创建PR评论: {owner}/{repo}#{pr_number}, ID: {comment_id}"
+                )
                 return comment_id
         except httpx.HTTPStatusError as e:
             if e.response.status_code in (401, 403):
-                logger.warning(f"权限不足，无法创建PR评论: {owner}/{repo}#{pr_number} (HTTP {e.response.status_code})")
+                logger.warning(
+                    f"权限不足，无法创建PR评论: {owner}/{repo}#{pr_number} (HTTP {e.response.status_code})"
+                )
             else:
                 logger.error(f"创建PR评论失败: {e}")
             return None
@@ -185,21 +192,23 @@ class GiteaClient:
         Returns:
             是否成功
         """
-        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/issues/comments/{comment_id}"
+        url = (
+            f"{self.base_url}/api/v1/repos/{owner}/{repo}/issues/comments/{comment_id}"
+        )
         payload = {"body": body}
         try:
             self._log_debug("PATCH", url, json=payload)
             async with httpx.AsyncClient() as client:
-                response = await client.patch(
-                    url, headers=self.headers, json=payload
-                )
+                response = await client.patch(url, headers=self.headers, json=payload)
                 self._log_response(response)
                 response.raise_for_status()
                 logger.info(f"成功更新PR评论: {owner}/{repo}, 评论ID: {comment_id}")
                 return True
         except httpx.HTTPStatusError as e:
             if e.response.status_code in (401, 403):
-                logger.warning(f"权限不足，无法更新PR评论: {owner}/{repo}, 评论ID: {comment_id} (HTTP {e.response.status_code})")
+                logger.warning(
+                    f"权限不足，无法更新PR评论: {owner}/{repo}, 评论ID: {comment_id} (HTTP {e.response.status_code})"
+                )
             else:
                 logger.error(f"更新PR评论失败: {e}")
             return False
@@ -249,7 +258,9 @@ class GiteaClient:
                 return True
         except httpx.HTTPStatusError as e:
             if e.response.status_code in (401, 403):
-                logger.warning(f"权限不足，无法创建PR审查: {owner}/{repo}#{pr_number} (HTTP {e.response.status_code})")
+                logger.warning(
+                    f"权限不足，无法创建PR审查: {owner}/{repo}#{pr_number} (HTTP {e.response.status_code})"
+                )
             else:
                 logger.error(f"创建PR审查失败: {e}")
             return False
@@ -300,7 +311,9 @@ class GiteaClient:
                 return True
         except httpx.HTTPStatusError as e:
             if e.response.status_code in (401, 403):
-                logger.warning(f"权限不足，无法设置提交状态: {owner}/{repo}@{sha[:7]} (HTTP {e.response.status_code})")
+                logger.warning(
+                    f"权限不足，无法设置提交状态: {owner}/{repo}@{sha[:7]} (HTTP {e.response.status_code})"
+                )
             else:
                 logger.error(f"设置提交状态失败: {e}")
             return False
@@ -336,11 +349,15 @@ class GiteaClient:
                 response = await client.post(url, headers=self.headers, json=payload)
                 self._log_response(response)
                 response.raise_for_status()
-                logger.info(f"成功请求审查者: {owner}/{repo}#{pr_number} <- {reviewers}")
+                logger.info(
+                    f"成功请求审查者: {owner}/{repo}#{pr_number} <- {reviewers}"
+                )
                 return True
         except httpx.HTTPStatusError as e:
             if e.response.status_code in (401, 403):
-                logger.warning(f"权限不足，无法请求审查者: {owner}/{repo}#{pr_number} (HTTP {e.response.status_code})")
+                logger.warning(
+                    f"权限不足，无法请求审查者: {owner}/{repo}#{pr_number} (HTTP {e.response.status_code})"
+                )
             else:
                 logger.error(f"请求审查者失败: {e}")
             return False
@@ -371,7 +388,9 @@ class GiteaClient:
             logger.error(f"获取仓库信息失败: {e}")
             return None
 
-    async def check_repo_permissions(self, owner: str, repo: str) -> Optional[Dict[str, bool]]:
+    async def check_repo_permissions(
+        self, owner: str, repo: str
+    ) -> Optional[Dict[str, bool]]:
         """
         检查当前用户对仓库的权限
 
@@ -393,6 +412,40 @@ class GiteaClient:
             "pull": permissions.get("pull", False),
         }
 
+    async def is_organization(self, org: str) -> bool:
+        """判断 owner 是否为组织"""
+        url = f"{self.base_url}/api/v1/orgs/{org}"
+        try:
+            self._log_debug("GET", url)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=self.headers)
+                self._log_response(response)
+                if response.status_code == 404:
+                    return False
+                response.raise_for_status()
+                return True
+        except Exception as e:
+            logger.error(f"获取组织信息失败: {e}")
+            return False
+
+    async def get_org_membership_role(self, org: str, username: str) -> Optional[str]:
+        """获取用户在组织中的角色"""
+        url = f"{self.base_url}/api/v1/orgs/{org}/memberships/{username}"
+        try:
+            self._log_debug("GET", url)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=self.headers)
+                self._log_response(response)
+                if response.status_code == 404:
+                    return None
+                response.raise_for_status()
+                data = response.json()
+                role = data.get("role")
+                return role.lower() if isinstance(role, str) else None
+        except Exception as e:
+            logger.error(f"获取组织成员角色失败: {e}")
+            return None
+
     async def list_user_repos(self) -> Optional[List[Dict[str, Any]]]:
         """列出当前token可访问的仓库"""
 
@@ -408,7 +461,9 @@ class GiteaClient:
             logger.error(f"获取仓库列表失败: {e}")
             return None
 
-    async def list_repo_hooks(self, owner: str, repo: str) -> Optional[List[Dict[str, Any]]]:
+    async def list_repo_hooks(
+        self, owner: str, repo: str
+    ) -> Optional[List[Dict[str, Any]]]:
         """列出仓库的webhooks"""
 
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/hooks"
@@ -471,7 +526,9 @@ class GiteaClient:
                 return True
         except httpx.HTTPStatusError as e:
             if e.response.status_code in (401, 403):
-                logger.warning(f"权限不足，无法邀请协作者: {owner}/{repo} <- {username} (HTTP {e.response.status_code})")
+                logger.warning(
+                    f"权限不足，无法邀请协作者: {owner}/{repo} <- {username} (HTTP {e.response.status_code})"
+                )
             else:
                 logger.error(f"邀请协作者失败: {e}")
             return False
@@ -488,7 +545,9 @@ class GiteaClient:
         target_url = hook_definition.get("config", {}).get("url")
         for hook in existing_hooks:
             if hook.get("config", {}).get("url") == target_url:
-                updated = await self.update_repo_hook(owner, repo, hook.get("id"), hook_definition)
+                updated = await self.update_repo_hook(
+                    owner, repo, hook.get("id"), hook_definition
+                )
                 return hook.get("id") if updated else None
 
         return await self.create_repo_hook(owner, repo, hook_definition)

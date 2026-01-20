@@ -36,6 +36,7 @@ type WebhookStatus = {
   webhook_id: number | null;
   events: string[];
   url: string | null;
+  can_setup_webhook?: boolean;
 };
 
 export default function RepoConfigPage() {
@@ -115,6 +116,8 @@ export default function RepoConfigPage() {
       .catch(() => setConfig(null));
   }, []);
 
+  const canEditRepo = webhookStatus?.can_setup_webhook ?? true;
+
   useEffect(() => {
     if (owner && repo && !requiresLogin) {
       fetchWebhookStatus();
@@ -138,7 +141,7 @@ export default function RepoConfigPage() {
   };
 
   const enableWebhook = async () => {
-    if (requiresLogin || !owner || !repo) return;
+    if (requiresLogin || !owner || !repo || !canEditRepo) return;
 
     setToggling(true);
     try {
@@ -162,7 +165,7 @@ export default function RepoConfigPage() {
   };
 
   const disableWebhook = async () => {
-    if (requiresLogin || !owner || !repo) return;
+    if (requiresLogin || !owner || !repo || !canEditRepo) return;
 
     setToggling(true);
     try {
@@ -198,7 +201,7 @@ export default function RepoConfigPage() {
   };
 
   const saveClaudeConfig = async () => {
-    if (requiresLogin || !owner || !repo) return;
+    if (requiresLogin || !owner || !repo || !canEditRepo) return;
 
     setClaudeSaving(true);
     try {
@@ -299,18 +302,22 @@ export default function RepoConfigPage() {
                   {isWebhookEnabled ? 'Webhook 已启用' : 'Webhook 未启用'}
                 </h3>
                 <p>
-                  {isWebhookEnabled
-                    ? `监听事件: ${webhookStatus?.events?.join(', ') || '无'}`
-                    : '启用后，PR 将自动触发代码审查'}
+                  {canEditRepo
+                    ? isWebhookEnabled
+                      ? `监听事件: ${webhookStatus?.events?.join(', ') || '无'}`
+                      : '启用后，PR 将自动触发代码审查'
+                    : '组织仓库需要组织管理员权限才能修改配置'}
                 </p>
               </div>
               <div
-                className={`toggle-switch-track ${isWebhookEnabled ? 'active' : ''} ${toggling ? 'loading' : ''}`}
-                onClick={toggling ? undefined : handleToggle}
+                className={`toggle-switch-track ${isWebhookEnabled ? 'active' : ''} ${toggling ? 'loading' : ''} ${canEditRepo ? '' : 'disabled'}`}
+                onClick={toggling || !canEditRepo ? undefined : handleToggle}
                 role="switch"
                 aria-checked={isWebhookEnabled}
-                tabIndex={0}
+                aria-disabled={!canEditRepo}
+                tabIndex={canEditRepo ? 0 : -1}
                 onKeyDown={(e) => {
+                  if (!canEditRepo) return;
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     if (!toggling) handleToggle();
@@ -323,7 +330,7 @@ export default function RepoConfigPage() {
           )}
 
           {/* 高级配置 - 仅在未启用时显示 */}
-          {!requiresLogin && !statusLoading && !isWebhookEnabled && (
+          {!requiresLogin && !statusLoading && !isWebhookEnabled && canEditRepo && (
             <>
               <p className="muted" style={{ marginTop: 'var(--spacing-md)' }}>
                 启用前可选择监听的事件：
@@ -411,6 +418,7 @@ export default function RepoConfigPage() {
                     value={claudeBaseUrl}
                     onChange={(e) => setClaudeBaseUrl(e.target.value)}
                     placeholder="https://api.anthropic.com (留空使用默认)"
+                    disabled={!canEditRepo}
                   />
                 </label>
                 <label className="input-field">
@@ -420,19 +428,22 @@ export default function RepoConfigPage() {
                     value={claudeAuthToken}
                     onChange={(e) => setClaudeAuthToken(e.target.value)}
                     placeholder={claudeConfig?.has_auth_token ? '已配置（输入新值覆盖）' : 'sk-ant-...'}
+                    disabled={!canEditRepo}
                   />
                 </label>
               </div>
-              <div style={{ marginTop: 'var(--spacing-md)', display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center' }}>
+              <div style={{ marginTop: 'var(--spacing-md)', display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center', flexWrap: 'wrap' }}>
                 <button
                   className="primary-button"
                   onClick={saveClaudeConfig}
-                  disabled={claudeSaving}
+                  disabled={claudeSaving || !canEditRepo}
                 >
                   {claudeSaving ? '保存中...' : '保存配置'}
                 </button>
                 <span className="muted small">
-                  配置后，审查 PR 时将使用此仓库的 API Key
+                  {canEditRepo
+                    ? '配置后，审查 PR 时将使用此仓库的 API Key'
+                    : '组织仓库需要组织管理员权限才能修改 Claude 配置'}
                 </span>
               </div>
             </>

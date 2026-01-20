@@ -1,6 +1,7 @@
 """
 HTTP route definitions for the FastAPI application.
 """
+
 from __future__ import annotations
 
 import hmac
@@ -43,16 +44,16 @@ class WebhookSetupRequest(BaseModel):
         default_factory=lambda: ["pull_request", "issue_comment"],
         description="需要监听的事件列表",
     )
-    bring_bot: bool = Field(
-        default=True, description="是否自动邀请bot账号协作"
-    )
+    bring_bot: bool = Field(default=True, description="是否自动邀请bot账号协作")
 
 
 class ModelConfigRequest(BaseModel):
     """模型配置请求体"""
 
     config_name: str = Field(..., description="配置名称")
-    repository_id: Optional[int] = Field(None, description="关联仓库ID（为空则为全局配置）")
+    repository_id: Optional[int] = Field(
+        None, description="关联仓库ID（为空则为全局配置）"
+    )
     model_name: str = Field("claude", description="模型名称")
     max_tokens: Optional[int] = Field(None, description="最大token数")
     temperature: Optional[float] = Field(None, description="温度参数")
@@ -65,8 +66,12 @@ class ModelConfigRequest(BaseModel):
 class ClaudeConfigRequest(BaseModel):
     """Claude 配置请求体"""
 
-    anthropic_base_url: Optional[str] = Field(None, description="Anthropic API Base URL")
-    anthropic_auth_token: Optional[str] = Field(None, description="Anthropic Auth Token")
+    anthropic_base_url: Optional[str] = Field(
+        None, description="Anthropic API Base URL"
+    )
+    anthropic_auth_token: Optional[str] = Field(
+        None, description="Anthropic Auth Token"
+    )
 
 
 def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> bool:
@@ -84,9 +89,7 @@ def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> boo
     if not secret:
         return True  # 如果没有配置密钥，跳过验证
 
-    expected_signature = hmac.new(
-        secret.encode(), payload, hashlib.sha256
-    ).hexdigest()
+    expected_signature = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
 
     return hmac.compare_digest(signature, expected_signature)
 
@@ -168,8 +171,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             raise HTTPException(status_code=502, detail="无法从Gitea获取仓库列表")
         # 只返回有admin权限的仓库，因为只有admin才能配置webhook
         admin_repos = [
-            repo for repo in repos
-            if repo.get("permissions", {}).get("admin", False)
+            repo for repo in repos if repo.get("permissions", {}).get("admin", False)
         ]
         return {"repos": admin_repos}
 
@@ -190,11 +192,28 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         permissions = await client.check_repo_permissions(owner, repo)
         if permissions is None:
             raise HTTPException(status_code=502, detail="无法获取仓库权限信息")
+
+        is_org = await client.is_organization(owner)
+        org_role = None
+        if is_org:
+            session = context.auth_manager.require_session(request)
+            username = session.user.get("username") if session else None
+            if username:
+                org_role = await client.get_org_membership_role(owner, username)
+
+        can_setup = permissions.get("admin", False)
+        if is_org:
+            can_setup = can_setup and org_role in {"owner", "admin"}
+
         return {
             "owner": owner,
             "repo": repo,
             "permissions": permissions,
-            "can_setup_webhook": permissions.get("admin", False),
+            "organization": {
+                "is_org": is_org,
+                "role": org_role,
+            },
+            "can_setup_webhook": can_setup,
         }
 
     @api_router.post("/repos/{owner}/{repo}/setup")
@@ -202,6 +221,30 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         owner: str, repo: str, payload: WebhookSetupRequest, request: Request
     ):
         """为指定仓库配置Webhook并可选邀请Bot账号"""
+        client = (
+            context.auth_manager.build_user_client(
+                context.auth_manager.require_session(request)
+            )
+            if context.auth_manager.enabled
+            else context.gitea_client
+        )
+
+        permissions = await client.check_repo_permissions(owner, repo)
+        if permissions is None:
+            raise HTTPException(status_code=502, detail="无法获取仓库权限信息")
+
+        is_org = await client.is_organization(owner)
+        org_role = None
+        if is_org:
+            session = context.auth_manager.require_session(request)
+            username = session.user.get("username") if session else None
+            if username:
+                org_role = await client.get_org_membership_role(owner, username)
+            if org_role not in {"owner", "admin"}:
+                raise HTTPException(status_code=403, detail="需要组织管理员权限")
+        elif not permissions.get("admin", False):
+            raise HTTPException(status_code=403, detail="需要仓库管理员权限")
+
         callback_url = payload.callback_url or str(request.url_for("webhook"))
         secret = context.repo_registry.get_secret(owner, repo) or secrets.token_hex(20)
         context.repo_registry.set_secret(owner, repo, secret)
@@ -216,14 +259,6 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             "events": payload.events,
             "active": True,
         }
-
-        client = (
-            context.auth_manager.build_user_client(
-                context.auth_manager.require_session(request)
-            )
-            if context.auth_manager.enabled
-            else context.gitea_client
-        )
 
         hook_id = await client.ensure_repo_webhook(owner, repo, webhook_config)
         if hook_id is None:
@@ -254,6 +289,22 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             if context.auth_manager.enabled
             else context.gitea_client
         )
+
+        permissions = await client.check_repo_permissions(owner, repo)
+        if permissions is None:
+            raise HTTPException(status_code=502, detail="无法获取仓库权限信息")
+
+        is_org = await client.is_organization(owner)
+        org_role = None
+        if is_org:
+            session = context.auth_manager.require_session(request)
+            username = session.user.get("username") if session else None
+            if username:
+                org_role = await client.get_org_membership_role(owner, username)
+
+        can_setup = permissions.get("admin", False)
+        if is_org:
+            can_setup = can_setup and org_role in {"owner", "admin"}
 
         # 获取当前服务的回调 URL
         try:
@@ -286,6 +337,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "url": matched_hook.get("config", {}).get("url", ""),
                 "created_at": matched_hook.get("created_at"),
                 "updated_at": matched_hook.get("updated_at"),
+                "can_setup_webhook": can_setup,
             }
         else:
             return {
@@ -294,6 +346,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "webhook_id": None,
                 "events": [],
                 "url": None,
+                "can_setup_webhook": can_setup,
             }
 
     @api_router.delete("/repos/{owner}/{repo}/webhook")
@@ -306,6 +359,22 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             if context.auth_manager.enabled
             else context.gitea_client
         )
+
+        permissions = await client.check_repo_permissions(owner, repo)
+        if permissions is None:
+            raise HTTPException(status_code=502, detail="无法获取仓库权限信息")
+
+        is_org = await client.is_organization(owner)
+        org_role = None
+        if is_org:
+            session = context.auth_manager.require_session(request)
+            username = session.user.get("username") if session else None
+            if username:
+                org_role = await client.get_org_membership_role(owner, username)
+            if org_role not in {"owner", "admin"}:
+                raise HTTPException(status_code=403, detail="需要组织管理员权限")
+        elif not permissions.get("admin", False):
+            raise HTTPException(status_code=403, detail="需要仓库管理员权限")
 
         # 先获取 webhook 状态
         try:
@@ -325,15 +394,20 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 hook_id = hook.get("id")
                 if hook_id:
                     # 调用 Gitea API 删除 webhook
-                    delete_url = f"{client.base_url}/api/v1/repos/{owner}/{repo}/hooks/{hook_id}"
+                    delete_url = (
+                        f"{client.base_url}/api/v1/repos/{owner}/{repo}/hooks/{hook_id}"
+                    )
                     try:
                         import httpx
+
                         async with httpx.AsyncClient() as http_client:
-                            response = await http_client.delete(delete_url, headers=client.headers)
+                            response = await http_client.delete(
+                                delete_url, headers=client.headers
+                            )
                             if response.status_code in (200, 204):
                                 deleted = True
                                 # 同时清除本地保存的 secret
-                                context.repo_registry.set_secret(owner, repo, None)
+                                context.repo_registry.delete_secret(owner, repo)
                                 break
                     except Exception as e:
                         logger.error(f"删除webhook失败: {e}")
@@ -342,6 +416,44 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             return {"success": True, "message": "Webhook 已删除"}
         else:
             raise HTTPException(status_code=404, detail="未找到匹配的Webhook")
+
+    @api_router.post("/repos/{owner}/{repo}/validate-admin")
+    async def validate_repo_admin(owner: str, repo: str, request: Request):
+        """校验仓库配置权限（组织仓库需管理员）"""
+        client = (
+            context.auth_manager.build_user_client(
+                context.auth_manager.require_session(request)
+            )
+            if context.auth_manager.enabled
+            else context.gitea_client
+        )
+
+        permissions = await client.check_repo_permissions(owner, repo)
+        if permissions is None:
+            raise HTTPException(status_code=502, detail="无法获取仓库权限信息")
+
+        is_org = await client.is_organization(owner)
+        org_role = None
+        if is_org:
+            session = context.auth_manager.require_session(request)
+            username = session.user.get("username") if session else None
+            if username:
+                org_role = await client.get_org_membership_role(owner, username)
+
+        can_setup = permissions.get("admin", False)
+        if is_org:
+            can_setup = can_setup and org_role in {"owner", "admin"}
+
+        return {
+            "owner": owner,
+            "repo": repo,
+            "permissions": permissions,
+            "organization": {
+                "is_org": is_org,
+                "role": org_role,
+            },
+            "can_setup_webhook": can_setup,
+        }
 
     # ==================== 审查历史 API ====================
 
@@ -354,12 +466,13 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         offset: int = Query(0, ge=0, description="偏移量"),
     ):
         """获取审查历史列表"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
         from app.services.db_service import DBService
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             db_service = DBService(session)
             sessions = await db_service.list_review_sessions(
                 owner=owner,
@@ -381,8 +494,12 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                         "overall_severity": s.overall_severity,
                         "overall_success": s.overall_success,
                         "inline_comments_count": s.inline_comments_count,
-                        "started_at": s.started_at.isoformat() if s.started_at else None,
-                        "completed_at": s.completed_at.isoformat() if s.completed_at else None,
+                        "started_at": s.started_at.isoformat()
+                        if s.started_at
+                        else None,
+                        "completed_at": s.completed_at.isoformat()
+                        if s.completed_at
+                        else None,
                         "duration_seconds": s.duration_seconds,
                     }
                     for s in sessions
@@ -393,14 +510,15 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             }
 
     @api_router.get("/reviews/{review_id}")
-    async def get_review(review_id: int):
+    async def get_review(review_id: int, request: Request):
         """获取审查详情"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
         from app.services.db_service import DBService
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             db_service = DBService(session)
             review_session = await db_service.get_review_session(review_id)
 
@@ -428,8 +546,12 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "inline_comments_count": review_session.inline_comments_count,
                 "overall_success": review_session.overall_success,
                 "error_message": review_session.error_message,
-                "started_at": review_session.started_at.isoformat() if review_session.started_at else None,
-                "completed_at": review_session.completed_at.isoformat() if review_session.completed_at else None,
+                "started_at": review_session.started_at.isoformat()
+                if review_session.started_at
+                else None,
+                "completed_at": review_session.completed_at.isoformat()
+                if review_session.completed_at
+                else None,
                 "duration_seconds": review_session.duration_seconds,
                 "inline_comments": [
                     {
@@ -449,12 +571,14 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
     @api_router.get("/stats")
     async def get_stats(
+        request: Request,
         repository_id: Optional[int] = Query(None, description="仓库ID"),
         start_date: Optional[str] = Query(None, description="开始日期 (YYYY-MM-DD)"),
         end_date: Optional[str] = Query(None, description="结束日期 (YYYY-MM-DD)"),
     ):
         """获取使用量统计"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
         from app.services.db_service import DBService
@@ -473,7 +597,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             except ValueError:
                 raise HTTPException(status_code=400, detail="无效的结束日期格式")
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             db_service = DBService(session)
 
             # 获取汇总
@@ -511,14 +635,15 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     # ==================== 模型配置 API ====================
 
     @api_router.get("/configs")
-    async def list_configs():
+    async def list_configs(request: Request):
         """获取所有模型配置"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
         from app.services.db_service import DBService
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             db_service = DBService(session)
             configs = await db_service.list_model_configs()
 
@@ -541,14 +666,15 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             }
 
     @api_router.post("/configs")
-    async def create_or_update_config(payload: ModelConfigRequest):
+    async def create_or_update_config(payload: ModelConfigRequest, request: Request):
         """创建或更新模型配置"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
         from app.services.db_service import DBService
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             db_service = DBService(session)
             config = await db_service.create_or_update_model_config(
                 config_name=payload.config_name,
@@ -576,12 +702,13 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     @api_router.get("/repos/{owner}/{repo}/claude-config")
     async def get_repo_claude_config(owner: str, repo: str, request: Request):
         """获取仓库的 Claude 配置"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
         from app.services.db_service import DBService
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             db_service = DBService(session)
             repo_obj = await db_service.get_repository(owner, repo)
 
@@ -611,12 +738,13 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         owner: str, repo: str, payload: ClaudeConfigRequest, request: Request
     ):
         """保存仓库的 Claude 配置"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
         from app.services.db_service import DBService
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             db_service = DBService(session)
 
             # 获取或创建仓库
@@ -649,12 +777,13 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     @api_router.get("/repos/{owner}/{repo}/webhook-secret")
     async def get_webhook_secret(owner: str, repo: str, request: Request):
         """获取仓库的 Webhook Secret"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
         from app.services.db_service import DBService
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             db_service = DBService(session)
             repo_obj = await db_service.get_repository(owner, repo)
 
@@ -672,14 +801,15 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     @api_router.post("/repos/{owner}/{repo}/webhook-secret/regenerate")
     async def regenerate_webhook_secret(owner: str, repo: str, request: Request):
         """重新生成仓库的 Webhook Secret"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
         from app.services.db_service import DBService
 
         new_secret = secrets.token_hex(20)
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             db_service = DBService(session)
             await db_service.update_repository_secret(owner, repo, new_secret)
 
@@ -693,14 +823,15 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         }
 
     @api_router.get("/repositories")
-    async def list_repositories():
+    async def list_repositories(request: Request):
         """获取所有已配置的仓库"""
-        if not context.database:
+        database = getattr(request.state, "database", None)
+        if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
         from app.services.db_service import DBService
 
-        async with context.database.session() as session:
+        async with database.session() as session:
             db_service = DBService(session)
             repos = await db_service.list_repositories()
 
@@ -713,8 +844,12 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                         "full_name": r.full_name,
                         "is_active": r.is_active,
                         "has_webhook_secret": bool(r.webhook_secret),
-                        "created_at": r.created_at.isoformat() if r.created_at else None,
-                        "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+                        "created_at": r.created_at.isoformat()
+                        if r.created_at
+                        else None,
+                        "updated_at": r.updated_at.isoformat()
+                        if r.updated_at
+                        else None,
                     }
                     for r in repos
                 ],
@@ -747,7 +882,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             repo_info = (
                 payload.get("repository", {}) if isinstance(payload, dict) else {}
             )
-            owner_info = repo_info.get("owner", {}) if isinstance(repo_info, dict) else {}
+            owner_info = (
+                repo_info.get("owner", {}) if isinstance(repo_info, dict) else {}
+            )
             owner_name = owner_info.get("username") or owner_info.get("login")
             repo_name = repo_info.get("name")
             repo_secret = (
@@ -777,9 +914,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 features = context.webhook_handler.parse_review_features(
                     x_review_features
                 )
-                focus_areas = context.webhook_handler.parse_review_focus(
-                    x_review_focus
-                )
+                focus_areas = context.webhook_handler.parse_review_focus(x_review_focus)
 
                 logger.info(f"收到PR webhook，功能: {features}, 重点: {focus_areas}")
 
