@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
-import { DashboardIcon, UsageIcon, UserIcon, SunIcon, MoonIcon } from './icons';
+import { DashboardIcon, UsageIcon, UserIcon, SunIcon, MoonIcon, AdminIcon } from './icons';
 import {
   AuthContext,
   defaultAuthStatus,
@@ -20,6 +20,7 @@ const navItems = [
   { href: '/', label: '仪表盘', icon: DashboardIcon },
   { href: '/usage', label: '用量', icon: UsageIcon },
   { href: '/settings', label: '用户中心', icon: UserIcon },
+  { href: '/admin', label: '管理后台', icon: AdminIcon, adminOnly: true },
 ];
 
 const AUTH_POLL_INTERVAL = 60000; // 60 seconds when window is not focused
@@ -104,7 +105,12 @@ export default function Layout({ children }: LayoutProps) {
           </div>
           <nav className="sidebar-nav">
             {navItems.map((item) => {
-              const active = router.pathname === item.href;
+              // 如果是管理后台且用户未登录，跳过
+              if (item.adminOnly && !authStatus.loggedIn) {
+                return null;
+              }
+              
+              const active = router.pathname === item.href || router.pathname.startsWith(item.href + '/');
               const Icon = item.icon;
               return (
                 <Link
