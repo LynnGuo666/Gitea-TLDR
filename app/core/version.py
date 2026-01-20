@@ -143,7 +143,7 @@ def get_version_banner() -> str:
     return banner
 
 
-def get_changelog(version: str = None) -> str:
+def get_changelog(version: str | None = None) -> str:
     """
     获取更新日志
 
