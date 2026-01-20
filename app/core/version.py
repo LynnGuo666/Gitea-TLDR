@@ -2,12 +2,25 @@
 版本信息模块
 """
 
-__version__ = "1.6.0"
-__release_date__ = "2025-12-16"
+__version__ = "1.7.0"
+__release_date__ = "2026-01-20"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.7.0": {
+        "date": "2026-01-20",
+        "changes": [
+            "新增：仓库级别Anthropic配置，支持为每个仓库配置独立的API Base URL和Auth Token",
+            "新增：Webhook Secret管理，支持查看和重新生成仓库的Webhook Secret",
+            "新增：API端点 /api/repos/{owner}/{repo}/claude-config (GET/PUT)",
+            "新增：API端点 /api/repos/{owner}/{repo}/webhook-secret (GET)",
+            "新增：API端点 /api/repos/{owner}/{repo}/webhook-secret/regenerate (POST)",
+            "优化：claude_analyzer支持传递自定义Anthropic配置到Claude Code CLI",
+            "优化：webhook_handler自动读取仓库的Anthropic配置",
+            "优化：前端仓库配置页面新增Claude配置表单",
+        ],
+    },
     "1.6.0": {
         "date": "2025-12-16",
         "changes": [
@@ -21,15 +34,15 @@ VERSION_HISTORY = {
             "新增：Toggle开关组件，直观展示Webhook启用状态",
             "优化：auth轮询机制，窗口聚焦时自动刷新",
             "优化：移动端响应式布局",
-            "优化：用量统计页面连接真实API"
-        ]
+            "优化：用量统计页面连接真实API",
+        ],
     },
     "1.5.1": {
         "date": "2025-12-15",
         "changes": [
             "优化：仓库列表API只返回用户有admin权限的仓库",
-            "修复：添加greenlet依赖，修复SQLAlchemy异步引擎初始化失败问题"
-        ]
+            "修复：添加greenlet依赖，修复SQLAlchemy异步引擎初始化失败问题",
+        ],
     },
     "1.5.0": {
         "date": "2025-12-15",
@@ -39,8 +52,8 @@ VERSION_HISTORY = {
             "新增：GiteaClient.check_repo_permissions()方法，检查用户权限",
             "新增：API端点 /api/repos/{owner}/{repo}/permissions",
             "优化：所有写操作的错误处理，区分权限错误和其他错误",
-            "优化：权限不足时记录warning级别日志，便于排查问题"
-        ]
+            "优化：权限不足时记录warning级别日志，便于排查问题",
+        ],
     },
     "1.4.0": {
         "date": "2025-12-13",
@@ -51,22 +64,20 @@ VERSION_HISTORY = {
             "新增：模型配置管理，支持全局和仓库级别的AI配置",
             "新增：API端点 /api/reviews、/api/stats、/api/configs、/api/repositories",
             "优化：仓库注册表支持数据库存储，自动从JSON迁移",
-            "优化：Webhook处理器自动记录审查会话到数据库"
-        ]
+            "优化：Webhook处理器自动记录审查会话到数据库",
+        ],
     },
     "1.3.0": {
         "date": "2025-12-09",
         "changes": [
             "新增：Claude输出结构化JSON，并可生成精确到文件/行的审查意见",
             "新增：自动向PR Review附加行级评论并携带对应commit id",
-            "优化：审查状态根据整体严重程度自动标记"
-        ]
+            "优化：审查状态根据整体严重程度自动标记",
+        ],
     },
     "1.2.0": {
         "date": "2025-11-29",
-        "changes": [
-            "更新：最低 Python 版本要求提升至 3.11+，与依赖栈保持一致"
-        ]
+        "changes": ["更新：最低 Python 版本要求提升至 3.11+，与依赖栈保持一致"],
     },
     "1.1.0": {
         "date": "2025-11-28",
@@ -75,7 +86,7 @@ VERSION_HISTORY = {
             "新增：AUTO_REQUEST_REVIEWER配置项，控制是否自动请求审查者",
             "新增：GiteaClient.request_reviewer()方法，支持请求PR审查者",
             "优化：创建review后自动将bot添加到审查者列表",
-        ]
+        ],
     },
     "1.0.0": {
         "date": "2025-11-28",
@@ -89,8 +100,8 @@ VERSION_HISTORY = {
             "使用Claude Code CLI进行代码分析",
             "完整代码库上下文分析",
             "模块化架构设计",
-        ]
-    }
+        ],
+    },
 }
 
 

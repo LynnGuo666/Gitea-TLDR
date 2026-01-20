@@ -4,6 +4,36 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.7.0] - 2026-01-20
+
+### 新增功能 (Added)
+
+- **仓库级别 Anthropic 配置**: 支持为每个仓库配置独立的 API Base URL 和 Auth Token，实现灵活的 API 配置管理
+- **Webhook Secret 管理**: 新增查看和重新生成 Webhook Secret 的功能，提升安全性
+
+### API端点 (Endpoints)
+
+- `GET /api/repos/{owner}/{repo}/claude-config`: 获取仓库的 Claude 配置（Base URL 和 Token 状态）
+- `PUT /api/repos/{owner}/{repo}/claude-config`: 保存或更新仓库的 Claude 配置
+- `GET /api/repos/{owner}/{repo}/webhook-secret`: 获取仓库的 Webhook Secret
+- `POST /api/repos/{owner}/{repo}/webhook-secret/regenerate`: 重新生成 Webhook Secret
+
+### 技术改进 (Technical)
+
+- **claude_analyzer 增强**: `analyze_pr()` 和 `analyze_pr_simple()` 方法支持传递自定义 `anthropic_base_url` 和 `anthropic_auth_token` 参数
+- **webhook_handler 优化**: 自动从数据库读取仓库的 Anthropic 配置并传递给 Claude Code CLI
+- **前端配置页面**: 仓库配置页面新增 Claude 配置表单，支持输入和保存 Base URL 和 API Key
+
+### 数据库模型 (Database)
+
+- `ModelConfig` 模型新增字段：`anthropic_base_url` (String 500)、`anthropic_auth_token` (String 500)
+
+### 使用场景 (Use Cases)
+
+- 为不同仓库使用不同的 Anthropic API 端点（如代理或私有部署）
+- 为不同团队配置独立的 API Token，实现成本隔离和配额管理
+- 敏感仓库使用专用 API 配置，提升安全性
+
 ## [1.6.0] - 2025-12-16
 
 ### 新增功能 (Added)
