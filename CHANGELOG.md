@@ -4,6 +4,66 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.8.0] - 2026-01-20
+
+### 新增功能 (Added)
+
+- **管理后台系统**: 全新的管理后台功能，支持系统管理和监控
+  - Dashboard 看板：实时统计审查次数、Token 消耗、Webhook 状态、仓库数量
+  - 管理员用户管理：支持创建、更新、删除管理员，区分 super_admin 和 admin 角色
+  - 全局配置管理：统一管理系统配置（Claude、审查、性能、高级选项）
+  - Webhook 日志查看：完整记录所有 Webhook 请求，支持查看详情和重试
+  - 权限控制：基于数据库的管理员列表，支持灵活的权限配置
+
+### 数据库模型 (Database)
+
+- `AdminUser`: 管理员用户表，支持角色（super_admin/admin）和权限配置
+- `AdminSettings`: 全局配置表，分类存储系统配置（claude/review/performance/advanced）
+- `ApiKey`: API Key 池表，支持多 Key 管理、配额监控、轮换策略
+- `WebhookLog`: Webhook 日志表，记录所有请求的完整信息和处理状态
+
+### API 端点 (Endpoints)
+
+**管理后台 API** (需要管理员权限)
+- `GET /api/admin/dashboard/stats`: 获取 Dashboard 统计数据
+- `GET /api/admin/users`: 获取管理员列表
+- `POST /api/admin/users`: 创建管理员用户
+- `PUT /api/admin/users/{username}`: 更新管理员用户
+- `DELETE /api/admin/users/{username}`: 删除管理员用户
+- `GET /api/admin/settings`: 获取全局配置
+- `PUT /api/admin/settings/{key}`: 更新配置项
+- `DELETE /api/admin/settings/{key}`: 删除配置项
+- `GET /api/admin/webhooks/logs`: 获取 Webhook 日志列表
+- `GET /api/admin/webhooks/logs/{id}`: 获取日志详情
+
+### 前端页面 (Frontend)
+
+- `/admin`: 管理后台 Dashboard，展示系统统计和快捷操作
+- 侧边栏新增"管理后台"入口（登录后可见）
+- 新增管理后台专用图标（AdminIcon, ChartIcon, LogIcon）
+
+### 配置选项 (Configuration)
+
+新增环境变量：
+- `ADMIN_ENABLED=true`: 是否启用管理后台（默认启用）
+- `INITIAL_ADMIN_USERNAME=admin`: 初始管理员用户名（首次启动自动创建）
+- `WEBHOOK_LOG_RETENTION_DAYS=30`: Webhook 日志保留天数
+- `WEBHOOK_LOG_RETENTION_DAYS_FAILED=90`: 失败日志保留天数
+
+### 技术改进 (Technical)
+
+- **权限中间件**: 实现 `admin_auth.py`，提供 `admin_required()` 装饰器用于权限控制
+- **管理服务**: `AdminService` 封装所有管理后台相关的数据库操作
+- **初始化流程**: 应用启动时自动创建初始管理员用户
+- **日志清理**: 支持自动清理旧的 Webhook 日志（区分成功/失败日志保留时间）
+
+### 使用说明 (Usage)
+
+1. 在 `.env` 中配置 `INITIAL_ADMIN_USERNAME=your_username`
+2. 启动应用后，使用配置的用户名登录
+3. 访问 `/admin` 即可进入管理后台
+4. super_admin 可以创建其他管理员，admin 只能管理自己的信息
+
 ## [1.7.0] - 2026-01-20
 
 ### 新增功能 (Added)
