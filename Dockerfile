@@ -30,6 +30,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制应用代码
 COPY app/ ./app/
 
+# 复制 Alembic 配置和迁移文件
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
+
 # 创建工作目录
 RUN mkdir -p /tmp/gitea-pr-reviewer
 
