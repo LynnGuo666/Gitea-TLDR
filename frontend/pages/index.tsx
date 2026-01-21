@@ -6,6 +6,13 @@ import { SearchIcon, RefreshIcon, RepoIcon } from '../components/icons';
 import { Repo } from '../lib/types';
 import { AuthContext } from '../lib/auth';
 import { useDebounce } from '../lib/hooks';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 
 export default function Home() {
   const [repos, setRepos] = useState<Repo[]>([]);
@@ -13,6 +20,7 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [needsAuth, setNeedsAuth] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState<'all' | 'personal' | 'org'>('all');
   const { status: authStatus, beginLogin } = useContext(AuthContext);
 
   const debouncedSearch = useDebounce(searchQuery, 300);
@@ -51,13 +59,29 @@ export default function Home() {
   }, [authStatus.enabled, authStatus.loggedIn]);
 
   const filteredRepos = useMemo(() => {
-    if (!debouncedSearch.trim()) return repos;
+    let filtered = repos;
+
+    // 应用所有者筛选
+    if (ownerFilter !== 'all') {
+      const currentUser = authStatus.user?.username;
+      filtered = filtered.filter(repo => {
+        const owner = repo.owner?.username || repo.owner?.login;
+        if (ownerFilter === 'personal') {
+          return owner === currentUser;
+        } else {
+          return owner !== currentUser;
+        }
+      });
+    }
+
+    // 应用搜索筛选
+    if (!debouncedSearch.trim()) return filtered;
     const query = debouncedSearch.toLowerCase();
-    return repos.filter((repo) => {
+    return filtered.filter((repo) => {
       const fullName = repo.full_name || `${repo.owner?.username || repo.owner?.login}/${repo.name}`;
       return fullName.toLowerCase().includes(query);
     });
-  }, [repos, debouncedSearch]);
+  }, [repos, debouncedSearch, ownerFilter, authStatus.user]);
 
   const repoCountLabel = needsAuth
     ? '等待登录'
@@ -77,14 +101,26 @@ export default function Home() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span className="repo-count-badge">{repoCountLabel}</span>
               {!needsAuth && !loading && (
-                <button
-                  className={`refresh-button ${refreshing ? 'spinning' : ''}`}
-                  onClick={() => fetchRepos(true)}
-                  disabled={refreshing}
-                  title="刷新仓库列表"
-                >
-                  <RefreshIcon size={18} />
-                </button>
+                <>
+                  <button
+                    className={`refresh-button ${refreshing ? 'spinning' : ''}`}
+                    onClick={() => fetchRepos(true)}
+                    disabled={refreshing}
+                    title="刷新仓库列表"
+                  >
+                    <RefreshIcon size={18} />
+                  </button>
+                  <Select value={ownerFilter} onValueChange={(value: any) => setOwnerFilter(value)} disabled={refreshing}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="筛选" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部</SelectItem>
+                      <SelectItem value="personal">个人仓库</SelectItem>
+                      <SelectItem value="org">组织仓库</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </>
               )}
             </div>
           </div>

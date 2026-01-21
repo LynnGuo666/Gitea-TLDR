@@ -173,6 +173,20 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         admin_repos = [
             repo for repo in repos if repo.get("permissions", {}).get("admin", False)
         ]
+
+        # 从数据库获取 is_active 状态
+        database = context.database
+        if database:
+            from app.services.db_service import DBService
+            async with database.session() as session:
+                db_service = DBService(session)
+                for repo in admin_repos:
+                    owner = repo.get("owner", {}).get("username") or repo.get("owner", {}).get("login")
+                    name = repo.get("name")
+                    if owner and name:
+                        db_repo = await db_service.get_repository(owner, name)
+                        repo["is_active"] = db_repo.is_active if db_repo else True
+
         return {"repos": admin_repos}
 
     @api_router.get("/repos/{owner}/{repo}/permissions")

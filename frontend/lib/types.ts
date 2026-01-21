@@ -5,6 +5,7 @@ export type Repo = {
   full_name?: string;
   private?: boolean;
   permissions?: { admin?: boolean; push?: boolean; pull?: boolean };
+  is_active?: boolean;
 };
 
 export type PublicConfig = {
