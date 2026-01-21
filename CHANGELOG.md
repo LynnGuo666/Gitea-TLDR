@@ -4,6 +4,32 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.11.0] - 2026-01-21
+
+### 修复 (Fixed)
+
+- **Toggle 开关显示**: 修复了 Webhook 启用状态下开关按钮显示错误的问题
+  - 滑块被挤压或位置不正确
+  - 改用 `left` 属性替代 `transform: translateX()` 控制位置
+  - 使用 `top: 50%` + `translateY(-50%)` 实现垂直居中
+  - 滑块使用纯白色 `#ffffff`，在绿色背景上更清晰
+
+- **仓库启用状态逻辑**: 修复了首页所有仓库默认显示为"已启用"的问题
+  - 后端 API：数据库无记录时，`is_active` 默认值从 `True` 改为 `False`
+  - 前端：`repo.is_active` 空值合并默认值从 `true` 改为 `false`
+  - 现在正确反映实际的 Webhook 配置状态
+
+- **布局问题**: 修复了监听事件文本过长导致开关按钮被挤出容器的问题
+  - Webhook 状态卡片添加 `gap` 间距
+  - 文本区域使用 `flex: 1` 和 `min-width: 0` 自适应宽度
+  - 开关添加 `flex-shrink: 0` 保持固定宽度
+  - 长文本支持 `word-break: break-word` 自动换行
+
+### 技术改进 (Technical)
+
+- 优化 Toggle 开关 CSS，提升视觉一致性和可靠性
+- 改进 Flexbox 布局，防止内容溢出和挤压
+
 ## [1.10.0] - 2026-01-21
 
 ### 优化 (Improved)

@@ -24,7 +24,7 @@ export default function RepoList({ repos }: RepoListProps) {
       {repos.map((repo, index) => {
         const owner = repo.owner?.username || repo.owner?.login || '未知';
         const fullName = repo.full_name || `${owner}/${repo.name}`;
-        const isActive = repo.is_active ?? true;
+        const isActive = repo.is_active ?? false;
         const isReadOnly = !repo.permissions?.admin;
 
         return (

@@ -196,7 +196,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                     name = repo.get("name")
                     if owner and name:
                         db_repo = await db_service.get_repository(owner, name)
-                        repo["is_active"] = db_repo.is_active if db_repo else True
+                        repo["is_active"] = db_repo.is_active if db_repo else False
 
         return {"repos": admin_repos}
 
