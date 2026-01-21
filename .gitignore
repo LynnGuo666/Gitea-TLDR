@@ -65,11 +65,6 @@ _next/
 .next/
 out/
 
-# Alembic
-alembic/
-alembic.ini
-versions/
-
 # Cache
 .cache/
 *.pytest_cache
