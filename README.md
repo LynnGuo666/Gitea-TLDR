@@ -118,7 +118,35 @@ SESSION_COOKIE_NAME=gitea_session
 SESSION_COOKIE_SECURE=false
 ```
 
-### 4. 启动服务
+### 4. 数据库迁移
+
+应用使用 Alembic 进行数据库版本控制。首次启动时，应用会自动运行数据库迁移。
+
+如果需要手动管理数据库迁移：
+
+```bash
+# 激活虚拟环境
+source venv/bin/activate  # Linux/Mac
+
+# 查看当前数据库版本
+alembic current
+
+# 升级到最新版本
+alembic upgrade head
+
+# 查看迁移历史
+alembic history --verbose
+
+# 创建新的迁移（开发使用）
+alembic revision --autogenerate -m "描述变更内容"
+```
+
+**注意**: 
+- 应用启动时会自动运行 `alembic upgrade head`，通常不需要手动执行
+- 如果迁移失败，应用会回退使用 `create_tables()` 创建表
+- 所有迁移文件已纳入版本控制，部署到新环境时会自动应用
+
+### 5. 启动服务
 
 ```bash
 # 开发模式
@@ -138,7 +166,7 @@ npm run build  # 生成 out/ 目录
 
 如果检测到 `frontend/out`，FastAPI 将自动在 `/ui` 路径挂载静态资源。
 
-### 5. 配置Gitea Webhook
+### 6. 配置Gitea Webhook
 
 在Gitea仓库设置中添加Webhook：
 

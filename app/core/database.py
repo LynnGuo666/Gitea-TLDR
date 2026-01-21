@@ -1,6 +1,7 @@
 """
 数据库连接管理模块
 """
+
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -63,6 +64,41 @@ class Database:
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("数据库表创建完成")
+
+    async def run_migrations(self) -> None:
+        """
+        运行 Alembic 数据库迁移
+
+        这个方法会自动检查并应用所有待执行的迁移
+        """
+        try:
+            from alembic import command
+            from alembic.config import Config
+            from pathlib import Path
+
+            # 获取项目根目录
+            project_root = Path(__file__).resolve().parents[2]
+            alembic_ini = project_root / "alembic.ini"
+
+            if not alembic_ini.exists():
+                logger.warning(f"未找到 alembic.ini 文件: {alembic_ini}")
+                logger.info("回退到使用 create_tables() 创建表")
+                await self.create_tables()
+                return
+
+            # 配置 Alembic
+            alembic_cfg = Config(str(alembic_ini))
+            alembic_cfg.set_main_option("sqlalchemy.url", self.database_url)
+
+            # 运行迁移到最新版本
+            logger.info("开始运行数据库迁移...")
+            command.upgrade(alembic_cfg, "head")
+            logger.info("数据库迁移完成")
+
+        except Exception as e:
+            logger.error(f"数据库迁移失败: {e}")
+            logger.info("尝试使用 create_tables() 创建表")
+            await self.create_tables()
 
     async def close(self) -> None:
         """关闭数据库连接"""
