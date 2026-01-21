@@ -204,6 +204,13 @@ def create_app() -> FastAPI:
             target = full_path or "index.html"
             response = await static_app.get_response(target, request.scope)
             if response.status_code == 404:
+                # 检查是否是 repo 动态路由
+                if full_path.startswith("repo/") and full_path.count("/") >= 2:
+                    fallback_path = frontend_out_dir / "repo" / "_fallback.html"
+                    if fallback_path.exists():
+                        return await static_app.get_response(
+                            "repo/_fallback.html", request.scope
+                        )
                 return await static_app.get_response("index.html", request.scope)
             return response
     else:
