@@ -14,6 +14,7 @@ export default function Home() {
   const [needsAuth, setNeedsAuth] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [ownerFilter, setOwnerFilter] = useState<'all' | 'personal' | 'org'>('all');
+  const [readonlyFilter, setReadonlyFilter] = useState<'all' | 'readonly' | 'writable'>('all');
   const { status: authStatus, beginLogin } = useContext(AuthContext);
 
   const debouncedSearch = useDebounce(searchQuery, 300);
@@ -67,6 +68,18 @@ export default function Home() {
       });
     }
 
+    // 应用只读筛选
+    if (readonlyFilter !== 'all') {
+      filtered = filtered.filter(repo => {
+        const isReadOnly = !repo.permissions?.admin;
+        if (readonlyFilter === 'readonly') {
+          return isReadOnly;
+        } else {
+          return !isReadOnly;
+        }
+      });
+    }
+
     // 应用搜索筛选
     if (!debouncedSearch.trim()) return filtered;
     const query = debouncedSearch.toLowerCase();
@@ -74,7 +87,7 @@ export default function Home() {
       const fullName = repo.full_name || `${repo.owner?.username || repo.owner?.login}/${repo.name}`;
       return fullName.toLowerCase().includes(query);
     });
-  }, [repos, debouncedSearch, ownerFilter, authStatus.user]);
+  }, [repos, debouncedSearch, ownerFilter, readonlyFilter, authStatus.user]);
 
   const repoCountLabel = needsAuth
     ? '等待登录'
@@ -112,6 +125,16 @@ export default function Home() {
                     <option value="all">全部</option>
                     <option value="personal">个人仓库</option>
                     <option value="org">组织仓库</option>
+                  </select>
+                  <select
+                    className="filter-select"
+                    value={readonlyFilter}
+                    onChange={(e) => setReadonlyFilter(e.target.value as 'all' | 'readonly' | 'writable')}
+                    disabled={refreshing}
+                  >
+                    <option value="all">全部权限</option>
+                    <option value="writable">可管理</option>
+                    <option value="readonly">只读</option>
                   </select>
                 </>
               )}

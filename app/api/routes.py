@@ -170,17 +170,13 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
     @api_router.get("/repos")
     async def list_repos(request: Request):
-        """列出当前用户有管理员权限的仓库（只有admin权限才能配置webhook）"""
+        """列出当前用户有权访问的所有仓库（包括只读权限）"""
         client = context.auth_manager.build_user_client(
             context.auth_manager.require_session(request)
         )
         repos = await client.list_user_repos()
         if repos is None:
             raise HTTPException(status_code=502, detail="无法从Gitea获取仓库列表")
-        # 只返回有admin权限的仓库，因为只有admin才能配置webhook
-        admin_repos = [
-            repo for repo in repos if repo.get("permissions", {}).get("admin", False)
-        ]
 
         # 从数据库获取 is_active 状态
         database = context.database
@@ -189,7 +185,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
             async with database.session() as session:
                 db_service = DBService(session)
-                for repo in admin_repos:
+                for repo in repos:
                     owner = repo.get("owner", {}).get("username") or repo.get(
                         "owner", {}
                     ).get("login")
@@ -198,7 +194,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                         db_repo = await db_service.get_repository(owner, name)
                         repo["is_active"] = db_repo.is_active if db_repo else False
 
-        return {"repos": admin_repos}
+        return {"repos": repos}
 
     @api_router.get("/repos/{owner}/{repo}/permissions")
     async def check_repo_permissions(owner: str, repo: str, request: Request):

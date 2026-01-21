@@ -27,18 +27,16 @@ export default function RepoList({ repos }: RepoListProps) {
         const isActive = repo.is_active ?? false;
         const isReadOnly = !repo.permissions?.admin;
 
-        return (
-          <Link
-            key={repo.id}
-            href={`/repo/${owner}/${repo.name}`}
-            className="repo-item"
-            style={{
-              animationDelay: `${index * 40}ms`,
-              animationName: 'repoFadeUp',
-              animationDuration: '0.35s',
-              animationFillMode: 'both',
-            }}
-          >
+        const itemStyle = {
+          animationDelay: `${index * 40}ms`,
+          animationName: 'repoFadeUp',
+          animationDuration: '0.35s',
+          animationFillMode: 'both' as const,
+          cursor: isReadOnly ? 'default' : 'pointer',
+        };
+
+        const content = (
+          <>
             <div className="repo-item-icon">
               <RepoIcon size={20} />
             </div>
@@ -57,19 +55,35 @@ export default function RepoList({ repos }: RepoListProps) {
                 </div>
               </div>
             </div>
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="repo-item-arrow"
-            >
-              <polyline points="9 18 15 12 9 6"></polyline>
-            </svg>
+            {isReadOnly ? null : (
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="repo-item-arrow"
+              >
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            )}
+          </>
+        );
+
+        if (isReadOnly) {
+          return (
+            <div key={repo.id} className="repo-item" style={itemStyle}>
+              {content}
+            </div>
+          );
+        }
+
+        return (
+          <Link key={repo.id} href={`/repo/${owner}/${repo.name}`} className="repo-item" style={itemStyle}>
+            {content}
           </Link>
         );
       })}
