@@ -392,43 +392,91 @@ server {
 
 #### 方式1：使用Docker Compose（推荐）
 
-1. 创建 `.env` 文件：
+Docker Compose 会自动从 `.env` 文件读取所有环境变量，无需在 `docker-compose.yml` 中逐个配置。
+
+1. 创建并配置 `.env` 文件：
 
 ```bash
 cp .env.example .env
-# 编辑.env文件填写配置
+# 编辑 .env 文件，填写所有必需的配置项
+# 重要：确保配置了以下关键变量
+# - GITEA_URL
+# - GITEA_TOKEN
+# - OAUTH_CLIENT_ID (如果使用OAuth登录)
+# - OAUTH_CLIENT_SECRET (如果使用OAuth登录)
+# - OAUTH_REDIRECT_URL (如果使用OAuth登录)
+# - ANTHROPIC_AUTH_TOKEN (如果使用Claude Code)
 ```
 
 2. 启动服务：
 
 ```bash
-docker-compose up -d
+docker compose up -d --build
 ```
 
-3. 查看日志：
+3. 验证配置加载（可选）：
 
 ```bash
-docker-compose logs -f
+# 检查环境变量是否正确加载
+docker compose config | grep -A 20 environment
+
+# 在容器内验证OAuth配置
+docker exec gitea-pr-reviewer python -c "
+from app.core.config import settings
+from app.services.auth_manager import AuthManager
+print(f'OAuth enabled: {AuthManager().enabled}')
+"
 ```
 
-4. 停止服务：
+4. 查看日志：
 
 ```bash
-docker-compose down
+docker compose logs -f
 ```
+
+5. 停止服务：
+
+```bash
+docker compose down
+```
+
+**注意事项：**
+- `.env` 文件包含敏感信息（如token和密钥），请勿提交到版本控制系统
+- 修改 `.env` 后需要重启容器：`docker compose restart`
+- 如需使用不同的配置文件，可以通过 `--env-file` 参数指定：
+  ```bash
+  docker compose --env-file .env.production up -d
+  ```
 
 #### 方式2：使用Docker命令
+
+推荐使用 `--env-file` 参数从 `.env` 文件加载所有配置：
 
 ```bash
 # 构建镜像
 docker build -t gitea-pr-reviewer .
 
-# 运行容器
+# 使用 .env 文件运行容器（推荐）
+docker run -d \
+  --name gitea-pr-reviewer \
+  -p 8000:8000 \
+  --env-file .env \
+  -v pr-reviewer-data:/tmp/gitea-pr-reviewer \
+  -v ./frontend:/app/frontend \
+  gitea-pr-reviewer
+```
+
+或者手动指定每个环境变量：
+
+```bash
 docker run -d \
   --name gitea-pr-reviewer \
   -p 8000:8000 \
   -e GITEA_URL=https://gitea.example.com \
   -e GITEA_TOKEN=your_token \
+  -e OAUTH_CLIENT_ID=your_client_id \
+  -e OAUTH_CLIENT_SECRET=your_client_secret \
+  -e OAUTH_REDIRECT_URL=http://localhost:8000/api/auth/callback \
   -e ANTHROPIC_BASE_URL=https://api.anthropic.com \
   -e ANTHROPIC_AUTH_TOKEN=your_anthropic_token \
   -e WEBHOOK_SECRET=your_secret \

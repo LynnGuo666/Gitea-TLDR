@@ -23,8 +23,14 @@
 
 ## Commit & Pull Request Guidelines
 - Follow semantic-style commit subjects (`feat:`, `fix:`, `chore:`) consistent with the changelog. Reference modules touched (e.g., `feat: auto-request reviewers in webhook handler`).  
-- PRs should include: problem statement, summary of changes, testing evidence (commands or screenshots), configuration updates (env vars, secrets, OAuth values), and **explicit version bumps** when behavior changes ship. Update both `app/core/version.py` and `CHANGELOG.md` together to keep release metadata in sync.  
+- PRs should include: problem statement, summary of changes, testing evidence (commands or screenshots), configuration updates (env vars, secrets, OAuth values), and **explicit version bumps** when behavior changes ship.
 - Update `CHANGELOG.md` when shipping user-visible behavior or configuration changes.
+- **Version Synchronization**: When bumping versions, ensure frontend and backend versions stay synchronized:
+  - Backend: `app/core/version.py` (`__version__` and `__release_date__`)
+  - Frontend: `frontend/package.json` (`version` field)
+  - Frontend: `frontend/lib/version.ts` (`FRONTEND_VERSION` and `FRONTEND_RELEASE_DATE`)
+  - All three must have the same version number to avoid version mismatch warnings in the UI
+  - The version display component in the sidebar will automatically detect and warn about mismatches
 
 ## Security & Configuration Tips
 - Never commit secrets; rely on `.env` locally and document new variables in `.env.example`.  

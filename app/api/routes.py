@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from app.core import (
     settings,
     __version__,
+    __release_date__,
     get_version_info,
     get_changelog,
     get_all_changelogs,
@@ -110,6 +111,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         """版本信息端点"""
         return {
             "version": __version__,
+            "release_date": __release_date__,
             "info": get_version_info(),
             "changelog": get_changelog(),
         }
@@ -130,6 +132,16 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             "bot_username": settings.bot_username,
             "debug": settings.debug,
             "oauth_enabled": context.auth_manager.enabled,
+        }
+
+    @api_router.get("/version")
+    async def api_version():
+        """版本信息端点（API前缀）"""
+        return {
+            "version": __version__,
+            "release_date": __release_date__,
+            "info": get_version_info(),
+            "changelog": get_changelog(),
         }
 
     @api_router.get("/auth/status")

@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { DashboardIcon, UsageIcon, UserIcon, SunIcon, MoonIcon, AdminIcon } from './icons';
+import { VersionDisplay } from './VersionDisplay';
 import {
   AuthContext,
   defaultAuthStatus,
@@ -125,6 +126,7 @@ export default function Layout({ children }: LayoutProps) {
             })}
           </nav>
           <div className="sidebar-footer">
+            <VersionDisplay compact />
             {authStatus.enabled ? (
               authStatus.loggedIn ? (
                 <div className="user-profile">
