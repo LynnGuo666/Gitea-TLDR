@@ -6,13 +6,6 @@ import { SearchIcon, RefreshIcon, RepoIcon } from '../components/icons';
 import { Repo } from '../lib/types';
 import { AuthContext } from '../lib/auth';
 import { useDebounce } from '../lib/hooks';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
 
 export default function Home() {
   const [repos, setRepos] = useState<Repo[]>([]);
@@ -110,16 +103,16 @@ export default function Home() {
                   >
                     <RefreshIcon size={18} />
                   </button>
-                  <Select value={ownerFilter} onValueChange={(value: any) => setOwnerFilter(value)} disabled={refreshing}>
-                    <SelectTrigger className="w-[140px]">
-                      <SelectValue placeholder="筛选" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">全部</SelectItem>
-                      <SelectItem value="personal">个人仓库</SelectItem>
-                      <SelectItem value="org">组织仓库</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <select
+                    className="filter-select"
+                    value={ownerFilter}
+                    onChange={(e) => setOwnerFilter(e.target.value as 'all' | 'personal' | 'org')}
+                    disabled={refreshing}
+                  >
+                    <option value="all">全部</option>
+                    <option value="personal">个人仓库</option>
+                    <option value="org">组织仓库</option>
+                  </select>
                 </>
               )}
             </div>
