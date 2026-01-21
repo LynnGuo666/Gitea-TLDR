@@ -6,30 +6,10 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: gitea-pr-reviewer
+    env_file:
+      - .env  # 从 .env 文件读取所有环境变量
     ports:
       - "8000:8000"
-    environment:
-      # Gitea配置
-      - GITEA_URL=${GITEA_URL}
-      - GITEA_TOKEN=${GITEA_TOKEN}
-
-      # Webhook配置
-      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
-
-      # Claude Code配置
-      - CLAUDE_CODE_PATH=claude
-      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}
-      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}
-
-      # 工作目录配置
-      - WORK_DIR=/tmp/gitea-pr-reviewer
-
-      # 服务器配置
-      - HOST=0.0.0.0
-      - PORT=8000
-
-      # 日志配置
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       # 持久化工作目录（可选）
       - pr-reviewer-data:/tmp/gitea-pr-reviewer
