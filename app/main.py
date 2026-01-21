@@ -53,8 +53,6 @@ async def init_database() -> Database:
     if _database is None:
         _database = Database(settings.effective_database_url)
         await _database.init()
-        # 使用 Alembic 迁移而不是简单的 create_tables()
-        await _database.run_migrations()
         logger.info(f"数据库初始化完成")
     return _database
 
