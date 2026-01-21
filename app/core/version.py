@@ -2,12 +2,23 @@
 版本信息模块
 """
 
-__version__ = "1.8.1"
+__version__ = "1.9.0"
 __release_date__ = "2026-01-21"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.9.0": {
+        "date": "2026-01-21",
+        "changes": [
+            "新增：仓库配置页面显示最新Pull Requests替代提交历史",
+            "新增：PR列表显示状态徽章（打开/已关闭/已合并）",
+            "新增：PR列表显示分支信息（源分支→目标分支）",
+            "新增：后端API端点 GET /api/repos/{owner}/{repo}/pulls 支持获取PR列表",
+            "优化：移除仓库配置页面的服务信息卡片，简化界面",
+            "优化：前端UI改进，移除Radix UI依赖，使用原生HTML元素和自定义样式",
+        ],
+    },
     "1.8.1": {
         "date": "2026-01-21",
         "changes": [

@@ -58,6 +58,35 @@ class GiteaClient:
                 else:
                     logger.debug(f"[响应体] {text}")
 
+    async def list_pull_requests(
+        self, owner: str, repo: str, state: str = "all", limit: int = 10
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        获取仓库的PR列表
+
+        Args:
+            owner: 仓库所有者
+            repo: 仓库名称
+            state: PR状态 (open/closed/all)
+            limit: 返回的PR数量
+
+        Returns:
+            PR列表
+        """
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/pulls"
+        params = {"state": state, "limit": limit, "sort": "recentupdate"}
+
+        try:
+            self._log_debug("GET", url)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=self.headers, params=params)
+                self._log_response(response)
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            logger.error(f"获取PR列表失败: {e}")
+            return None
+
     async def get_pull_request(
         self, owner: str, repo: str, pr_number: int
     ) -> Optional[Dict[str, Any]]:

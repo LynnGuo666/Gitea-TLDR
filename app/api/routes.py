@@ -716,16 +716,18 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
     # ==================== 仓库管理 API ====================
 
-    @api_router.get("/repos/{owner}/{repo}/commits")
-    async def get_repo_commits(owner: str, repo: str, limit: int = 5):
-        """获取仓库最新提交"""
+    @api_router.get("/repos/{owner}/{repo}/pulls")
+    async def get_repo_pulls(owner: str, repo: str, state: str = "all", limit: int = 5):
+        """获取仓库最新PR"""
         gitea_client = context.gitea_client
-        commits = await gitea_client.get_commits(owner, repo, limit=limit)
+        pulls = await gitea_client.list_pull_requests(
+            owner, repo, state=state, limit=limit
+        )
 
-        if commits is None:
-            raise HTTPException(status_code=404, detail="无法获取提交信息")
+        if pulls is None:
+            raise HTTPException(status_code=404, detail="无法获取PR信息")
 
-        return {"commits": commits}
+        return {"pulls": pulls}
 
     @api_router.get("/repos/{owner}/{repo}/claude-config")
     async def get_repo_claude_config(owner: str, repo: str, request: Request):

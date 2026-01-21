@@ -39,21 +39,30 @@ type WebhookStatus = {
   can_setup_webhook?: boolean;
 };
 
-type Commit = {
-  sha: string;
-  commit: {
-    message: string;
-    author: {
-      name: string;
-      email: string;
-      date: string;
-    };
+type PullRequest = {
+  id: number;
+  number: number;
+  title: string;
+  state: string;
+  created_at: string;
+  updated_at: string;
+  user: {
+    login: string;
+    avatar_url: string;
   };
-  author: {
-    login?: string;
-    avatar_url?: string;
-  } | null;
+  head: {
+    ref: string;
+    repo: {
+      name: string;
+    } | null;
+  };
+  base: {
+    ref: string;
+  };
   html_url: string;
+  mergeable: boolean;
+  merged: boolean;
+  merged_at: string | null;
 };
 
 export default function RepoConfigPage() {
@@ -76,9 +85,9 @@ export default function RepoConfigPage() {
   const [claudeAuthToken, setClaudeAuthToken] = useState('');
   const [claudeConfigLoading, setClaudeConfigLoading] = useState(true);
   const [claudeSaving, setClaudeSaving] = useState(false);
-  // 提交历史
-  const [commits, setCommits] = useState<Commit[]>([]);
-  const [commitsLoading, setCommitsLoading] = useState(true);
+  // Pull Requests
+  const [pulls, setPulls] = useState<PullRequest[]>([]);
+  const [pullsLoading, setPullsLoading] = useState(true);
 
   const { status: authStatus, beginLogin } = useContext(AuthContext);
   const { addToast } = useToast();
@@ -129,22 +138,22 @@ export default function RepoConfigPage() {
     }
   }, [owner, repo, requiresLogin]);
 
-  const fetchCommits = useCallback(async () => {
+  const fetchPulls = useCallback(async () => {
     if (!owner || !repo || requiresLogin) return;
 
-    setCommitsLoading(true);
+    setPullsLoading(true);
     try {
-      const res = await fetch(`/api/repos/${owner}/${repo}/commits?limit=5`);
+      const res = await fetch(`/api/repos/${owner}/${repo}/pulls?state=all&limit=5`);
       if (res.ok) {
         const data = await res.json();
-        setCommits(data.commits || []);
+        setPulls(data.pulls || []);
       } else {
-        setCommits([]);
+        setPulls([]);
       }
     } catch {
-      setCommits([]);
+      setPulls([]);
     } finally {
-      setCommitsLoading(false);
+      setPullsLoading(false);
     }
   }, [owner, repo, requiresLogin]);
 
@@ -161,13 +170,13 @@ export default function RepoConfigPage() {
     if (owner && repo && !requiresLogin) {
       fetchWebhookStatus();
       fetchClaudeConfig();
-      fetchCommits();
+      fetchPulls();
     } else {
       setStatusLoading(false);
       setClaudeConfigLoading(false);
-      setCommitsLoading(false);
+      setPullsLoading(false);
     }
-  }, [owner, repo, requiresLogin, fetchWebhookStatus, fetchClaudeConfig, fetchCommits]);
+  }, [owner, repo, requiresLogin, fetchWebhookStatus, fetchClaudeConfig, fetchPulls]);
 
   const toggleEvent = (event: string) => {
     setEvents((prev) =>
@@ -491,7 +500,7 @@ export default function RepoConfigPage() {
           )}
         </section>
 
-        {/* 最新提交 */}
+        {/* 最新 Pull Requests */}
         <section className="card">
           <div className="panel-header">
             <div className="section-title">
@@ -506,18 +515,19 @@ export default function RepoConfigPage() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
-                  <circle cx="12" cy="12" r="3"></circle>
-                  <line x1="12" y1="1" x2="12" y2="9"></line>
-                  <line x1="12" y1="15" x2="12" y2="23"></line>
+                  <circle cx="18" cy="18" r="3"></circle>
+                  <circle cx="6" cy="6" r="3"></circle>
+                  <path d="M13 6h3a2 2 0 0 1 2 2v7"></path>
+                  <line x1="6" y1="9" x2="6" y2="21"></line>
                 </svg>
               </span>
-              <h2>最新提交</h2>
+              <h2>最新 Pull Requests</h2>
             </div>
-            {!requiresLogin && !commitsLoading && commits.length > 0 && (
+            {!requiresLogin && !pullsLoading && pulls.length > 0 && (
               <button
-                className={`refresh-button ${commitsLoading ? 'spinning' : ''}`}
-                onClick={fetchCommits}
-                title="刷新提交"
+                className={`refresh-button ${pullsLoading ? 'spinning' : ''}`}
+                onClick={fetchPulls}
+                title="刷新 PR"
               >
                 <RefreshIcon size={16} />
               </button>
@@ -525,22 +535,21 @@ export default function RepoConfigPage() {
           </div>
 
           {requiresLogin ? (
-            <p className="muted">登录后可查看提交历史</p>
-          ) : commitsLoading ? (
+            <p className="muted">登录后可查看 Pull Request</p>
+          ) : pullsLoading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
-              <Skeleton width="100%" height={60} />
-              <Skeleton width="100%" height={60} />
-              <Skeleton width="100%" height={60} />
+              <Skeleton width="100%" height={80} />
+              <Skeleton width="100%" height={80} />
+              <Skeleton width="100%" height={80} />
             </div>
-          ) : commits.length === 0 ? (
-            <p className="muted">暂无提交记录</p>
+          ) : pulls.length === 0 ? (
+            <p className="muted">暂无 Pull Request</p>
           ) : (
-            <div className="commit-list">
-              {commits.map((commit) => {
-                const commitMsg = commit.commit.message.split('\n')[0];
-                const commitDate = new Date(commit.commit.author.date);
+            <div className="pr-list">
+              {pulls.map((pr) => {
+                const prDate = new Date(pr.updated_at);
                 const now = new Date();
-                const diffMs = now.getTime() - commitDate.getTime();
+                const diffMs = now.getTime() - prDate.getTime();
                 const diffMins = Math.floor(diffMs / 60000);
                 const diffHours = Math.floor(diffMs / 3600000);
                 const diffDays = Math.floor(diffMs / 86400000);
@@ -556,29 +565,45 @@ export default function RepoConfigPage() {
                   timeAgo = '刚刚';
                 }
 
+                let statusClass = 'pr-status-open';
+                let statusText = '打开';
+                if (pr.merged) {
+                  statusClass = 'pr-status-merged';
+                  statusText = '已合并';
+                } else if (pr.state === 'closed') {
+                  statusClass = 'pr-status-closed';
+                  statusText = '已关闭';
+                }
+
                 return (
                   <a
-                    key={commit.sha}
-                    href={commit.html_url}
+                    key={pr.id}
+                    href={pr.html_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="commit-item"
+                    className="pr-item"
                   >
-                    <div className="commit-avatar">
-                      {commit.author?.avatar_url ? (
-                        <img src={commit.author.avatar_url} alt={commit.commit.author.name} />
-                      ) : (
-                        <span>{commit.commit.author.name[0].toUpperCase()}</span>
-                      )}
+                    <div className="pr-avatar">
+                      <img src={pr.user.avatar_url} alt={pr.user.login} />
                     </div>
-                    <div className="commit-content">
-                      <p className="commit-message">{commitMsg}</p>
-                      <div className="commit-meta">
-                        <span className="commit-author">{commit.author?.login || commit.commit.author.name}</span>
-                        <span className="commit-sep">•</span>
-                        <span className="commit-time">{timeAgo}</span>
-                        <span className="commit-sep">•</span>
-                        <code className="commit-sha">{commit.sha.substring(0, 7)}</code>
+                    <div className="pr-content">
+                      <div className="pr-header">
+                        <span className="pr-title">{pr.title}</span>
+                        <span className={`pr-status ${statusClass}`}>{statusText}</span>
+                      </div>
+                      <div className="pr-meta">
+                        <span className="pr-number">#{pr.number}</span>
+                        <span className="pr-sep">•</span>
+                        <span className="pr-author">{pr.user.login}</span>
+                        <span className="pr-sep">•</span>
+                        <span className="pr-time">{timeAgo}</span>
+                      </div>
+                      <div className="pr-branches">
+                        <code>{pr.head.ref}</code>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                        <code>{pr.base.ref}</code>
                       </div>
                     </div>
                     <svg
@@ -590,7 +615,7 @@ export default function RepoConfigPage() {
                       strokeWidth="2"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      className="commit-arrow"
+                      className="pr-arrow"
                     >
                       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                       <polyline points="15 3 21 3 21 9"></polyline>
@@ -602,33 +627,6 @@ export default function RepoConfigPage() {
             </div>
           )}
         </section>
-
-        {/* 服务信息 */}
-        {config && (
-          <section className="card">
-            <div className="panel-header">
-              <h3>服务信息</h3>
-            </div>
-            <dl className="status-list">
-              <div>
-                <dt>Gitea 实例</dt>
-                <dd>{config.gitea_url}</dd>
-              </div>
-              <div>
-                <dt>Bot 账号</dt>
-                <dd>{config.bot_username || '未配置'}</dd>
-              </div>
-              {webhookStatus?.url && (
-                <div>
-                  <dt>Webhook URL</dt>
-                  <dd style={{ fontSize: '0.85rem', wordBreak: 'break-all' }}>
-                    {webhookStatus.url}
-                  </dd>
-                </div>
-              )}
-            </dl>
-          </section>
-        )}
       </main>
     </>
   );

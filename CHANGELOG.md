@@ -4,6 +4,40 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.9.0] - 2026-01-21
+
+### 新增功能 (Added)
+
+- **Pull Request 展示**: 仓库配置页面新增"最新 Pull Requests"卡片，替代原有的提交历史
+  - 显示 PR 编号、标题、作者头像和用户名
+  - 状态徽章：打开（绿色）、已关闭（红色）、已合并（紫色）
+  - 分支信息：显示源分支 → 目标分支
+  - 时间显示：相对时间（刚刚、X 分钟前、X 小时前、X 天前）
+  - 刷新按钮：支持手动刷新 PR 列表
+  - 外链跳转：点击 PR 卡片跳转到 Gitea PR 页面
+
+### API端点 (Endpoints)
+
+- `GET /api/repos/{owner}/{repo}/pulls`: 获取仓库的 Pull Request 列表
+  - 参数：`state`（all/open/closed，默认 all）、`limit`（数量限制，默认 5）
+  - 返回：PR 列表，包含编号、标题、状态、分支、作者、时间等信息
+
+### 前端改进 (Frontend)
+
+- 仓库配置页面 (`/repo/[owner]/[repo]`) 改进：
+  - 新增 `.pr-list`、`.pr-item` 等 CSS 类，完整的 PR 卡片样式
+  - PR 状态徽章样式：`.pr-status-open`、`.pr-status-closed`、`.pr-status-merged`
+  - 移除"服务信息"卡片，简化页面布局
+  - 移除 Radix UI Select 组件依赖，使用原生 HTML `<select>` 元素
+  - 重写 RepoList 组件，移除 Radix UI Table 和 Badge 组件，使用卡片式布局
+
+### 技术改进 (Technical)
+
+- **后端**: `GiteaClient.list_pull_requests()` 方法，调用 Gitea API 获取 PR 列表
+- **前端**: TypeScript 类型定义 `PullRequest`，包含所有必要字段
+- **样式**: 新增 PR 专用 CSS 样式，与现有设计系统保持一致
+- **性能**: 减少前端 bundle 大小（从 129 kB → 93.4 kB）
+
 ## [1.8.1] - 2026-01-21
 
 ### 修复 (Fixed)
