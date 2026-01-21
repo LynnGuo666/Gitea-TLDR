@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Repo } from '../lib/types';
 import { RepoIcon } from './icons';
 
@@ -27,7 +28,7 @@ export default function RepoList({ repos }: RepoListProps) {
         const isReadOnly = !repo.permissions?.admin;
 
         return (
-          <a
+          <Link
             key={repo.id}
             href={`/repo/${owner}/${repo.name}`}
             className="repo-item"
@@ -69,7 +70,7 @@ export default function RepoList({ repos }: RepoListProps) {
             >
               <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
-          </a>
+          </Link>
         );
       })}
     </div>
