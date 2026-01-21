@@ -446,6 +446,37 @@ class GiteaClient:
             logger.error(f"获取组织成员角色失败: {e}")
             return None
 
+    async def get_commits(
+        self, owner: str, repo: str, sha: Optional[str] = None, limit: int = 10
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        获取仓库的提交列表
+
+        Args:
+            owner: 仓库所有者
+            repo: 仓库名称
+            sha: 分支名或提交SHA（默认获取默认分支）
+            limit: 返回的提交数量
+
+        Returns:
+            提交列表
+        """
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/commits"
+        params = {"limit": limit}
+        if sha:
+            params["sha"] = sha
+
+        try:
+            self._log_debug("GET", url)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=self.headers, params=params)
+                self._log_response(response)
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            logger.error(f"获取提交列表失败: {e}")
+            return None
+
     async def list_user_repos(self) -> Optional[List[Dict[str, Any]]]:
         """列出当前token可访问的仓库"""
 

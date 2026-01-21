@@ -1442,6 +1442,109 @@ a {
 
 /* ==================== 管理后台样式 ==================== */
 
+/* 提交历史列表 */
+.commit-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.commit-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: var(--color-text-primary);
+  transition: all var(--transition-fast);
+  background: var(--color-bg-secondary);
+}
+
+.commit-item:hover {
+  border-color: var(--color-border-secondary);
+  background: var(--color-bg-hover);
+  transform: translateX(2px);
+}
+
+.commit-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--color-bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.commit-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.commit-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.commit-message {
+  margin: 0 0 var(--spacing-xs);
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.commit-author {
+  font-weight: 500;
+}
+
+.commit-sep {
+  color: var(--color-text-muted);
+}
+
+.commit-time {
+  color: var(--color-text-muted);
+}
+
+.commit-sha {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  padding: 0.15rem 0.4rem;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.commit-arrow {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  transition: transform var(--transition-fast), color var(--transition-fast);
+}
+
+.commit-item:hover .commit-arrow {
+  color: var(--color-accent);
+  transform: translate(2px, -2px);
+}
+
+/* ==================== 管理后台样式 ==================== */
+
 .stat-card {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border-primary);

@@ -178,10 +178,13 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         database = context.database
         if database:
             from app.services.db_service import DBService
+
             async with database.session() as session:
                 db_service = DBService(session)
                 for repo in admin_repos:
-                    owner = repo.get("owner", {}).get("username") or repo.get("owner", {}).get("login")
+                    owner = repo.get("owner", {}).get("username") or repo.get(
+                        "owner", {}
+                    ).get("login")
                     name = repo.get("name")
                     if owner and name:
                         db_repo = await db_service.get_repository(owner, name)
@@ -712,6 +715,17 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             }
 
     # ==================== 仓库管理 API ====================
+
+    @api_router.get("/repos/{owner}/{repo}/commits")
+    async def get_repo_commits(owner: str, repo: str, limit: int = 5):
+        """获取仓库最新提交"""
+        gitea_client = context.gitea_client
+        commits = await gitea_client.get_commits(owner, repo, limit=limit)
+
+        if commits is None:
+            raise HTTPException(status_code=404, detail="无法获取提交信息")
+
+        return {"commits": commits}
 
     @api_router.get("/repos/{owner}/{repo}/claude-config")
     async def get_repo_claude_config(owner: str, repo: str, request: Request):

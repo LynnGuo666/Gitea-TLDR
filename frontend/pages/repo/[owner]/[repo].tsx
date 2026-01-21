@@ -39,6 +39,23 @@ type WebhookStatus = {
   can_setup_webhook?: boolean;
 };
 
+type Commit = {
+  sha: string;
+  commit: {
+    message: string;
+    author: {
+      name: string;
+      email: string;
+      date: string;
+    };
+  };
+  author: {
+    login?: string;
+    avatar_url?: string;
+  } | null;
+  html_url: string;
+};
+
 export default function RepoConfigPage() {
   const router = useRouter();
   const { owner, repo } = router.query;
@@ -59,6 +76,9 @@ export default function RepoConfigPage() {
   const [claudeAuthToken, setClaudeAuthToken] = useState('');
   const [claudeConfigLoading, setClaudeConfigLoading] = useState(true);
   const [claudeSaving, setClaudeSaving] = useState(false);
+  // 提交历史
+  const [commits, setCommits] = useState<Commit[]>([]);
+  const [commitsLoading, setCommitsLoading] = useState(true);
 
   const { status: authStatus, beginLogin } = useContext(AuthContext);
   const { addToast } = useToast();
@@ -109,6 +129,25 @@ export default function RepoConfigPage() {
     }
   }, [owner, repo, requiresLogin]);
 
+  const fetchCommits = useCallback(async () => {
+    if (!owner || !repo || requiresLogin) return;
+
+    setCommitsLoading(true);
+    try {
+      const res = await fetch(`/api/repos/${owner}/${repo}/commits?limit=5`);
+      if (res.ok) {
+        const data = await res.json();
+        setCommits(data.commits || []);
+      } else {
+        setCommits([]);
+      }
+    } catch {
+      setCommits([]);
+    } finally {
+      setCommitsLoading(false);
+    }
+  }, [owner, repo, requiresLogin]);
+
   useEffect(() => {
     fetch('/api/config/public')
       .then((res) => res.json())
@@ -122,11 +161,13 @@ export default function RepoConfigPage() {
     if (owner && repo && !requiresLogin) {
       fetchWebhookStatus();
       fetchClaudeConfig();
+      fetchCommits();
     } else {
       setStatusLoading(false);
       setClaudeConfigLoading(false);
+      setCommitsLoading(false);
     }
-  }, [owner, repo, requiresLogin, fetchWebhookStatus, fetchClaudeConfig]);
+  }, [owner, repo, requiresLogin, fetchWebhookStatus, fetchClaudeConfig, fetchCommits]);
 
   const toggleEvent = (event: string) => {
     setEvents((prev) =>
@@ -447,6 +488,118 @@ export default function RepoConfigPage() {
                 </span>
               </div>
             </>
+          )}
+        </section>
+
+        {/* 最新提交 */}
+        <section className="card">
+          <div className="panel-header">
+            <div className="section-title">
+              <span className="icon-badge">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <line x1="12" y1="1" x2="12" y2="9"></line>
+                  <line x1="12" y1="15" x2="12" y2="23"></line>
+                </svg>
+              </span>
+              <h2>最新提交</h2>
+            </div>
+            {!requiresLogin && !commitsLoading && commits.length > 0 && (
+              <button
+                className={`refresh-button ${commitsLoading ? 'spinning' : ''}`}
+                onClick={fetchCommits}
+                title="刷新提交"
+              >
+                <RefreshIcon size={16} />
+              </button>
+            )}
+          </div>
+
+          {requiresLogin ? (
+            <p className="muted">登录后可查看提交历史</p>
+          ) : commitsLoading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
+              <Skeleton width="100%" height={60} />
+              <Skeleton width="100%" height={60} />
+              <Skeleton width="100%" height={60} />
+            </div>
+          ) : commits.length === 0 ? (
+            <p className="muted">暂无提交记录</p>
+          ) : (
+            <div className="commit-list">
+              {commits.map((commit) => {
+                const commitMsg = commit.commit.message.split('\n')[0];
+                const commitDate = new Date(commit.commit.author.date);
+                const now = new Date();
+                const diffMs = now.getTime() - commitDate.getTime();
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+                
+                let timeAgo = '';
+                if (diffDays > 0) {
+                  timeAgo = `${diffDays} 天前`;
+                } else if (diffHours > 0) {
+                  timeAgo = `${diffHours} 小时前`;
+                } else if (diffMins > 0) {
+                  timeAgo = `${diffMins} 分钟前`;
+                } else {
+                  timeAgo = '刚刚';
+                }
+
+                return (
+                  <a
+                    key={commit.sha}
+                    href={commit.html_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="commit-item"
+                  >
+                    <div className="commit-avatar">
+                      {commit.author?.avatar_url ? (
+                        <img src={commit.author.avatar_url} alt={commit.commit.author.name} />
+                      ) : (
+                        <span>{commit.commit.author.name[0].toUpperCase()}</span>
+                      )}
+                    </div>
+                    <div className="commit-content">
+                      <p className="commit-message">{commitMsg}</p>
+                      <div className="commit-meta">
+                        <span className="commit-author">{commit.author?.login || commit.commit.author.name}</span>
+                        <span className="commit-sep">•</span>
+                        <span className="commit-time">{timeAgo}</span>
+                        <span className="commit-sep">•</span>
+                        <code className="commit-sha">{commit.sha.substring(0, 7)}</code>
+                      </div>
+                    </div>
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="commit-arrow"
+                    >
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                      <polyline points="15 3 21 3 21 9"></polyline>
+                      <line x1="10" y1="14" x2="21" y2="3"></line>
+                    </svg>
+                  </a>
+                );
+              })}
+            </div>
           )}
         </section>
 
