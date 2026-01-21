@@ -1552,7 +1552,7 @@ a {
 
 .pr-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--spacing-md);
   padding: var(--spacing-md);
   border: 1px solid var(--color-border-primary);
@@ -1592,22 +1592,14 @@ a {
   gap: var(--spacing-xs);
 }
 
-.pr-header {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  flex-wrap: wrap;
-}
-
 .pr-title {
   font-size: 0.95rem;
   font-weight: 500;
   color: var(--color-text-primary);
-  flex: 1;
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  margin-bottom: var(--spacing-xs);
 }
 
 .pr-status {
@@ -1684,11 +1676,18 @@ a {
   flex-shrink: 0;
 }
 
+.pr-status-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-shrink: 0;
+}
+
 .pr-arrow {
   color: var(--color-text-muted);
   flex-shrink: 0;
   transition: transform var(--transition-fast), color var(--transition-fast);
-  align-self: center;
 }
 
 .pr-item:hover .pr-arrow {

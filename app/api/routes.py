@@ -159,12 +159,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     @api_router.get("/repos")
     async def list_repos(request: Request):
         """列出当前用户有管理员权限的仓库（只有admin权限才能配置webhook）"""
-        client = (
-            context.auth_manager.build_user_client(
-                context.auth_manager.require_session(request)
-            )
-            if context.auth_manager.enabled
-            else context.gitea_client
+        client = context.auth_manager.build_user_client(
+            context.auth_manager.require_session(request)
         )
         repos = await client.list_user_repos()
         if repos is None:
@@ -199,12 +195,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
         返回权限信息，用于前端判断是否显示webhook设置等功能
         """
-        client = (
-            context.auth_manager.build_user_client(
-                context.auth_manager.require_session(request)
-            )
-            if context.auth_manager.enabled
-            else context.gitea_client
+        client = context.auth_manager.build_user_client(
+            context.auth_manager.require_session(request)
         )
         permissions = await client.check_repo_permissions(owner, repo)
         if permissions is None:
@@ -238,12 +230,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         owner: str, repo: str, payload: WebhookSetupRequest, request: Request
     ):
         """为指定仓库配置Webhook并可选邀请Bot账号"""
-        client = (
-            context.auth_manager.build_user_client(
-                context.auth_manager.require_session(request)
-            )
-            if context.auth_manager.enabled
-            else context.gitea_client
+        client = context.auth_manager.build_user_client(
+            context.auth_manager.require_session(request)
         )
 
         permissions = await client.check_repo_permissions(owner, repo)
@@ -299,12 +287,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     @api_router.get("/repos/{owner}/{repo}/webhook-status")
     async def get_webhook_status(owner: str, repo: str, request: Request):
         """获取仓库的 Webhook 配置状态"""
-        client = (
-            context.auth_manager.build_user_client(
-                context.auth_manager.require_session(request)
-            )
-            if context.auth_manager.enabled
-            else context.gitea_client
+        client = context.auth_manager.build_user_client(
+            context.auth_manager.require_session(request)
         )
 
         permissions = await client.check_repo_permissions(owner, repo)
@@ -369,12 +353,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     @api_router.delete("/repos/{owner}/{repo}/webhook")
     async def delete_webhook(owner: str, repo: str, request: Request):
         """删除仓库的 Webhook"""
-        client = (
-            context.auth_manager.build_user_client(
-                context.auth_manager.require_session(request)
-            )
-            if context.auth_manager.enabled
-            else context.gitea_client
+        client = context.auth_manager.build_user_client(
+            context.auth_manager.require_session(request)
         )
 
         permissions = await client.check_repo_permissions(owner, repo)
@@ -437,12 +417,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     @api_router.post("/repos/{owner}/{repo}/validate-admin")
     async def validate_repo_admin(owner: str, repo: str, request: Request):
         """校验仓库配置权限（组织仓库需管理员）"""
-        client = (
-            context.auth_manager.build_user_client(
-                context.auth_manager.require_session(request)
-            )
-            if context.auth_manager.enabled
-            else context.gitea_client
+        client = context.auth_manager.build_user_client(
+            context.auth_manager.require_session(request)
         )
 
         permissions = await client.check_repo_permissions(owner, repo)
@@ -732,6 +708,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     @api_router.get("/repos/{owner}/{repo}/claude-config")
     async def get_repo_claude_config(owner: str, repo: str, request: Request):
         """获取仓库的 Claude 配置"""
+        context.auth_manager.require_session(request)
         database = getattr(request.state, "database", None)
         if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
@@ -768,6 +745,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         owner: str, repo: str, payload: ClaudeConfigRequest, request: Request
     ):
         """保存仓库的 Claude 配置"""
+        context.auth_manager.require_session(request)
         database = getattr(request.state, "database", None)
         if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
@@ -831,6 +809,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     @api_router.post("/repos/{owner}/{repo}/webhook-secret/regenerate")
     async def regenerate_webhook_secret(owner: str, repo: str, request: Request):
         """重新生成仓库的 Webhook Secret"""
+        context.auth_manager.require_session(request)
         database = getattr(request.state, "database", None)
         if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")

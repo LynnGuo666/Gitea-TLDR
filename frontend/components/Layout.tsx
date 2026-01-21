@@ -163,12 +163,19 @@ export default function Layout({ children }: LayoutProps) {
                 </button>
               )
             ) : (
-              <p className="sidebar-hint">使用默认 PAT</p>
+              <p className="sidebar-hint">请配置 OAuth 登录</p>
             )}
           </div>
         </aside>
         <main className="main-content">
-          {requiresLogin ? (
+          {!authStatus.enabled ? (
+            <section className="card auth-gate">
+              <h1>需要配置 OAuth</h1>
+              <p>
+                管理员需要在环境变量中配置 OAuth (OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET, OAUTH_REDIRECT_URL) 才能使用本系统。
+              </p>
+            </section>
+          ) : requiresLogin ? (
             <section className="card auth-gate">
               <h1>连接 PKUGit</h1>
               <p>

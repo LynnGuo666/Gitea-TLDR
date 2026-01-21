@@ -4,6 +4,44 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.10.0] - 2026-01-21
+
+### 优化 (Improved)
+
+- **认证架构优化**: 前端所有 API 操作现在都必须通过 OAuth 登录，移除了降级使用 Bot PAT 的逻辑
+  - Bot PAT (`GITEA_TOKEN`) 仅用于 webhook 处理时发送评论
+  - 用户登录后使用自己的 OAuth token 管理仓库和配置 webhook
+  - 提升了系统安全性，避免后端 Bot Token 被前端滥用
+
+### 前端改进 (Frontend)
+
+- 侧边栏底部提示更新：`"使用默认 PAT"` → `"请配置 OAuth 登录"`
+- 新增 OAuth 未配置时的提示页面，提示管理员配置 OAuth
+- 移除前端对 Bot PAT 的依赖
+
+### 技术改进 (Technical)
+
+- 以下 API 端点移除了降级逻辑，必须 OAuth 登录：
+  - `GET /api/repos` - 列出仓库
+  - `GET /api/repos/{owner}/{repo}/permissions` - 检查权限
+  - `POST /api/repos/{owner}/{repo}/setup` - 配置 webhook
+  - `GET /api/repos/{owner}/{repo}/webhook-status` - webhook 状态
+  - `DELETE /api/repos/{owner}/{repo}/webhook` - 删除 webhook
+  - `PUT /api/repos/{owner}/{repo}/claude-config` - Claude 配置
+  - `POST /api/repos/{owner}/{repo}/webhook-secret/regenerate` - 重新生成 secret
+
+## [1.9.1] - 2026-01-21
+
+### 优化 (Improved)
+
+- **PR 列表布局优化**: 调整 PR 卡片布局，状态徽章和箭头图标水平排列在同一行，中间留有合适间距
+- **界面简化**: 移除仓库配置页面底部的"服务信息"卡片，简化页面结构
+
+### 技术改进 (Technical)
+
+- `.pr-status-row` 样式调整为水平布局（`flex-direction: row`）
+- 状态徽章和箭头间距使用 `var(--spacing-md)` 保持一致性
+
 ## [1.9.0] - 2026-01-21
 
 ### 新增功能 (Added)
