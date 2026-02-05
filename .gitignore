@@ -70,3 +70,6 @@ out/
 *.pytest_cache
 .ruff_cache/
 .mypy_cache/
+
+# Project agents plans
+agents/
