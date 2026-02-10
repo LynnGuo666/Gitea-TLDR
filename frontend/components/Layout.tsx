@@ -2,7 +2,16 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
-import { DashboardIcon, UsageIcon, UserIcon, SunIcon, MoonIcon, AdminIcon } from './icons';
+import { useTheme } from 'next-themes';
+import {
+  Button,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+  Avatar,
+} from '@heroui/react';
+import { LayoutGrid, BarChart3, User, Sun, Moon, Shield, LogOut } from 'lucide-react';
 import { VersionDisplay } from './VersionDisplay';
 import {
   AuthContext,
@@ -11,28 +20,30 @@ import {
   beginOAuthLogin,
   requestLogout,
 } from '../lib/auth';
-import { useTheme, useWindowFocus } from '../lib/hooks';
+import { useWindowFocus } from '../lib/hooks';
 
 type LayoutProps = {
   children: ReactNode;
 };
 
 const navItems = [
-  { href: '/', label: '仪表盘', icon: DashboardIcon },
-  { href: '/usage', label: '用量', icon: UsageIcon },
-  { href: '/settings', label: '用户中心', icon: UserIcon },
-  { href: '/admin', label: '管理后台', icon: AdminIcon, adminOnly: true },
+  { href: '/', label: '仪表盘', icon: LayoutGrid },
+  { href: '/usage', label: '用量', icon: BarChart3 },
+  { href: '/settings', label: '用户中心', icon: User },
+  { href: '/admin', label: '管理后台', icon: Shield, adminOnly: true },
 ];
 
-const AUTH_POLL_INTERVAL = 60000; // 60 seconds when window is not focused
-const AUTH_POLL_INTERVAL_FOCUSED = 30000; // 30 seconds when window is focused
+const AUTH_POLL_INTERVAL = 60000;
+const AUTH_POLL_INTERVAL_FOCUSED = 30000;
 
 export default function Layout({ children }: LayoutProps) {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState(defaultAuthStatus);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const { resolvedTheme, toggleTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
   const isWindowFocused = useWindowFocus();
+
+  useEffect(() => { setMounted(true); }, []);
 
   const refreshAuth = useCallback(() => {
     fetchAuthStatus()
@@ -40,84 +51,78 @@ export default function Layout({ children }: LayoutProps) {
       .catch(() => setAuthStatus(defaultAuthStatus));
   }, []);
 
-  useEffect(() => {
-    refreshAuth();
-  }, [refreshAuth]);
+  useEffect(() => { refreshAuth(); }, [refreshAuth]);
 
-  // Smart polling: more frequent when focused, less when not
   useEffect(() => {
     const interval = isWindowFocused ? AUTH_POLL_INTERVAL_FOCUSED : AUTH_POLL_INTERVAL;
     const id = setInterval(refreshAuth, interval);
     return () => clearInterval(id);
   }, [refreshAuth, isWindowFocused]);
 
-  // Refresh on window focus
   useEffect(() => {
-    if (isWindowFocused) {
-      refreshAuth();
-    }
+    if (isWindowFocused) refreshAuth();
   }, [isWindowFocused, refreshAuth]);
 
   const beginLogin = useCallback(async () => {
-    try {
-      await beginOAuthLogin();
-    } catch (error) {
-      console.error(error);
-    }
+    try { await beginOAuthLogin(); } catch (error) { console.error(error); }
   }, []);
 
   const logout = useCallback(async () => {
     await requestLogout();
-    setShowUserMenu(false);
     refreshAuth();
   }, [refreshAuth]);
 
   const authContextValue = useMemo(
-    () => ({
-      status: authStatus,
-      refresh: refreshAuth,
-      beginLogin,
-      logout,
-    }),
+    () => ({ status: authStatus, refresh: refreshAuth, beginLogin, logout }),
     [authStatus, refreshAuth, beginLogin, logout]
   );
 
   const requiresLogin = authStatus.enabled && !authStatus.loggedIn;
 
+  const toggleTheme = () => {
+    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+  };
+
   return (
     <AuthContext.Provider value={authContextValue}>
-      <div className="app-container">
-        <aside className="sidebar">
-          <div className="sidebar-header">
-            <div className="brand">
-              <span className="brand-icon">
-                <DashboardIcon size={18} />
+      <div className="flex min-h-dvh">
+        <aside className="w-full sm:w-60 bg-content1 border-b sm:border-b-0 sm:border-r border-divider flex sm:flex-col justify-between shrink-0">
+          <div className="p-4 sm:px-5 sm:py-5 border-b border-divider flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 font-semibold">
+              <span className="w-8 h-8 rounded-lg bg-foreground text-background flex items-center justify-center">
+                <LayoutGrid size={18} />
               </span>
-              <strong>Gitea PR Reviewer</strong>
+              <strong className="hidden sm:inline text-foreground">Gitea PR Reviewer</strong>
             </div>
-            <button
-              className="theme-toggle"
-              onClick={toggleTheme}
-              title={resolvedTheme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
-              aria-label="切换主题"
-            >
-              {resolvedTheme === 'dark' ? <SunIcon size={18} /> : <MoonIcon size={18} />}
-            </button>
+            {mounted && (
+              <Button
+                isIconOnly
+                variant="light"
+                size="sm"
+                onPress={toggleTheme}
+                aria-label="切换主题"
+              >
+                {resolvedTheme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              </Button>
+            )}
           </div>
-          <nav className="sidebar-nav">
+          <nav className="flex flex-row sm:flex-col overflow-x-auto sm:overflow-visible px-3 py-2 sm:py-4 gap-1 flex-1">
             {navItems.map((item) => {
-              // 如果是管理后台且用户未登录，跳过
-              if (item.adminOnly && !authStatus.loggedIn) {
-                return null;
-              }
-              
-              const active = router.pathname === item.href || router.pathname.startsWith(item.href + '/');
+              if (item.adminOnly && !authStatus.loggedIn) return null;
+              const isExact = item.href === '/';
+              const active = isExact
+                ? router.pathname === '/'
+                : router.pathname === item.href || router.pathname.startsWith(item.href + '/');
               const Icon = item.icon;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`sidebar-link ${active ? 'active' : ''}`}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm no-underline transition-colors whitespace-nowrap ${
+                    active
+                      ? 'bg-default-100 font-semibold text-foreground'
+                      : 'text-foreground hover:bg-default-100'
+                  }`}
                 >
                   <Icon size={20} />
                   <span>{item.label}</span>
@@ -125,68 +130,80 @@ export default function Layout({ children }: LayoutProps) {
               );
             })}
           </nav>
-          <div className="sidebar-footer">
+          <div className="hidden sm:block p-4 mt-auto">
             <VersionDisplay compact />
             {authStatus.enabled ? (
               authStatus.loggedIn ? (
-                <div className="user-profile">
-                  <button
-                    className="user-profile-trigger"
-                    onClick={() => setShowUserMenu((prev) => !prev)}
+                <Dropdown placement="top-start">
+                  <DropdownTrigger>
+                    <button className="w-full border border-divider rounded-xl p-2.5 flex items-center gap-3 bg-transparent cursor-pointer transition-colors hover:bg-default-100 text-left">
+                      {authStatus.user?.avatar_url ? (
+                        <Avatar
+                          src={authStatus.user.avatar_url}
+                          name={authStatus.user.username || 'U'}
+                          size="sm"
+                        />
+                      ) : (
+                        <Avatar
+                          name={(authStatus.user?.username || 'U')[0]}
+                          size="sm"
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <strong className="block text-sm text-foreground truncate">
+                          {authStatus.user?.full_name || authStatus.user?.username || '已登录'}
+                        </strong>
+                        <span className="block text-xs text-default-500 truncate">
+                          @{authStatus.user?.username || ''}
+                        </span>
+                      </div>
+                    </button>
+                  </DropdownTrigger>
+                  <DropdownMenu
+                    aria-label="用户菜单"
+                    onAction={(key) => {
+                      if (key === 'logout') logout();
+                    }}
                   >
-                    {authStatus.user?.avatar_url ? (
-                      <Image
-                        src={authStatus.user.avatar_url}
-                        alt={authStatus.user.username || 'avatar'}
-                        width={32}
-                        height={32}
-                      />
-                    ) : (
-                      <span className="avatar-placeholder">
-                        {(authStatus.user?.username || 'U')[0]}
-                      </span>
-                    )}
-                    <div>
-                      <strong>
-                        {authStatus.user?.full_name || authStatus.user?.username || '已登录'}
-                      </strong>
-                      <span>@{authStatus.user?.username || ''}</span>
-                    </div>
-                  </button>
-                  {showUserMenu && (
-                    <div className="user-menu">
-                      <button onClick={logout}>退出登录</button>
-                    </div>
-                  )}
-                </div>
+                    <DropdownItem key="logout" startContent={<LogOut size={16} />}>
+                      退出登录
+                    </DropdownItem>
+                  </DropdownMenu>
+                </Dropdown>
               ) : (
-                <button className="sidebar-login" onClick={beginLogin}>
+                <Button
+                  variant="bordered"
+                  color="primary"
+                  fullWidth
+                  radius="full"
+                  onPress={beginLogin}
+                >
                   连接 PKUGit
-                </button>
+                </Button>
               )
             ) : (
-              <p className="sidebar-hint">请配置 OAuth 登录</p>
+              <p className="text-sm text-default-500 m-0">请配置 OAuth 登录</p>
             )}
           </div>
         </aside>
-        <main className="main-content">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 sm:px-8 pb-12">
           {!authStatus.enabled ? (
-            <section className="card auth-gate">
-              <h1>需要配置 OAuth</h1>
-              <p>
+            <section className="max-w-lg mx-auto mt-16 text-center flex flex-col gap-4">
+              <h1 className="m-0">需要配置 OAuth</h1>
+              <p className="m-0 text-default-500">
                 管理员需要在环境变量中配置 OAuth (OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET, OAUTH_REDIRECT_URL) 才能使用本系统。
               </p>
             </section>
           ) : requiresLogin ? (
-            <section className="card auth-gate">
-              <h1>连接 PKUGit</h1>
-              <p>
+            <section className="max-w-lg mx-auto mt-16 text-center flex flex-col gap-4">
+              <h1 className="m-0">连接 PKUGit</h1>
+              <p className="m-0 text-default-500">
                 需要先授权 PKUGit 帐号后，才能加载仓库列表与审查配置。
                 该授权仅用于读取你有权限的仓库，并为其创建 Webhook。
               </p>
-              <button className="primary-button" onClick={beginLogin}>
+              <Button color="primary" onPress={beginLogin}>
                 立即连接
-              </button>
+              </Button>
             </section>
           ) : (
             children

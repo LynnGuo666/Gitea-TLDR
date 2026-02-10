@@ -2,6 +2,11 @@
 
 > 本文面向所有在仓库中执行任务的智能体。若指南与代码冲突，请先遵循指南并在 PR 中说明差异。
 
+### 特殊规则：Codex / OpenCode
+- 若当前执行主体为 Codex 或 OpenCode，在开展任务、读取/修改任意文件之前，必须先阅读 `agents/plan/` 目录下的所有计划文档，了解最近的开发计划与约束，再回到本指南执行后续步骤。
+- 若 `agents/plan/` 有新增或更新文件，需重新阅读后方可继续操作。
+- 未遵循该规则的变更视为无效，需在 PR 中注明已重新确认计划。
+
 ## 1. 仓库结构与职责
 - `app/`：FastAPI 后端。`api/` 暴露 HTTP 路由，`services/` 聚合 Gitea/Claude/Webhook 等业务逻辑，`core/` 存放配置和版本信息，`models/` 管理 ORM/Pydantic。
 - `frontend/`：Next.js 13 仪表盘，`npm run build` 后产出静态目录 `frontend/out`。根服务若检测到该目录会自动挂载静态页面。

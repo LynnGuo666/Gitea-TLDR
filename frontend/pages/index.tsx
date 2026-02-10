@@ -1,8 +1,9 @@
 import Head from 'next/head';
 import { useContext, useEffect, useState, useMemo } from 'react';
+import { Button, Input, Select, SelectItem } from '@heroui/react';
+import { Search, RefreshCw, FolderGit2 } from 'lucide-react';
 import RepoList from '../components/RepoList';
 import { RepoSkeleton } from '../components/ui';
-import { SearchIcon, RefreshIcon, RepoIcon } from '../components/icons';
 import { Repo } from '../lib/types';
 import { AuthContext } from '../lib/auth';
 import { useDebounce } from '../lib/hooks';
@@ -55,32 +56,21 @@ export default function Home() {
   const filteredRepos = useMemo(() => {
     let filtered = repos;
 
-    // 应用所有者筛选
     if (ownerFilter !== 'all') {
       const currentUser = authStatus.user?.username;
       filtered = filtered.filter(repo => {
         const owner = repo.owner?.username || repo.owner?.login;
-        if (ownerFilter === 'personal') {
-          return owner === currentUser;
-        } else {
-          return owner !== currentUser;
-        }
+        return ownerFilter === 'personal' ? owner === currentUser : owner !== currentUser;
       });
     }
 
-    // 应用只读筛选
     if (readonlyFilter !== 'all') {
       filtered = filtered.filter(repo => {
         const isReadOnly = !repo.permissions?.admin;
-        if (readonlyFilter === 'readonly') {
-          return isReadOnly;
-        } else {
-          return !isReadOnly;
-        }
+        return readonlyFilter === 'readonly' ? isReadOnly : !isReadOnly;
       });
     }
 
-    // 应用搜索筛选
     if (!debouncedSearch.trim()) return filtered;
     const query = debouncedSearch.toLowerCase();
     return filtered.filter((repo) => {
@@ -100,81 +90,96 @@ export default function Home() {
       <Head>
         <title>仪表盘 - Gitea PR Reviewer</title>
       </Head>
-      <main className="dashboard home-dashboard">
-        <section className="repo-section">
-          <div className="repo-section-header">
-            <h2>我的仓库</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span className="repo-count-badge">{repoCountLabel}</span>
+      <div className="max-w-[1100px] mx-auto flex flex-col gap-8">
+        <section className="flex flex-col gap-6">
+          <div className="flex items-end justify-between flex-wrap gap-2.5">
+            <h2 className="m-0">我的仓库</h2>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full border border-dashed border-default-300 px-4 py-1.5 text-sm text-default-500">
+                {repoCountLabel}
+              </span>
               {!needsAuth && !loading && (
                 <>
-                  <button
-                    className={`refresh-button ${refreshing ? 'spinning' : ''}`}
-                    onClick={() => fetchRepos(true)}
-                    disabled={refreshing}
-                    title="刷新仓库列表"
+                  <Button
+                    isIconOnly
+                    variant="bordered"
+                    size="sm"
+                    onPress={() => fetchRepos(true)}
+                    isDisabled={refreshing}
+                    aria-label="刷新仓库列表"
                   >
-                    <RefreshIcon size={18} />
-                  </button>
-                  <select
-                    className="filter-select"
-                    value={ownerFilter}
-                    onChange={(e) => setOwnerFilter(e.target.value as 'all' | 'personal' | 'org')}
-                    disabled={refreshing}
+                    <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+                  </Button>
+                  <Select
+                    size="sm"
+                    selectedKeys={new Set([ownerFilter])}
+                    onSelectionChange={(keys) => {
+                      if (keys === 'all') return;
+                      const key = Array.from(keys)[0] as string;
+                      if (key) setOwnerFilter(key as 'all' | 'personal' | 'org');
+                    }}
+                    isDisabled={refreshing}
+                    className="w-32"
+                    aria-label="所有者筛选"
                   >
-                    <option value="all">全部</option>
-                    <option value="personal">个人仓库</option>
-                    <option value="org">组织仓库</option>
-                  </select>
-                  <select
-                    className="filter-select"
-                    value={readonlyFilter}
-                    onChange={(e) => setReadonlyFilter(e.target.value as 'all' | 'readonly' | 'writable')}
-                    disabled={refreshing}
+                    <SelectItem key="all">全部</SelectItem>
+                    <SelectItem key="personal">个人仓库</SelectItem>
+                    <SelectItem key="org">组织仓库</SelectItem>
+                  </Select>
+                  <Select
+                    size="sm"
+                    selectedKeys={new Set([readonlyFilter])}
+                    onSelectionChange={(keys) => {
+                      if (keys === 'all') return;
+                      const key = Array.from(keys)[0] as string;
+                      if (key) setReadonlyFilter(key as 'all' | 'readonly' | 'writable');
+                    }}
+                    isDisabled={refreshing}
+                    className="w-32"
+                    aria-label="权限筛选"
                   >
-                    <option value="all">全部权限</option>
-                    <option value="writable">可管理</option>
-                    <option value="readonly">只读</option>
-                  </select>
+                    <SelectItem key="all">全部权限</SelectItem>
+                    <SelectItem key="writable">可管理</SelectItem>
+                    <SelectItem key="readonly">只读</SelectItem>
+                  </Select>
                 </>
               )}
             </div>
           </div>
 
           {needsAuth ? (
-            <div className="empty-state">
-              <div className="empty-state-icon">
-                <RepoIcon size={32} />
+            <div className="flex flex-col items-center justify-center py-12 text-default-500 gap-4">
+              <div className="w-16 h-16 rounded-xl bg-default-100 flex items-center justify-center text-default-400">
+                <FolderGit2 size={32} />
               </div>
-              <h3>连接 Gitea 以开始</h3>
-              <p>请先连接 Gitea，才可同步仓库列表。</p>
-              <button className="primary-button" onClick={beginLogin}>
+              <h3 className="m-0 text-foreground">连接 Gitea 以开始</h3>
+              <p className="m-0 text-sm">请先连接 Gitea，才可同步仓库列表。</p>
+              <Button color="primary" onPress={beginLogin}>
                 使用 Gitea 登录
-              </button>
+              </Button>
             </div>
           ) : loading ? (
             <RepoSkeleton />
           ) : (
             <>
               {repos.length > 3 && (
-                <div className="search-container">
-                  <SearchIcon size={18} className="search-icon" />
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="搜索仓库..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
+                <Input
+                  placeholder="搜索仓库..."
+                  value={searchQuery}
+                  onValueChange={setSearchQuery}
+                  startContent={<Search size={18} className="text-default-400" />}
+                  size="lg"
+                  variant="bordered"
+                  radius="lg"
+                />
               )}
               {filteredRepos.length === 0 && debouncedSearch ? (
-                <div className="empty-state">
-                  <div className="empty-state-icon">
-                    <SearchIcon size={32} />
+                <div className="flex flex-col items-center justify-center py-12 text-default-500 gap-4">
+                  <div className="w-16 h-16 rounded-xl bg-default-100 flex items-center justify-center text-default-400">
+                    <Search size={32} />
                   </div>
-                  <h3>未找到匹配的仓库</h3>
-                  <p>尝试使用不同的搜索词</p>
+                  <h3 className="m-0 text-foreground">未找到匹配的仓库</h3>
+                  <p className="m-0 text-sm">尝试使用不同的搜索词</p>
                 </div>
               ) : (
                 <RepoList repos={filteredRepos} />
@@ -182,7 +187,7 @@ export default function Home() {
             </>
           )}
         </section>
-      </main>
+      </div>
     </>
   );
 }

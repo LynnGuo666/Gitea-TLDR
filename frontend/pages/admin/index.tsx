@@ -1,7 +1,8 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useContext, useEffect, useState } from 'react';
-import { ChartIcon, RepoIcon, UsageIcon, RefreshIcon } from '../../components/icons';
+import { Button, Card, CardBody, CardHeader } from '@heroui/react';
+import { BarChart3, FolderGit2, Coins, Activity, RefreshCw, Settings, BookOpen, Webhook } from 'lucide-react';
 import { AuthContext } from '../../lib/auth';
 
 type DashboardStats = {
@@ -67,12 +68,14 @@ export default function AdminDashboard() {
 
   if (!authStatus.loggedIn) {
     return (
-      <main className="dashboard">
-        <section className="card">
-          <h1>管理后台</h1>
-          <p>需要登录后才能访问管理后台</p>
-        </section>
-      </main>
+      <div className="max-w-[1100px] mx-auto">
+        <Card>
+          <CardBody>
+            <h1 className="m-0">管理后台</h1>
+            <p className="text-default-500 m-0 mt-2">需要登录后才能访问管理后台</p>
+          </CardBody>
+        </Card>
+      </div>
     );
   }
 
@@ -89,144 +92,119 @@ export default function AdminDashboard() {
       <Head>
         <title>管理后台 - Dashboard</title>
       </Head>
-      <main className="dashboard">
-        <section className="card">
-          <div className="panel-header">
-            <h1>管理后台</h1>
-            <button
-              className={`refresh-button ${loading ? 'spinning' : ''}`}
-              onClick={fetchStats}
-              disabled={loading}
+      <div className="max-w-[1100px] mx-auto flex flex-col gap-5">
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <h1 className="m-0 text-xl font-semibold">管理后台</h1>
+            <Button
+              isIconOnly
+              variant="bordered"
+              size="sm"
+              onPress={fetchStats}
+              isDisabled={loading}
+              aria-label="刷新统计"
             >
-              <RefreshIcon size={16} />
-            </button>
-          </div>
-
-          {error && (
-            <div className="error-message" style={{ marginTop: '1rem' }}>
-              {error}
-            </div>
-          )}
-
-          {showDatabaseWarning && (
-            <div className="error-message" style={{ marginTop: '1rem' }}>
-              数据库未启用，当前展示的是空统计数据。请检查 `DATABASE_URL` 或 `WORK_DIR` 配置并重启服务。
-            </div>
-          )}
-
-          {loading && !stats ? (
-            <div style={{ padding: '2rem', textAlign: 'center' }}>
-              <p className="muted">加载中...</p>
-            </div>
-          ) : stats ? (
-            <>
-              {/* 统计卡片网格 */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                  gap: 'var(--spacing-md)',
-                  marginTop: 'var(--spacing-lg)',
-                }}
-              >
-                {/* 审查统计 */}
-                <div className="stat-card">
-                  <div className="stat-header">
-                    <ChartIcon size={20} />
-                    <h3>审查次数</h3>
-                  </div>
-                  <div className="stat-value">{formatNumber(stats.reviews.total)}</div>
-                  <div className="stat-details">
-                    <span>今日: {stats.reviews.today}</span>
-                    <span>本周: {stats.reviews.week}</span>
-                    <span>本月: {stats.reviews.month}</span>
-                  </div>
-                </div>
-
-                {/* Token 统计 */}
-                <div className="stat-card">
-                  <div className="stat-header">
-                    <UsageIcon size={20} />
-                    <h3>Token 消耗</h3>
-                  </div>
-                  <div className="stat-value">{formatNumber(stats.tokens.total)}</div>
-                  <div className="stat-details">
-                    <span>今日: {formatNumber(stats.tokens.today)}</span>
-                    <span>本周: {formatNumber(stats.tokens.week)}</span>
-                    <span>本月: {formatNumber(stats.tokens.month)}</span>
-                  </div>
-                </div>
-
-                {/* Webhook 统计 */}
-                <div className="stat-card">
-                  <div className="stat-header">
-                    <ChartIcon size={20} />
-                    <h3>Webhook</h3>
-                  </div>
-                  <div className="stat-value">{stats.webhooks.total}</div>
-                  <div className="stat-details">
-                    <span>今日: {stats.webhooks.today}</span>
-                    <span>成功率: {stats.webhooks.success_rate.toFixed(1)}%</span>
-                  </div>
-                </div>
-
-                {/* 仓库统计 */}
-                <div className="stat-card">
-                  <div className="stat-header">
-                    <RepoIcon size={20} />
-                    <h3>仓库</h3>
-                  </div>
-                  <div className="stat-value">{stats.repositories.total}</div>
-                  <div className="stat-details">
-                    <span>活跃: {stats.repositories.active}</span>
-                  </div>
-                </div>
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            </Button>
+          </CardHeader>
+          <CardBody>
+            {error && (
+              <div className="p-3 bg-danger-50 border border-danger rounded-lg text-danger text-sm mb-4">
+                {error}
               </div>
+            )}
 
-              {/* 快捷导航 */}
-              <div style={{ marginTop: 'var(--spacing-xl)' }}>
-                <h2 style={{ marginBottom: 'var(--spacing-md)' }}>快捷操作</h2>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: 'var(--spacing-md)',
-                  }}
-                >
-                  <button
-                    className="card-button"
-                    onClick={() => router.push('/admin/config')}
-                  >
-                    <h3>全局配置</h3>
-                    <p className="muted">管理系统配置</p>
-                  </button>
-                  <button
-                    className="card-button"
-                    onClick={() => router.push('/admin/repos')}
-                  >
-                    <h3>仓库管理</h3>
-                    <p className="muted">批量操作仓库</p>
-                  </button>
-                  <button
-                    className="card-button"
-                    onClick={() => router.push('/admin/reviews')}
-                  >
-                    <h3>审查历史</h3>
-                    <p className="muted">查看所有审查记录</p>
-                  </button>
-                  <button
-                    className="card-button"
-                    onClick={() => router.push('/admin/webhooks')}
-                  >
-                    <h3>Webhook 日志</h3>
-                    <p className="muted">查看请求日志</p>
-                  </button>
-                </div>
+            {showDatabaseWarning && (
+              <div className="p-3 bg-warning-50 border border-warning rounded-lg text-warning text-sm mb-4">
+                数据库未启用，当前展示的是空统计数据。请检查 `DATABASE_URL` 或 `WORK_DIR` 配置并重启服务。
               </div>
-            </>
-          ) : null}
-        </section>
-      </main>
+            )}
+
+            {loading && !stats ? (
+              <div className="py-8 text-center">
+                <p className="text-default-500 m-0">加载中...</p>
+              </div>
+            ) : stats ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="border border-divider rounded-xl p-4">
+                    <div className="flex items-center gap-2 text-default-500 mb-2">
+                      <BarChart3 size={20} />
+                      <h3 className="m-0 text-sm font-medium">审查次数</h3>
+                    </div>
+                    <div className="text-2xl font-bold text-foreground">{formatNumber(stats.reviews.total)}</div>
+                    <div className="flex gap-3 mt-2 text-xs text-default-400">
+                      <span>今日: {stats.reviews.today}</span>
+                      <span>本周: {stats.reviews.week}</span>
+                      <span>本月: {stats.reviews.month}</span>
+                    </div>
+                  </div>
+
+                  <div className="border border-divider rounded-xl p-4">
+                    <div className="flex items-center gap-2 text-default-500 mb-2">
+                      <Coins size={20} />
+                      <h3 className="m-0 text-sm font-medium">Token 消耗</h3>
+                    </div>
+                    <div className="text-2xl font-bold text-foreground">{formatNumber(stats.tokens.total)}</div>
+                    <div className="flex gap-3 mt-2 text-xs text-default-400">
+                      <span>今日: {formatNumber(stats.tokens.today)}</span>
+                      <span>本周: {formatNumber(stats.tokens.week)}</span>
+                      <span>本月: {formatNumber(stats.tokens.month)}</span>
+                    </div>
+                  </div>
+
+                  <div className="border border-divider rounded-xl p-4">
+                    <div className="flex items-center gap-2 text-default-500 mb-2">
+                      <Activity size={20} />
+                      <h3 className="m-0 text-sm font-medium">Webhook</h3>
+                    </div>
+                    <div className="text-2xl font-bold text-foreground">{stats.webhooks.total}</div>
+                    <div className="flex gap-3 mt-2 text-xs text-default-400">
+                      <span>今日: {stats.webhooks.today}</span>
+                      <span>成功率: {stats.webhooks.success_rate.toFixed(1)}%</span>
+                    </div>
+                  </div>
+
+                  <div className="border border-divider rounded-xl p-4">
+                    <div className="flex items-center gap-2 text-default-500 mb-2">
+                      <FolderGit2 size={20} />
+                      <h3 className="m-0 text-sm font-medium">仓库</h3>
+                    </div>
+                    <div className="text-2xl font-bold text-foreground">{stats.repositories.total}</div>
+                    <div className="flex gap-3 mt-2 text-xs text-default-400">
+                      <span>活跃: {stats.repositories.active}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8">
+                  <h2 className="m-0 mb-4 text-base font-semibold">快捷操作</h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {[
+                      { href: '/admin/config', icon: Settings, title: '全局配置', desc: '管理系统配置' },
+                      { href: '/admin/repos', icon: FolderGit2, title: '仓库管理', desc: '批量操作仓库' },
+                      { href: '/admin/reviews', icon: BookOpen, title: '审查历史', desc: '查看所有审查记录' },
+                      { href: '/admin/webhooks', icon: Webhook, title: 'Webhook 日志', desc: '查看请求日志' },
+                    ].map(({ href, icon: Icon, title, desc }) => (
+                      <button
+                        key={href}
+                        className="text-left p-4 rounded-xl border border-divider bg-transparent cursor-pointer transition-all hover:border-default-300 hover:bg-default-50 hover:-translate-y-0.5 hover:shadow-sm"
+                        onClick={() => router.push(href)}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <Icon size={16} className="text-default-500" />
+                          <h3 className="m-0 text-sm font-semibold">{title}</h3>
+                        </div>
+                        <p className="m-0 text-xs text-default-500">{desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </CardBody>
+        </Card>
+      </div>
     </>
   );
 }

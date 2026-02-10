@@ -1,6 +1,7 @@
 import Link from 'next/link';
+import { Chip } from '@heroui/react';
+import { FolderGit2, ChevronRight } from 'lucide-react';
 import { Repo } from '../lib/types';
-import { RepoIcon } from './icons';
 
 type RepoListProps = {
   repos: Repo[];
@@ -9,18 +10,18 @@ type RepoListProps = {
 export default function RepoList({ repos }: RepoListProps) {
   if (repos.length === 0) {
     return (
-      <div className="empty-state">
-        <div className="empty-state-icon">
-          <RepoIcon size={32} />
+      <div className="flex flex-col items-center justify-center py-12 text-default-500 gap-4">
+        <div className="w-16 h-16 rounded-xl bg-default-100 flex items-center justify-center text-default-400">
+          <FolderGit2 size={32} />
         </div>
-        <h3>暂无仓库</h3>
-        <p>还没有找到任何仓库</p>
+        <h3 className="m-0 text-foreground text-base">暂无仓库</h3>
+        <p className="m-0 text-sm">还没有找到任何仓库</p>
       </div>
     );
   }
 
   return (
-    <div className="repo-list">
+    <div className="flex flex-col gap-2">
       {repos.map((repo, index) => {
         const owner = repo.owner?.username || repo.owner?.login || '未知';
         const fullName = repo.full_name || `${owner}/${repo.name}`;
@@ -32,57 +33,53 @@ export default function RepoList({ repos }: RepoListProps) {
           animationName: 'repoFadeUp',
           animationDuration: '0.35s',
           animationFillMode: 'both' as const,
-          cursor: isReadOnly ? 'default' : 'pointer',
         };
+
+        const itemClassName = `group flex items-center gap-4 p-4 sm:p-5 bg-content1 border border-divider rounded-xl no-underline text-foreground transition-all hover:border-default-300 hover:bg-default-50 hover:-translate-y-0.5 hover:shadow-md ${
+          isReadOnly ? 'cursor-default' : 'cursor-pointer'
+        }`;
 
         const content = (
           <>
-            <div className="repo-item-icon">
-              <RepoIcon size={20} />
+            <div className="w-10 h-10 rounded-lg bg-default-100 flex items-center justify-center text-default-500 shrink-0 group-hover:bg-primary-100 group-hover:text-primary transition-colors">
+              <FolderGit2 size={20} />
             </div>
-            <div className="repo-item-content">
-              <div className="repo-item-header">
-                <h3 className="repo-item-name">{fullName}</h3>
-                <div className="repo-item-badges">
-                  {repo.private && <span className="repo-badge repo-badge-private">私有</span>}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-4 flex-wrap mb-1">
+                <h3 className="m-0 text-sm font-semibold text-foreground truncate">{fullName}</h3>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {repo.private && (
+                    <Chip size="sm" variant="bordered">私有</Chip>
+                  )}
                   {isReadOnly ? (
-                    <span className="repo-badge repo-badge-readonly">只读</span>
+                    <Chip size="sm" variant="flat" color="default">只读</Chip>
                   ) : (
-                    <span className={`repo-badge ${isActive ? 'repo-badge-active' : 'repo-badge-inactive'}`}>
+                    <Chip size="sm" variant="flat" color={isActive ? 'success' : 'danger'}>
                       {isActive ? '已启用' : '未启用'}
-                    </span>
+                    </Chip>
                   )}
                 </div>
               </div>
             </div>
-            {isReadOnly ? null : (
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="repo-item-arrow"
-              >
-                <polyline points="9 18 15 12 9 6"></polyline>
-              </svg>
+            {!isReadOnly && (
+              <ChevronRight
+                size={20}
+                className="text-default-400 shrink-0 transition-transform group-hover:text-primary group-hover:translate-x-1"
+              />
             )}
           </>
         );
 
         if (isReadOnly) {
           return (
-            <div key={repo.id} className="repo-item" style={itemStyle}>
+            <div key={repo.id} className={itemClassName} style={itemStyle}>
               {content}
             </div>
           );
         }
 
         return (
-          <Link key={repo.id} href={`/repo/${owner}/${repo.name}`} className="repo-item" style={itemStyle}>
+          <Link key={repo.id} href={`/repo/${owner}/${repo.name}`} className={itemClassName} style={itemStyle}>
             {content}
           </Link>
         );

@@ -1,7 +1,8 @@
 import Head from 'next/head';
 import Image from 'next/image';
 import { useContext, useEffect, useState } from 'react';
-import { UserIcon } from '../components/icons';
+import { Button, Card, CardBody, CardHeader, Chip } from '@heroui/react';
+import { User } from 'lucide-react';
 import { AuthContext } from '../lib/auth';
 import { PublicConfig, UsageSummary } from '../lib/types';
 
@@ -16,19 +17,16 @@ export default function SettingsPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // 获取公共配置
         const configRes = await fetch('/api/config/public');
         if (configRes.ok) {
           const configData = await configRes.json();
           setConfig(configData);
         }
 
-        // 获取使用统计
         const statsRes = await fetch('/api/stats');
         if (statsRes.ok) {
           const statsData = await statsRes.json();
           setStats(statsData.summary);
-          // 统计审查次数
           setReviewCount(statsData.details?.length || 0);
         }
       } catch (error) {
@@ -69,120 +67,104 @@ export default function SettingsPage() {
       <Head>
         <title>用户中心 - Gitea PR Reviewer</title>
       </Head>
-      <main className="dashboard">
-        {/* 用户信息卡片 */}
-        <section className="card account-panel">
-          <div className="panel-header">
-            <div className="section-title">
-              <span className="icon-badge">
-                <UserIcon size={18} />
-              </span>
-              <h2>用户信息</h2>
-            </div>
-          </div>
-
-          {authStatus.loggedIn && authStatus.user ? (
-            <div className="user-info-card">
-              <div className="user-avatar">
-                {authStatus.user.avatar_url ? (
-                  <Image
-                    src={authStatus.user.avatar_url}
-                    alt={authStatus.user.username || 'avatar'}
-                    width={64}
-                    height={64}
-                  />
-                ) : (
-                  <span className="avatar-placeholder large">
-                    {(authStatus.user.username || 'U')[0].toUpperCase()}
-                  </span>
-                )}
+      <div className="max-w-[1100px] mx-auto flex flex-col gap-5">
+        <Card>
+          <CardHeader className="flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
+              <User size={18} />
+            </span>
+            <h2 className="m-0 text-lg font-semibold">用户信息</h2>
+          </CardHeader>
+          <CardBody>
+            {authStatus.loggedIn && authStatus.user ? (
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full overflow-hidden bg-default-100 flex items-center justify-center shrink-0">
+                  {authStatus.user.avatar_url ? (
+                    <Image
+                      src={authStatus.user.avatar_url}
+                      alt={authStatus.user.username || 'avatar'}
+                      width={64}
+                      height={64}
+                    />
+                  ) : (
+                    <span className="text-2xl font-semibold text-foreground">
+                      {(authStatus.user.username || 'U')[0].toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <h3 className="m-0">{authStatus.user.full_name || authStatus.user.username}</h3>
+                  <p className="m-0 text-default-500 text-sm">@{authStatus.user.username}</p>
+                  <p className="m-0 text-default-400 text-xs mt-1">
+                    Gitea: {config?.gitea_url || '...'}
+                  </p>
+                </div>
               </div>
-              <div className="user-details">
-                <h3>{authStatus.user.full_name || authStatus.user.username}</h3>
-                <p className="muted">@{authStatus.user.username}</p>
-                <p className="muted small">
-                  Gitea: {config?.gitea_url || '...'}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="muted">未登录</p>
-          )}
-        </section>
+            ) : (
+              <p className="text-default-500 m-0">未登录</p>
+            )}
+          </CardBody>
+        </Card>
 
-        {/* 使用统计卡片 */}
-        <section className="card account-panel">
-          <div className="panel-header">
-            <div className="section-title">
-              <h2>使用统计</h2>
-            </div>
-            <button className="ghost-button" onClick={refreshStats}>
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <h2 className="m-0 text-lg font-semibold">使用统计</h2>
+            <Button variant="bordered" size="sm" onPress={refreshStats}>
               刷新
-            </button>
-          </div>
+            </Button>
+          </CardHeader>
+          <CardBody>
+            {loading ? (
+              <p className="text-default-500 m-0">加载中...</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {[
+                  { value: reviewCount, label: 'PR 审查次数' },
+                  { value: stats?.total_claude_calls || 0, label: 'Claude API 调用' },
+                  { value: formatNumber((stats?.total_input_tokens || 0) + (stats?.total_output_tokens || 0)), label: '总 Token 使用量' },
+                  { value: stats?.total_gitea_calls || 0, label: 'Gitea API 调用' },
+                ].map(({ value, label }) => (
+                  <div key={label} className="text-center">
+                    <div className="text-2xl font-bold text-foreground">{value}</div>
+                    <div className="text-sm text-default-500 mt-1">{label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardBody>
+        </Card>
 
-          {loading ? (
-            <div className="stats-loading">
-              <p className="muted">加载中...</p>
-            </div>
-          ) : (
-            <div className="stats-grid">
-              <div className="stat-item">
-                <span className="stat-value">{reviewCount}</span>
-                <span className="stat-label">PR 审查次数</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-value">{stats?.total_claude_calls || 0}</span>
-                <span className="stat-label">Claude API 调用</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-value">
-                  {formatNumber((stats?.total_input_tokens || 0) + (stats?.total_output_tokens || 0))}
+        <Card>
+          <CardHeader>
+            <h2 className="m-0 text-lg font-semibold">服务状态</h2>
+          </CardHeader>
+          <CardBody>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-default-500 text-sm">Bot 用户名</span>
+                <span className="text-sm font-medium">
+                  {config?.bot_username || <span className="text-default-400">未配置</span>}
                 </span>
-                <span className="stat-label">总 Token 使用量</span>
               </div>
-              <div className="stat-item">
-                <span className="stat-value">{stats?.total_gitea_calls || 0}</span>
-                <span className="stat-label">Gitea API 调用</span>
+              <div className="flex items-center justify-between">
+                <span className="text-default-500 text-sm">Debug 模式</span>
+                <Chip size="sm" color={config?.debug ? 'success' : 'default'} variant="flat">
+                  {config?.debug ? '开启' : '关闭'}
+                </Chip>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-default-500 text-sm">OAuth 登录</span>
+                <Chip size="sm" color={config?.oauth_enabled ? 'success' : 'default'} variant="flat">
+                  {config?.oauth_enabled ? '已启用' : '未启用'}
+                </Chip>
               </div>
             </div>
-          )}
-        </section>
-
-        {/* 服务状态卡片 */}
-        <section className="card account-panel">
-          <div className="panel-header">
-            <div className="section-title">
-              <h2>服务状态</h2>
-            </div>
-          </div>
-
-          <div className="service-status-list">
-            <div className="status-item">
-              <span className="status-label">Bot 用户名</span>
-              <span className="status-value">
-                {config?.bot_username || <span className="muted">未配置</span>}
-              </span>
-            </div>
-            <div className="status-item">
-              <span className="status-label">Debug 模式</span>
-              <span className={`status-badge ${config?.debug ? 'active' : ''}`}>
-                {config?.debug ? '开启' : '关闭'}
-              </span>
-            </div>
-            <div className="status-item">
-              <span className="status-label">OAuth 登录</span>
-              <span className={`status-badge ${config?.oauth_enabled ? 'active' : ''}`}>
-                {config?.oauth_enabled ? '已启用' : '未启用'}
-              </span>
-            </div>
-          </div>
-
-          <p className="muted small" style={{ marginTop: '1rem' }}>
-            Claude 配置（Base URL / API Key）请在各仓库的配置页面中单独设置
-          </p>
-        </section>
-      </main>
+            <p className="text-default-400 text-xs mt-4 m-0">
+              Claude 配置（Base URL / API Key）请在各仓库的配置页面中单独设置
+            </p>
+          </CardBody>
+        </Card>
+      </div>
     </>
   );
 }

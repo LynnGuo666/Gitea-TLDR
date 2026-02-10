@@ -1,14 +1,18 @@
 import type { AppProps } from 'next/app';
+import { HeroUIProvider, ToastProvider } from '@heroui/react';
+import { ThemeProvider as NextThemesProvider } from 'next-themes';
 import Layout from '../components/Layout';
-import { ToastProvider } from '../components/ui';
 import '../styles/globals.css';
 
 export default function MyApp({ Component, pageProps }: AppProps) {
   return (
-    <ToastProvider>
-      <Layout>
-        <Component {...pageProps} />
-      </Layout>
-    </ToastProvider>
+    <NextThemesProvider attribute="class" defaultTheme="system">
+      <HeroUIProvider>
+        <ToastProvider placement="bottom-right" />
+        <Layout>
+          <Component {...pageProps} />
+        </Layout>
+      </HeroUIProvider>
+    </NextThemesProvider>
   );
 }
