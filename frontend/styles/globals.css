@@ -27,14 +27,14 @@ body {
   line-height: 1.2;
 }
 
-/* Apple-style Card: borderless with soft shadow */
+/* Apple-style Card: borderless, relies on bg contrast */
 [data-slot="base"].bg-content1 {
   border: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: none;
 }
 
 :is(.dark *) [data-slot="base"].bg-content1 {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
 }
 
 @keyframes repoFadeUp {

@@ -171,7 +171,7 @@ export default function UsagePage() {
                     { label: 'API 调用', value: totalRequests },
                     { label: '审查次数', value: stats?.summary?.review_count || 0 },
                   ].map(({ label, value }) => (
-                    <div key={label} className="rounded-lg p-3 bg-content1 shadow-sm">
+                    <div key={label} className="rounded-lg p-3 bg-default-100">
                       <p className="m-0 text-default-500 text-sm">{label}</p>
                       <strong className="block mt-1 text-lg text-foreground">{value.toLocaleString()}</strong>
                     </div>

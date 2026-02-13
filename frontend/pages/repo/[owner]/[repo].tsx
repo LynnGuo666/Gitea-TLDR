@@ -429,8 +429,8 @@ export default function RepoConfigPage() {
                     key={item.key}
                     className={`text-left p-4 rounded-xl transition-all cursor-pointer ${
                       active
-                        ? 'bg-primary-50 shadow-sm ring-1 ring-primary'
-                        : 'bg-content1 shadow-sm hover:shadow-md'
+                        ? 'bg-primary-50 ring-1 ring-primary'
+                        : 'bg-default-100 hover:bg-default-200'
                     }`}
                     onClick={() => toggleFocus(item.key)}
                   >
@@ -566,7 +566,7 @@ export default function RepoConfigPage() {
                       href={pr.html_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="group flex items-center gap-3 p-3 rounded-xl bg-content1 shadow-sm no-underline text-foreground transition-all hover:shadow-md"
+                      className="group flex items-center gap-3 p-3 rounded-xl bg-default-100 no-underline text-foreground transition-all hover:bg-default-200"
                     >
                       <img
                         src={pr.user.avatar_url}

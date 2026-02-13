@@ -31,7 +31,7 @@ export function RepoSkeleton() {
 
 export function CardSkeleton() {
   return (
-    <div className="p-6 bg-content1 rounded-xl shadow-sm">
+    <div className="p-6 bg-content1 rounded-xl">
       <HeroUISkeleton className="rounded-lg w-2/5 h-5" />
       <div className="mt-4 flex flex-col gap-2">
         <HeroUISkeleton className="rounded-lg h-4 w-full" />
