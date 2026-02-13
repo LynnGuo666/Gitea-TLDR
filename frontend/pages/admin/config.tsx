@@ -2,6 +2,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { Card, CardBody, CardHeader, Button } from '@heroui/react';
 import { ArrowLeft } from 'lucide-react';
+import PageHeader from '../../components/PageHeader';
 
 export default function AdminConfigPage() {
   return (
@@ -11,11 +12,16 @@ export default function AdminConfigPage() {
       </Head>
       <div className="max-w-[1100px] mx-auto">
         <Card>
-          <CardHeader className="flex items-center justify-between">
-            <h1 className="m-0 text-2xl font-bold tracking-tight">全局配置</h1>
-            <Button as={Link} href="/admin" variant="bordered" size="sm" startContent={<ArrowLeft size={16} />}>
-              返回管理后台
-            </Button>
+          <CardHeader>
+            <PageHeader
+              title="全局配置"
+              actions={
+                <Button as={Link} href="/admin" variant="bordered" size="sm" startContent={<ArrowLeft size={16} />}>
+                  返回管理后台
+                </Button>
+              }
+              className="w-full"
+            />
           </CardHeader>
           <CardBody>
             <p className="text-default-500 m-0">

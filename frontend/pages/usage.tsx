@@ -10,8 +10,9 @@ import {
   TableCell,
   Chip,
 } from '@heroui/react';
-import { BarChart3, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { apiFetch } from '../lib/api';
+import PageHeader from '../components/PageHeader';
 
 const USD_PER_MILLION_INPUT = 3;
 const USD_PER_MILLION_OUTPUT = 15;
@@ -131,19 +132,15 @@ export default function UsagePage() {
 
   return (
     <>
-      <Head><title>用量 - Gitea PR Reviewer</title></Head>
-      <div className="max-w-[1100px] mx-auto flex flex-col gap-5">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2.5">
-            <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
-              <BarChart3 size={18} />
-            </span>
-            <h2 className="m-0 text-xl font-bold tracking-tight">用量统计</h2>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button
-              isIconOnly
-              variant="bordered"
+        <Head><title>用量 - Gitea PR Reviewer</title></Head>
+        <div className="max-w-[1100px] mx-auto flex flex-col gap-5">
+          <PageHeader
+            title="用量统计"
+            actions={
+              <div className="flex items-center gap-3">
+              <Button
+                isIconOnly
+                variant="bordered"
               size="sm"
               onPress={() => fetchStats(true)}
               isDisabled={refreshing}
@@ -151,12 +148,13 @@ export default function UsagePage() {
             >
               <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
             </Button>
-            <Chip variant="bordered" size="sm">
-              <span className="text-default-500 mr-1">预计美元</span>
-              <strong className="text-success">${usdCost}</strong>
-            </Chip>
-          </div>
-        </div>
+              <Chip variant="bordered" size="sm">
+                <span className="text-default-500 mr-1">预计美元</span>
+                <strong className="text-success">${usdCost}</strong>
+              </Chip>
+              </div>
+            }
+          />
 
         {error ? (
           <div className="flex flex-col items-center justify-center py-12 text-default-500 gap-4">

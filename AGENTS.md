@@ -68,6 +68,7 @@
 5. 数据获取：只能调用后端 API；禁止直接访问 Gitea/Claude；新增 API 需先在后端实现。
 6. Lint/格式：`npm run lint` 与 `tsc --noEmit` 必须通过；若使用 Prettier，请遵循仓库默认配置（printWidth 100）。
 7. 版本信息：前端自动读取版本文件；修改版本后务必重新 `npm run build`。
+8. 页面标题规范：页面主标题统一使用 `frontend/components/PageHeader.tsx`（语义必须为 `h1`），分区标题统一使用 `frontend/components/SectionHeader.tsx`（语义为 `h2`）；禁止在页面内新增散落的标题样式类（如直接写 `text-2xl font-bold tracking-tight` 作为页面主标题）。
 
 ## 7. 测试策略
 - Webhook/Claude 测试：`pytest` 搭配 `httpx_mock` 构造 Gitea/Anthropic 响应；如需模拟 Claude CLI，构造 stdout/stderr。

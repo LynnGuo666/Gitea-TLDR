@@ -3,6 +3,7 @@ import { useContext, useEffect, useState, useMemo } from 'react';
 import { Button, Input, Select, SelectItem } from '@heroui/react';
 import { Search, RefreshCw } from 'lucide-react';
 import RepoList from '../components/RepoList';
+import PageHeader from '../components/PageHeader';
 import { RepoSkeleton } from '../components/ui';
 import { Repo } from '../lib/types';
 import { AuthContext } from '../lib/auth';
@@ -93,9 +94,10 @@ export default function Home() {
       </Head>
       <div className="max-w-[1100px] mx-auto flex flex-col gap-8">
         <section className="flex flex-col gap-6">
-          <div className="flex items-end justify-between flex-wrap gap-2.5">
-            <h1 className="m-0 page-title">我的仓库</h1>
-            <div className="flex items-center gap-2">
+          <PageHeader
+            title="我的仓库"
+            actions={
+              <div className="flex items-center gap-2">
               <span className="rounded-full border border-dashed border-default-300 px-4 py-1.5 text-sm text-default-500">
                 {repoCountLabel}
               </span>
@@ -145,8 +147,9 @@ export default function Home() {
                   </Select>
                 </>
               )}
-            </div>
-          </div>
+              </div>
+            }
+          />
 
           {needsAuth ? (
             <div className="flex flex-col items-center justify-center py-12 text-default-500 gap-4">

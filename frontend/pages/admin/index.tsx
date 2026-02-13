@@ -3,6 +3,8 @@ import { useRouter } from 'next/router';
 import { useContext, useEffect, useState } from 'react';
 import { Button, Card, CardBody, CardHeader } from '@heroui/react';
 import { BarChart3, FolderGit2, Coins, Activity, RefreshCw, Settings, BookOpen, Webhook } from 'lucide-react';
+import PageHeader from '../../components/PageHeader';
+import SectionHeader from '../../components/SectionHeader';
 import { AuthContext } from '../../lib/auth';
 import { apiFetch } from '../../lib/api';
 
@@ -70,12 +72,12 @@ export default function AdminDashboard() {
   if (!authStatus.loggedIn) {
     return (
       <div className="max-w-[1100px] mx-auto">
-        <Card>
-          <CardBody>
-            <h1 className="m-0">管理后台</h1>
-            <p className="text-default-500 m-0 mt-2">需要登录后才能访问管理后台</p>
-          </CardBody>
-        </Card>
+          <Card>
+            <CardBody>
+              <h1 className="m-0 page-title">管理后台</h1>
+              <p className="text-default-500 m-0 mt-2">需要登录后才能访问管理后台</p>
+            </CardBody>
+          </Card>
       </div>
     );
   }
@@ -95,18 +97,23 @@ export default function AdminDashboard() {
       </Head>
       <div className="max-w-[1100px] mx-auto flex flex-col gap-5">
         <Card>
-          <CardHeader className="flex items-center justify-between">
-            <h1 className="m-0 page-title">管理后台</h1>
-            <Button
-              isIconOnly
-              variant="bordered"
-              size="sm"
-              onPress={fetchStats}
-              isDisabled={loading}
-              aria-label="刷新统计"
-            >
-              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-            </Button>
+          <CardHeader>
+            <PageHeader
+              title="管理后台"
+              actions={
+                <Button
+                  isIconOnly
+                  variant="bordered"
+                  size="sm"
+                  onPress={fetchStats}
+                  isDisabled={loading}
+                  aria-label="刷新统计"
+                >
+                  <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                </Button>
+              }
+              className="w-full"
+            />
           </CardHeader>
           <CardBody>
             {error && (
@@ -179,7 +186,7 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="mt-8">
-                  <h2 className="m-0 mb-4 text-lg font-bold tracking-tight">快捷操作</h2>
+                  <SectionHeader title="快捷操作" className="mb-4" />
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     {[
                       { href: '/admin/config', icon: Settings, title: '全局配置', desc: '管理系统配置' },

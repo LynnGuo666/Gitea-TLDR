@@ -12,14 +12,12 @@ import {
 } from '@heroui/react';
 import {
   FolderGit2,
-  Bot,
-  Settings,
   RefreshCw,
-  GitPullRequest,
   ArrowLeft,
   ExternalLink,
   ChevronRight,
 } from 'lucide-react';
+import PageHeader from '../../../components/PageHeader';
 import { Skeleton } from '../../../components/ui';
 import { RepoClaudeConfig } from '../../../lib/types';
 import { AuthContext } from '../../../lib/auth';
@@ -106,6 +104,7 @@ export default function RepoConfigPage() {
   const [inheritGlobal, setInheritGlobal] = useState(true);
   const [inheritSaving, setInheritSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('webhook');
+  const [refreshingAll, setRefreshingAll] = useState(false);
   // Pull Requests
   const [pulls, setPulls] = useState<PullRequest[]>([]);
   const [pullsLoading, setPullsLoading] = useState(true);
@@ -195,6 +194,16 @@ export default function RepoConfigPage() {
       setPullsLoading(false);
     }
   }, [owner, repo, requiresLogin, fetchWebhookStatus, fetchClaudeConfig, fetchPulls]);
+
+  const refreshAll = async () => {
+    if (requiresLogin) return;
+    setRefreshingAll(true);
+    try {
+      await Promise.all([fetchWebhookStatus(), fetchClaudeConfig(), fetchPulls()]);
+    } finally {
+      setRefreshingAll(false);
+    }
+  };
 
   const toggleEvent = (event: string) => {
     setEvents((prev) =>
@@ -350,19 +359,22 @@ export default function RepoConfigPage() {
       <Head>
         <title>{`${owner}/${repo} - 配置`}</title>
       </Head>
-      <div className="max-w-[980px] mx-auto">
+      <div className="max-w-[1100px] mx-auto">
         <section className="pb-4">
-          <div className="flex items-center gap-4">
-            <Button variant="light" size="sm" onPress={() => router.push('/')}>
-              <ArrowLeft size={16} /> 返回
-            </Button>
-            <div className="flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
-                <FolderGit2 size={20} />
-              </span>
-              <h1 className="m-0 page-title">{`${owner}/${repo}`}</h1>
-            </div>
-          </div>
+          <PageHeader
+            title={`${owner}/${repo}`}
+            icon={<FolderGit2 size={20} />}
+            actions={
+              <>
+                <Button isIconOnly variant="bordered" size="sm" onPress={refreshAll} isDisabled={refreshingAll} aria-label="刷新仓库数据">
+                  <RefreshCw size={16} className={refreshingAll ? 'animate-spin' : ''} />
+                </Button>
+                <Button variant="light" size="sm" onPress={() => router.push('/')}>
+                  <ArrowLeft size={16} /> 返回
+                </Button>
+              </>
+            }
+          />
         </section>
 
         <section className="pt-2 border-t border-divider/60">
@@ -380,22 +392,8 @@ export default function RepoConfigPage() {
         </section>
 
         {activeTab === 'webhook' && (
-          <section className="py-5 border-t border-divider/60">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
-                  <Settings size={18} />
-                </span>
-                <h2 className="m-0 text-xl font-bold tracking-tight">自动审查</h2>
-              </div>
-              {!requiresLogin && !statusLoading && (
-                <Button isIconOnly variant="bordered" size="sm" onPress={fetchWebhookStatus} aria-label="刷新状态">
-                  <RefreshCw size={16} />
-                </Button>
-              )}
-            </div>
-
-            <div className="mt-4">
+          <section className="py-5">
+            <div>
               {requiresLogin ? (
                 <div className="flex items-center justify-between gap-4">
                   <div>
@@ -467,17 +465,11 @@ export default function RepoConfigPage() {
         )}
 
         {activeTab === 'focus' && (
-          <section className="py-5 border-t border-divider/60">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
-                  <Bot size={18} />
-                </span>
-                <h2 className="m-0 text-xl font-bold tracking-tight">审查方向</h2>
-              </div>
+          <section className="py-5">
+            <div className="mb-4 flex justify-end">
               <Chip size="sm" variant="flat">{reviewFocus.length} 个已启用</Chip>
             </div>
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {reviewCatalog.map((item) => {
                 const active = reviewFocus.includes(item.key);
                 return (
@@ -500,20 +492,14 @@ export default function RepoConfigPage() {
         )}
 
         {activeTab === 'claude' && (
-          <section className="py-5 border-t border-divider/60">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
-                  <Settings size={18} />
-                </span>
-                <h2 className="m-0 text-xl font-bold tracking-tight">Claude 配置</h2>
-              </div>
-              {claudeConfig?.has_auth_token && (
+          <section className="py-5">
+            {claudeConfig?.has_auth_token ? (
+              <div className="mb-4 flex justify-end">
                 <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
-              )}
-            </div>
+              </div>
+            ) : null}
 
-            <div className="mt-4">
+            <div>
               {requiresLogin ? (
                 <p className="text-default-500 m-0">登录后可配置 Claude API</p>
               ) : claudeConfigLoading ? (
@@ -605,22 +591,8 @@ export default function RepoConfigPage() {
         )}
 
         {activeTab === 'pulls' && (
-          <section className="py-5 border-t border-divider/60">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
-                  <GitPullRequest size={18} />
-                </span>
-                <h2 className="m-0 text-xl font-bold tracking-tight">最新 Pull Requests</h2>
-              </div>
-              {!requiresLogin && !pullsLoading && pulls.length > 0 && (
-                <Button isIconOnly variant="bordered" size="sm" onPress={fetchPulls} aria-label="刷新 PR">
-                  <RefreshCw size={16} className={pullsLoading ? 'animate-spin' : ''} />
-                </Button>
-              )}
-            </div>
-
-            <div className="mt-4">
+          <section className="py-5">
+            <div>
               {requiresLogin ? (
                 <p className="text-default-500 m-0">登录后可查看 Pull Request</p>
               ) : pullsLoading ? (

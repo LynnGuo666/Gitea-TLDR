@@ -5,6 +5,8 @@ import { Button, Chip, Input, addToast } from '@heroui/react';
 import { Bot, User } from 'lucide-react';
 import { AuthContext } from '../lib/auth';
 import { apiFetch } from '../lib/api';
+import PageHeader from '../components/PageHeader';
+import SectionHeader from '../components/SectionHeader';
 import { GlobalClaudeConfig, PublicConfig, UsageSummary } from '../lib/types';
 
 export default function SettingsPage() {
@@ -138,19 +140,13 @@ export default function SettingsPage() {
       <Head>
         <title>用户中心 - Gitea PR Reviewer</title>
       </Head>
-      <div className="max-w-[980px] mx-auto">
+      <div className="max-w-[1100px] mx-auto">
         <div className="pb-4">
-          <h1 className="m-0 page-title">用户中心</h1>
-          <p className="m-0 mt-2 text-sm text-default-500">查看账号、使用统计和全局 Claude 默认配置</p>
+          <PageHeader title="用户中心" subtitle="查看账号、使用统计和全局 Claude 默认配置" />
         </div>
 
         <section className="py-5 border-t border-divider/60">
-          <div className="flex items-center gap-2.5">
-            <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
-              <User size={18} />
-            </span>
-            <h2 className="m-0 text-xl font-bold tracking-tight">用户信息</h2>
-          </div>
+          <SectionHeader title="用户信息" icon={<User size={18} />} />
           <div className="mt-4">
             {authStatus.loggedIn && authStatus.user ? (
               <div className="flex items-center gap-4">
@@ -181,12 +177,14 @@ export default function SettingsPage() {
         </section>
 
         <section className="py-5 border-t border-divider/60">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h2 className="m-0 text-xl font-bold tracking-tight">使用统计</h2>
-            <Button variant="bordered" size="sm" onPress={refreshStats}>
-              刷新
-            </Button>
-          </div>
+          <SectionHeader
+            title="使用统计"
+            actions={
+              <Button variant="bordered" size="sm" onPress={refreshStats}>
+                刷新
+              </Button>
+            }
+          />
           <div className="mt-4">
             {loading ? (
               <p className="text-default-500 m-0">加载中...</p>
@@ -212,7 +210,7 @@ export default function SettingsPage() {
         </section>
 
         <section className="py-5 border-t border-divider/60">
-          <h2 className="m-0 text-xl font-bold tracking-tight">服务状态</h2>
+          <SectionHeader title="服务状态" />
           <div className="mt-4 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <span className="text-default-500 text-sm">Bot 用户名</span>
@@ -239,17 +237,15 @@ export default function SettingsPage() {
         </section>
 
         <section className="py-5 border-t border-divider/60">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
-                <Bot size={18} />
-              </span>
-              <h2 className="m-0 text-xl font-bold tracking-tight">Claude 全局配置</h2>
-            </div>
-            {globalClaude?.has_auth_token && (
-              <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
-            )}
-          </div>
+          <SectionHeader
+            title="Claude 全局配置"
+            icon={<Bot size={18} />}
+            actions={
+              globalClaude?.has_auth_token ? (
+                <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
+              ) : null
+            }
+          />
           <div className="mt-4">
             {!authStatus.loggedIn ? (
               <p className="text-default-500 m-0">登录后可配置全局 Claude 设置</p>
