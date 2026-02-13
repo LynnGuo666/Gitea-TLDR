@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { memo } from 'react';
 import { Chip } from '@heroui/react';
 import { FolderGit2, ChevronRight } from 'lucide-react';
 import { Repo } from '../lib/types';
@@ -7,7 +8,7 @@ type RepoListProps = {
   repos: Repo[];
 };
 
-export default function RepoList({ repos }: RepoListProps) {
+function RepoList({ repos }: RepoListProps) {
   if (repos.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-default-500 gap-4">
@@ -87,3 +88,5 @@ export default function RepoList({ repos }: RepoListProps) {
     </div>
   );
 }
+
+export default memo(RepoList);

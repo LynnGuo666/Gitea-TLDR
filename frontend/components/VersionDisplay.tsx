@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Popover, PopoverTrigger, PopoverContent } from '@heroui/react';
 import { FRONTEND_VERSION } from '../lib/version';
+import { apiFetch } from '../lib/api';
 
 type VersionInfo = {
   frontend: string;
@@ -20,7 +21,7 @@ export function VersionDisplay({ compact = false }: VersionDisplayProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/version')
+    apiFetch('/api/version')
       .then((res) => res.json())
       .then((data) => {
         setVersionInfo({

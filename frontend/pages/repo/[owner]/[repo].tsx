@@ -3,9 +3,6 @@ import { useRouter } from 'next/router';
 import { useContext, useEffect, useState, useCallback } from 'react';
 import {
   Button,
-  Card,
-  CardBody,
-  CardHeader,
   Chip,
   Input,
   Tab,
@@ -26,6 +23,7 @@ import {
 import { Skeleton } from '../../../components/ui';
 import { RepoClaudeConfig } from '../../../lib/types';
 import { AuthContext } from '../../../lib/auth';
+import { apiFetch } from '../../../lib/api';
 
 const defaultEvents = ['pull_request', 'issue_comment'];
 const reviewCatalog = [
@@ -120,7 +118,7 @@ export default function RepoConfigPage() {
 
     setStatusLoading(true);
     try {
-      const res = await fetch(`/api/repos/${owner}/${repo}/webhook-status`);
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/webhook-status`);
       if (res.ok) {
         const data = await res.json();
         setWebhookStatus(data);
@@ -143,7 +141,7 @@ export default function RepoConfigPage() {
 
     setClaudeConfigLoading(true);
     try {
-      const res = await fetch(`/api/repos/${owner}/${repo}/claude-config`);
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/claude-config`);
       if (res.ok) {
         const data = await res.json();
         setClaudeConfig(data);
@@ -170,7 +168,7 @@ export default function RepoConfigPage() {
 
     setPullsLoading(true);
     try {
-      const res = await fetch(`/api/repos/${owner}/${repo}/pulls?state=all&limit=5`);
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/pulls?state=all&limit=5`);
       if (res.ok) {
         const data = await res.json();
         setPulls(data.pulls || []);
@@ -215,7 +213,7 @@ export default function RepoConfigPage() {
 
     setToggling(true);
     try {
-      const res = await fetch(`/api/repos/${owner}/${repo}/setup`, {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/setup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ events, bring_bot: bringBot }),
@@ -239,7 +237,7 @@ export default function RepoConfigPage() {
 
     setToggling(true);
     try {
-      const res = await fetch(`/api/repos/${owner}/${repo}/webhook`, {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/webhook`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -275,7 +273,7 @@ export default function RepoConfigPage() {
 
     setClaudeSaving(true);
     try {
-      const res = await fetch(`/api/repos/${owner}/${repo}/claude-config`, {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/claude-config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -313,7 +311,7 @@ export default function RepoConfigPage() {
 
     setInheritSaving(true);
     try {
-      const res = await fetch(`/api/repos/${owner}/${repo}/claude-config`, {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/claude-config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ inherit_global: nextValue }),
@@ -352,136 +350,134 @@ export default function RepoConfigPage() {
       <Head>
         <title>{`${owner}/${repo} - 配置`}</title>
       </Head>
-      <div className="max-w-[1100px] mx-auto flex flex-col gap-5">
-        <Card>
-          <CardBody>
-            <div className="flex items-center gap-4">
-              <Button variant="light" size="sm" onPress={() => router.push('/')}>
-                <ArrowLeft size={16} /> 返回
-              </Button>
-              <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
-                  <FolderGit2 size={20} />
-                </span>
-                <h1 className="m-0 text-xl font-bold tracking-tight">{`${owner}/${repo}`}</h1>
-              </div>
-            </div>
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardBody className="py-2">
-            <Tabs
-              selectedKey={activeTab}
-              onSelectionChange={(key) => setActiveTab(String(key))}
-              variant="underlined"
-              color="primary"
-            >
-              <Tab key="webhook" title="自动审查" />
-              <Tab key="focus" title="审查方向" />
-              <Tab key="claude" title="Claude 配置" />
-              <Tab key="pulls" title="最新 PR" />
-            </Tabs>
-          </CardBody>
-        </Card>
-
-        {activeTab === 'webhook' && (
-        <Card>
-          <CardHeader className="flex items-center justify-between">
+      <div className="max-w-[980px] mx-auto">
+        <section className="pb-4">
+          <div className="flex items-center gap-4">
+            <Button variant="light" size="sm" onPress={() => router.push('/')}>
+              <ArrowLeft size={16} /> 返回
+            </Button>
             <div className="flex items-center gap-2.5">
               <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
-                <Settings size={18} />
+                <FolderGit2 size={20} />
               </span>
-              <h2 className="m-0 text-xl font-bold tracking-tight">自动审查</h2>
+              <h1 className="m-0 page-title">{`${owner}/${repo}`}</h1>
             </div>
-            {!requiresLogin && !statusLoading && (
-              <Button isIconOnly variant="bordered" size="sm" onPress={fetchWebhookStatus} aria-label="刷新状态">
-                <RefreshCw size={16} />
-              </Button>
-            )}
-          </CardHeader>
-          <CardBody>
-            {requiresLogin ? (
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h3 className="m-0 text-base">需要登录</h3>
-                  <p className="m-0 text-default-500 text-sm mt-1">连接 Gitea 后才能查看和配置 Webhook</p>
-                </div>
-                <Button color="primary" onPress={beginLogin}>登录</Button>
-              </div>
-            ) : statusLoading ? (
-              <div className="flex items-center justify-between gap-4">
-                <Skeleton width={200} height={20} />
-                <Skeleton width={52} height={28} />
-              </div>
-            ) : (
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h3 className="m-0 text-base flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full ${isWebhookEnabled ? 'bg-success' : 'bg-default-300'}`} />
-                    {isWebhookEnabled ? 'Webhook 已启用' : 'Webhook 未启用'}
-                  </h3>
-                  <p className="m-0 text-default-500 text-sm mt-1">
-                    {canEditRepo
-                      ? isWebhookEnabled
-                        ? `监听事件: ${webhookStatus?.events?.join(', ') || '无'}`
-                        : '启用后，PR 将自动触发代码审查'
-                      : '组织仓库需要组织管理员权限才能修改配置'}
-                  </p>
-                </div>
-                <Switch
-                  isSelected={!!isWebhookEnabled}
-                  isDisabled={toggling || !canEditRepo}
-                  onValueChange={() => { if (!toggling) handleToggle(); }}
-                  aria-label="切换 Webhook"
-                />
-              </div>
-            )}
+          </div>
+        </section>
 
-            {!requiresLogin && !statusLoading && !isWebhookEnabled && canEditRepo && (
-              <div className="mt-4 border-t border-divider pt-4">
-                <p className="text-default-500 text-sm m-0 mb-2">启用前可选择监听的事件：</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  {defaultEvents.map((event) => (
-                    <Chip
-                      key={event}
-                      variant={events.includes(event) ? 'solid' : 'bordered'}
-                      color={events.includes(event) ? 'primary' : 'default'}
-                      className="cursor-pointer"
-                      onClick={() => toggleEvent(event)}
-                    >
-                      {event}
-                    </Chip>
-                  ))}
-                  <label className="flex items-center gap-2 text-sm cursor-pointer ml-2">
-                    <input
-                      type="checkbox"
-                      checked={bringBot}
-                      onChange={(e) => setBringBot(e.target.checked)}
-                      className="accent-primary"
-                    />
-                    <span>邀请 bot 协作</span>
-                  </label>
-                </div>
+        <section className="pt-2 border-t border-divider/60">
+          <Tabs
+            selectedKey={activeTab}
+            onSelectionChange={(key) => setActiveTab(String(key))}
+            variant="underlined"
+            color="primary"
+          >
+            <Tab key="webhook" title="自动审查" />
+            <Tab key="focus" title="审查方向" />
+            <Tab key="claude" title="Claude 配置" />
+            <Tab key="pulls" title="最新 PR" />
+          </Tabs>
+        </section>
+
+        {activeTab === 'webhook' && (
+          <section className="py-5 border-t border-divider/60">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
+                  <Settings size={18} />
+                </span>
+                <h2 className="m-0 text-xl font-bold tracking-tight">自动审查</h2>
               </div>
-            )}
-          </CardBody>
-        </Card>
+              {!requiresLogin && !statusLoading && (
+                <Button isIconOnly variant="bordered" size="sm" onPress={fetchWebhookStatus} aria-label="刷新状态">
+                  <RefreshCw size={16} />
+                </Button>
+              )}
+            </div>
+
+            <div className="mt-4">
+              {requiresLogin ? (
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="m-0 text-base">需要登录</h3>
+                    <p className="m-0 text-default-500 text-sm mt-1">连接 Gitea 后才能查看和配置 Webhook</p>
+                  </div>
+                  <Button color="primary" onPress={beginLogin}>登录</Button>
+                </div>
+              ) : statusLoading ? (
+                <div className="flex items-center justify-between gap-4">
+                  <Skeleton width={200} height={20} />
+                  <Skeleton width={52} height={28} />
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="m-0 text-base flex items-center gap-2">
+                      <span className={`w-2.5 h-2.5 rounded-full ${isWebhookEnabled ? 'bg-success' : 'bg-default-300'}`} />
+                      {isWebhookEnabled ? 'Webhook 已启用' : 'Webhook 未启用'}
+                    </h3>
+                    <p className="m-0 text-default-500 text-sm mt-1">
+                      {canEditRepo
+                        ? isWebhookEnabled
+                          ? `监听事件: ${webhookStatus?.events?.join(', ') || '无'}`
+                          : '启用后，PR 将自动触发代码审查'
+                        : '组织仓库需要组织管理员权限才能修改配置'}
+                    </p>
+                  </div>
+                  <Switch
+                    isSelected={!!isWebhookEnabled}
+                    isDisabled={toggling || !canEditRepo}
+                    onValueChange={() => {
+                      if (!toggling) handleToggle();
+                    }}
+                    aria-label="切换 Webhook"
+                  />
+                </div>
+              )}
+
+              {!requiresLogin && !statusLoading && !isWebhookEnabled && canEditRepo && (
+                <div className="mt-4 border-t border-divider pt-4">
+                  <p className="text-default-500 text-sm m-0 mb-2">启用前可选择监听的事件：</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {defaultEvents.map((event) => (
+                      <Chip
+                        key={event}
+                        variant={events.includes(event) ? 'solid' : 'bordered'}
+                        color={events.includes(event) ? 'primary' : 'default'}
+                        className="cursor-pointer"
+                        onClick={() => toggleEvent(event)}
+                      >
+                        {event}
+                      </Chip>
+                    ))}
+                    <label className="flex items-center gap-2 text-sm cursor-pointer ml-2">
+                      <input
+                        type="checkbox"
+                        checked={bringBot}
+                        onChange={(e) => setBringBot(e.target.checked)}
+                        className="accent-primary"
+                      />
+                      <span>邀请 bot 协作</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
         )}
 
         {activeTab === 'focus' && (
-        <Card>
-          <CardHeader className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
-                <Bot size={18} />
-              </span>
-              <h2 className="m-0 text-xl font-bold tracking-tight">审查方向</h2>
+          <section className="py-5 border-t border-divider/60">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
+                  <Bot size={18} />
+                </span>
+                <h2 className="m-0 text-xl font-bold tracking-tight">审查方向</h2>
+              </div>
+              <Chip size="sm" variant="flat">{reviewFocus.length} 个已启用</Chip>
             </div>
-            <Chip size="sm" variant="flat">{reviewFocus.length} 个已启用</Chip>
-          </CardHeader>
-          <CardBody>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
               {reviewCatalog.map((item) => {
                 const active = reviewFocus.includes(item.key);
                 return (
@@ -500,210 +496,211 @@ export default function RepoConfigPage() {
                 );
               })}
             </div>
-          </CardBody>
-        </Card>
+          </section>
         )}
 
         {activeTab === 'claude' && (
-        <Card>
-          <CardHeader className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
-                <Settings size={18} />
-              </span>
-              <h2 className="m-0 text-xl font-bold tracking-tight">Claude 配置</h2>
-            </div>
-            {claudeConfig?.has_auth_token && (
-              <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
-            )}
-          </CardHeader>
-          <CardBody>
-            {requiresLogin ? (
-              <p className="text-default-500 m-0">登录后可配置 Claude API</p>
-            ) : claudeConfigLoading ? (
-              <div className="flex flex-col gap-3">
-                <Skeleton width="100%" height={40} />
-                <Skeleton width="100%" height={40} />
+          <section className="py-5 border-t border-divider/60">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
+                  <Settings size={18} />
+                </span>
+                <h2 className="m-0 text-xl font-bold tracking-tight">Claude 配置</h2>
               </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between gap-4 rounded-xl bg-default-100 px-4 py-3 mb-4">
-                  <div>
-                    <p className="m-0 text-sm font-medium">与全局设置保持一致</p>
-                    <p className="m-0 mt-1 text-xs text-default-500">
-                      {inheritGlobal
-                        ? '当前使用全局 Claude 配置'
-                        : '当前使用此仓库的独立 Claude 配置'}
-                    </p>
-                  </div>
-                  <Switch
-                    isSelected={inheritGlobal}
-                    isDisabled={!canEditRepo || inheritSaving}
-                    onValueChange={toggleInheritGlobal}
-                    aria-label="与全局设置保持一致"
-                  />
-                </div>
+              {claudeConfig?.has_auth_token && (
+                <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
+              )}
+            </div>
 
-                {inheritGlobal ? (
-                  <div className="rounded-xl bg-default-100 px-4 py-3">
-                    {claudeConfig?.has_global_config ? (
-                      <>
-                        <p className="m-0 text-sm text-default-700">
-                          Base URL: {claudeConfig.global_base_url || '默认官方地址'}
-                        </p>
-                        <p className="m-0 mt-1 text-sm text-default-700">
-                          API Key: {claudeConfig.global_has_auth_token ? '已配置' : '未配置'}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="m-0 text-sm text-warning-600">
-                        尚未配置全局 Claude 设置，请先在“用户中心”中配置
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex flex-col gap-3">
-                      <Input
-                        label="Base URL"
-                        value={claudeBaseUrl}
-                        onValueChange={setClaudeBaseUrl}
-                        placeholder="https://api.anthropic.com (留空使用默认)"
-                        isDisabled={!canEditRepo}
-                        variant="bordered"
-                      />
-                      <Input
-                        label="API Key"
-                        type="password"
-                        value={claudeAuthToken}
-                        onValueChange={setClaudeAuthToken}
-                        placeholder={claudeConfig?.has_auth_token ? '已配置（输入新值覆盖）' : 'sk-ant-...'}
-                        isDisabled={!canEditRepo}
-                        variant="bordered"
-                      />
-                    </div>
-                    <div className="mt-4 flex items-center gap-3 flex-wrap">
-                      <Button
-                        color="primary"
-                        onPress={saveClaudeConfig}
-                        isDisabled={claudeSaving || !canEditRepo}
-                        isLoading={claudeSaving}
-                      >
-                        保存配置
-                      </Button>
-                      <span className="text-default-400 text-xs">
-                        {canEditRepo
-                          ? '配置后，审查 PR 时将使用此仓库的 API Key'
-                          : '组织仓库需要组织管理员权限才能修改 Claude 配置'}
-                      </span>
-                    </div>
-                  </>
-                )}
-                <div className="mt-3 text-default-400 text-xs">
-                  全局配置在“用户中心”维护，仓库仅在需要时单独覆盖
+            <div className="mt-4">
+              {requiresLogin ? (
+                <p className="text-default-500 m-0">登录后可配置 Claude API</p>
+              ) : claudeConfigLoading ? (
+                <div className="flex flex-col gap-3">
+                  <Skeleton width="100%" height={40} />
+                  <Skeleton width="100%" height={40} />
                 </div>
-              </>
-            )}
-          </CardBody>
-        </Card>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between gap-4 rounded-xl bg-default-100 px-4 py-3 mb-4">
+                    <div>
+                      <p className="m-0 text-sm font-medium">与全局设置保持一致</p>
+                      <p className="m-0 mt-1 text-xs text-default-500">
+                        {inheritGlobal
+                          ? '当前使用全局 Claude 配置'
+                          : '当前使用此仓库的独立 Claude 配置'}
+                      </p>
+                    </div>
+                    <Switch
+                      isSelected={inheritGlobal}
+                      isDisabled={!canEditRepo || inheritSaving}
+                      onValueChange={toggleInheritGlobal}
+                      aria-label="与全局设置保持一致"
+                    />
+                  </div>
+
+                  {inheritGlobal ? (
+                    <div className="rounded-xl bg-default-100 px-4 py-3">
+                      {claudeConfig?.has_global_config ? (
+                        <>
+                          <p className="m-0 text-sm text-default-700">
+                            Base URL: {claudeConfig.global_base_url || '默认官方地址'}
+                          </p>
+                          <p className="m-0 mt-1 text-sm text-default-700">
+                            API Key: {claudeConfig.global_has_auth_token ? '已配置' : '未配置'}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="m-0 text-sm text-warning-600">
+                          尚未配置全局 Claude 设置，请先在“用户中心”中配置
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-col gap-3">
+                        <Input
+                          label="Base URL"
+                          value={claudeBaseUrl}
+                          onValueChange={setClaudeBaseUrl}
+                          placeholder="https://api.anthropic.com (留空使用默认)"
+                          isDisabled={!canEditRepo}
+                          variant="bordered"
+                        />
+                        <Input
+                          label="API Key"
+                          type="password"
+                          value={claudeAuthToken}
+                          onValueChange={setClaudeAuthToken}
+                          placeholder={claudeConfig?.has_auth_token ? '已配置（输入新值覆盖）' : 'sk-ant-...'}
+                          isDisabled={!canEditRepo}
+                          variant="bordered"
+                        />
+                      </div>
+                      <div className="mt-4 flex items-center gap-3 flex-wrap">
+                        <Button
+                          color="primary"
+                          onPress={saveClaudeConfig}
+                          isDisabled={claudeSaving || !canEditRepo}
+                          isLoading={claudeSaving}
+                        >
+                          保存配置
+                        </Button>
+                        <span className="text-default-400 text-xs">
+                          {canEditRepo
+                            ? '配置后，审查 PR 时将使用此仓库的 API Key'
+                            : '组织仓库需要组织管理员权限才能修改 Claude 配置'}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  <div className="mt-3 text-default-400 text-xs">
+                    全局配置在“用户中心”维护，仓库仅在需要时单独覆盖
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
         )}
 
         {activeTab === 'pulls' && (
-        <Card>
-          <CardHeader className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
-                <GitPullRequest size={18} />
-              </span>
-              <h2 className="m-0 text-xl font-bold tracking-tight">最新 Pull Requests</h2>
+          <section className="py-5 border-t border-divider/60">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
+                  <GitPullRequest size={18} />
+                </span>
+                <h2 className="m-0 text-xl font-bold tracking-tight">最新 Pull Requests</h2>
+              </div>
+              {!requiresLogin && !pullsLoading && pulls.length > 0 && (
+                <Button isIconOnly variant="bordered" size="sm" onPress={fetchPulls} aria-label="刷新 PR">
+                  <RefreshCw size={16} className={pullsLoading ? 'animate-spin' : ''} />
+                </Button>
+              )}
             </div>
-            {!requiresLogin && !pullsLoading && pulls.length > 0 && (
-              <Button isIconOnly variant="bordered" size="sm" onPress={fetchPulls} aria-label="刷新 PR">
-                <RefreshCw size={16} className={pullsLoading ? 'animate-spin' : ''} />
-              </Button>
-            )}
-          </CardHeader>
-          <CardBody>
-            {requiresLogin ? (
-              <p className="text-default-500 m-0">登录后可查看 Pull Request</p>
-            ) : pullsLoading ? (
-              <div className="flex flex-col gap-3">
-                <Skeleton width="100%" height={80} />
-                <Skeleton width="100%" height={80} />
-                <Skeleton width="100%" height={80} />
-              </div>
-            ) : pulls.length === 0 ? (
-              <p className="text-default-500 m-0">暂无 Pull Request</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {pulls.map((pr) => {
-                  const prDate = new Date(pr.updated_at);
-                  const now = new Date();
-                  const diffMs = now.getTime() - prDate.getTime();
-                  const diffMins = Math.floor(diffMs / 60000);
-                  const diffHours = Math.floor(diffMs / 3600000);
-                  const diffDays = Math.floor(diffMs / 86400000);
 
-                  let timeAgo = '';
-                  if (diffDays > 0) {
-                    timeAgo = `${diffDays} 天前`;
-                  } else if (diffHours > 0) {
-                    timeAgo = `${diffHours} 小时前`;
-                  } else if (diffMins > 0) {
-                    timeAgo = `${diffMins} 分钟前`;
-                  } else {
-                    timeAgo = '刚刚';
-                  }
+            <div className="mt-4">
+              {requiresLogin ? (
+                <p className="text-default-500 m-0">登录后可查看 Pull Request</p>
+              ) : pullsLoading ? (
+                <div className="flex flex-col gap-3">
+                  <Skeleton width="100%" height={80} />
+                  <Skeleton width="100%" height={80} />
+                  <Skeleton width="100%" height={80} />
+                </div>
+              ) : pulls.length === 0 ? (
+                <p className="text-default-500 m-0">暂无 Pull Request</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {pulls.map((pr) => {
+                    const prDate = new Date(pr.updated_at);
+                    const now = new Date();
+                    const diffMs = now.getTime() - prDate.getTime();
+                    const diffMins = Math.floor(diffMs / 60000);
+                    const diffHours = Math.floor(diffMs / 3600000);
+                    const diffDays = Math.floor(diffMs / 86400000);
 
-                  let statusColor: 'success' | 'danger' | 'primary' = 'primary';
-                  let statusText = '打开';
-                  if (pr.merged) {
-                    statusColor = 'success';
-                    statusText = '已合并';
-                  } else if (pr.state === 'closed') {
-                    statusColor = 'danger';
-                    statusText = '已关闭';
-                  }
+                    let timeAgo = '';
+                    if (diffDays > 0) {
+                      timeAgo = `${diffDays} 天前`;
+                    } else if (diffHours > 0) {
+                      timeAgo = `${diffHours} 小时前`;
+                    } else if (diffMins > 0) {
+                      timeAgo = `${diffMins} 分钟前`;
+                    } else {
+                      timeAgo = '刚刚';
+                    }
 
-                  return (
-                    <a
-                      key={pr.id}
-                      href={pr.html_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group flex items-center gap-3 p-3 rounded-xl bg-default-100 no-underline text-foreground transition-all hover:bg-default-200"
-                    >
-                      <img
-                        src={pr.user.avatar_url}
-                        alt={pr.user.login}
-                        className="w-9 h-9 rounded-full shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{pr.title}</div>
-                        <div className="text-xs text-default-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                          <span>#{pr.number}</span>
-                          <span>·</span>
-                          <span>{pr.user.login}</span>
-                          <span>·</span>
-                          <span>{timeAgo}</span>
+                    let statusColor: 'success' | 'danger' | 'primary' = 'primary';
+                    let statusText = '打开';
+                    if (pr.merged) {
+                      statusColor = 'success';
+                      statusText = '已合并';
+                    } else if (pr.state === 'closed') {
+                      statusColor = 'danger';
+                      statusText = '已关闭';
+                    }
+
+                    return (
+                      <a
+                        key={pr.id}
+                        href={pr.html_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex items-center gap-3 p-3 rounded-xl bg-default-100 no-underline text-foreground transition-all hover:bg-default-200"
+                      >
+                        <img
+                          src={pr.user.avatar_url}
+                          alt={pr.user.login}
+                          className="w-9 h-9 rounded-full shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{pr.title}</div>
+                          <div className="text-xs text-default-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                            <span>#{pr.number}</span>
+                            <span>·</span>
+                            <span>{pr.user.login}</span>
+                            <span>·</span>
+                            <span>{timeAgo}</span>
+                          </div>
+                          <div className="text-xs text-default-400 mt-1 flex items-center gap-1">
+                            <code className="bg-default-100 px-1.5 py-0.5 rounded text-[11px]">{pr.head.ref}</code>
+                            <ChevronRight size={12} />
+                            <code className="bg-default-100 px-1.5 py-0.5 rounded text-[11px]">{pr.base.ref}</code>
+                          </div>
                         </div>
-                        <div className="text-xs text-default-400 mt-1 flex items-center gap-1">
-                          <code className="bg-default-100 px-1.5 py-0.5 rounded text-[11px]">{pr.head.ref}</code>
-                          <ChevronRight size={12} />
-                          <code className="bg-default-100 px-1.5 py-0.5 rounded text-[11px]">{pr.base.ref}</code>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Chip size="sm" variant="flat" color={statusColor}>{statusText}</Chip>
+                          <ExternalLink size={16} className="text-default-400 group-hover:text-primary transition-colors" />
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Chip size="sm" variant="flat" color={statusColor}>{statusText}</Chip>
-                        <ExternalLink size={16} className="text-default-400 group-hover:text-primary transition-colors" />
-                      </div>
-                    </a>
-                  );
-                })}
-              </div>
-            )}
-          </CardBody>
-        </Card>
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
         )}
       </div>
     </>

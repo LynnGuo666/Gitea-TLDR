@@ -1,4 +1,5 @@
 import { createContext } from 'react';
+import { apiFetch } from './api';
 
 export type AuthUser = {
   username?: string;
@@ -33,7 +34,7 @@ export const AuthContext = createContext<AuthContextValue>({
 });
 
 export async function fetchAuthStatus(): Promise<AuthStatus> {
-  const res = await fetch('/api/auth/status', { credentials: 'include' });
+  const res = await apiFetch('/api/auth/status', { credentials: 'include' });
   if (!res.ok) {
     throw new Error('无法加载登录状态');
   }
@@ -46,7 +47,7 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
 }
 
 export async function beginOAuthLogin(): Promise<void> {
-  const res = await fetch('/api/auth/login-url', { credentials: 'include' });
+  const res = await apiFetch('/api/auth/login-url', { credentials: 'include' });
   if (!res.ok) {
     throw new Error('无法获取登录链接');
   }
@@ -59,5 +60,5 @@ export async function beginOAuthLogin(): Promise<void> {
 }
 
 export async function requestLogout(): Promise<void> {
-  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+  await apiFetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
 }

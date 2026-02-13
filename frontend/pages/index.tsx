@@ -1,11 +1,12 @@
 import Head from 'next/head';
 import { useContext, useEffect, useState, useMemo } from 'react';
 import { Button, Input, Select, SelectItem } from '@heroui/react';
-import { Search, RefreshCw, FolderGit2 } from 'lucide-react';
+import { Search, RefreshCw } from 'lucide-react';
 import RepoList from '../components/RepoList';
 import { RepoSkeleton } from '../components/ui';
 import { Repo } from '../lib/types';
 import { AuthContext } from '../lib/auth';
+import { apiFetch } from '../lib/api';
 import { useDebounce } from '../lib/hooks';
 
 export default function Home() {
@@ -25,7 +26,7 @@ export default function Home() {
     else setLoading(true);
 
     try {
-      const res = await fetch('/api/repos');
+      const res = await apiFetch('/api/repos');
       if (res.status === 401) {
         setNeedsAuth(true);
         setRepos([]);
@@ -149,9 +150,6 @@ export default function Home() {
 
           {needsAuth ? (
             <div className="flex flex-col items-center justify-center py-12 text-default-500 gap-4">
-              <div className="w-16 h-16 rounded-xl bg-default-100 flex items-center justify-center text-default-400">
-                <FolderGit2 size={32} />
-              </div>
               <h3 className="m-0 text-foreground">连接 Gitea 以开始</h3>
               <p className="m-0 text-sm">请先连接 Gitea，才可同步仓库列表。</p>
               <Button color="primary" onPress={beginLogin}>

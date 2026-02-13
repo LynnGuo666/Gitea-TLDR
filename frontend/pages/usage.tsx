@@ -15,6 +15,7 @@ import {
 } from '@heroui/react';
 import { BarChart3, RefreshCw } from 'lucide-react';
 import { CardSkeleton } from '../components/ui';
+import { apiFetch } from '../lib/api';
 
 const USD_PER_MILLION_INPUT = 3;
 const USD_PER_MILLION_OUTPUT = 15;
@@ -57,7 +58,7 @@ export default function UsagePage() {
     setError(null);
 
     try {
-      const res = await fetch('/api/stats');
+      const res = await apiFetch('/api/stats');
       if (!res.ok) {
         if (res.status === 503) {
           setError('数据库未启用，无法获取统计数据');

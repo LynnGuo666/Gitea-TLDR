@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import Image from 'next/image';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from 'next-themes';
 import {
   Button,
@@ -12,11 +11,11 @@ import {
   Avatar,
 } from '@heroui/react';
 import { BarChart3, User, Sun, Moon, Shield, LogOut, LayoutGrid } from 'lucide-react';
-import { GiteaLogo } from './GiteaLogo';
 import { VersionDisplay } from './VersionDisplay';
 import {
   AuthContext,
   defaultAuthStatus,
+  type AuthStatus,
   fetchAuthStatus,
   beginOAuthLogin,
   requestLogout,
@@ -37,24 +36,50 @@ const navItems = [
 const AUTH_POLL_INTERVAL = 60000;
 const AUTH_POLL_INTERVAL_FOCUSED = 30000;
 
+function isAuthStatusEqual(a: AuthStatus, b: AuthStatus): boolean {
+  return (
+    a.enabled === b.enabled &&
+    a.loggedIn === b.loggedIn &&
+    (a.user?.username || '') === (b.user?.username || '') &&
+    (a.user?.full_name || '') === (b.user?.full_name || '') &&
+    (a.user?.avatar_url || '') === (b.user?.avatar_url || '')
+  );
+}
+
 export default function Layout({ children }: LayoutProps) {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState(defaultAuthStatus);
   const [mounted, setMounted] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
   const isWindowFocused = useWindowFocus();
+  const authRefreshInFlightRef = useRef(false);
 
   useEffect(() => { setMounted(true); }, []);
 
   const refreshAuth = useCallback(() => {
-    fetchAuthStatus()
-      .then(setAuthStatus)
-      .catch(() => setAuthStatus(defaultAuthStatus));
+    if (authRefreshInFlightRef.current) return;
+    authRefreshInFlightRef.current = true;
+
+    void fetchAuthStatus()
+      .then((nextStatus) => {
+        setAuthStatus((prevStatus) =>
+          isAuthStatusEqual(prevStatus, nextStatus) ? prevStatus : nextStatus
+        );
+      })
+      .catch(() => {
+        setAuthStatus((prevStatus) =>
+          isAuthStatusEqual(prevStatus, defaultAuthStatus) ? prevStatus : defaultAuthStatus
+        );
+      })
+      .finally(() => {
+        authRefreshInFlightRef.current = false;
+      });
   }, []);
 
   useEffect(() => { refreshAuth(); }, [refreshAuth]);
 
   useEffect(() => {
+    if (document.visibilityState !== 'visible') return;
     const interval = isWindowFocused ? AUTH_POLL_INTERVAL_FOCUSED : AUTH_POLL_INTERVAL;
     const id = setInterval(refreshAuth, interval);
     return () => clearInterval(id);
@@ -90,9 +115,6 @@ export default function Layout({ children }: LayoutProps) {
         <aside className="w-full sm:w-60 sidebar-glass border-b sm:border-b-0 sm:border-r border-divider/50 flex sm:flex-col justify-between shrink-0">
           <div className="p-4 sm:px-5 sm:py-5 border-b border-divider flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 font-semibold">
-              <span className="w-8 h-8 rounded-lg bg-[#609926] flex items-center justify-center">
-                <GiteaLogo size={20} />
-              </span>
               <strong className="hidden sm:inline text-foreground">Gitea PR Reviewer</strong>
             </div>
             {mounted && (

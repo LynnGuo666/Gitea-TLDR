@@ -4,6 +4,7 @@ import { useContext, useEffect, useState } from 'react';
 import { Button, Card, CardBody, CardHeader } from '@heroui/react';
 import { BarChart3, FolderGit2, Coins, Activity, RefreshCw, Settings, BookOpen, Webhook } from 'lucide-react';
 import { AuthContext } from '../../lib/auth';
+import { apiFetch } from '../../lib/api';
 
 type DashboardStats = {
   database_available?: boolean;
@@ -42,7 +43,7 @@ export default function AdminDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/admin/dashboard/stats');
+      const res = await apiFetch('/api/admin/dashboard/stats');
       if (res.status === 401 || res.status === 403) {
         router.push('/');
         return;
