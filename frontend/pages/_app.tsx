@@ -1,6 +1,7 @@
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
 import { HeroUIProvider, ToastProvider } from '@heroui/react';
+import { Agentation } from 'agentation';
 import { ThemeProvider as NextThemesProvider } from 'next-themes';
 import Layout from '../components/Layout';
 import '../styles/globals.css';
@@ -18,6 +19,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
           <ToastProvider placement="bottom-right" />
           <Layout>
             <Component {...pageProps} />
+            {process.env.NODE_ENV === 'development' && <Agentation />}
           </Layout>
         </HeroUIProvider>
       </NextThemesProvider>
