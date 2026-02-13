@@ -73,6 +73,7 @@ class ClaudeConfigRequest(BaseModel):
     anthropic_auth_token: Optional[str] = Field(
         None, description="Anthropic Auth Token"
     )
+    inherit_global: Optional[bool] = Field(None, description="是否继承全局 Claude 配置")
 
 
 def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> bool:
@@ -133,6 +134,74 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             "debug": settings.debug,
             "oauth_enabled": context.auth_manager.enabled,
         }
+
+    @api_router.get("/config/claude-global")
+    async def get_global_claude_config(request: Request):
+        """获取全局 Claude 配置"""
+        context.auth_manager.require_session(request)
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        async with database.session() as session:
+            db_service = DBService(session)
+            global_config = await db_service.get_global_model_config()
+
+            if not global_config:
+                return {
+                    "configured": False,
+                    "anthropic_base_url": None,
+                    "has_auth_token": False,
+                }
+
+            return {
+                "configured": bool(
+                    global_config.anthropic_base_url
+                    or global_config.anthropic_auth_token
+                ),
+                "anthropic_base_url": global_config.anthropic_base_url,
+                "has_auth_token": bool(global_config.anthropic_auth_token),
+            }
+
+    @api_router.put("/config/claude-global")
+    async def update_global_claude_config(
+        payload: ClaudeConfigRequest, request: Request
+    ):
+        """更新全局 Claude 配置"""
+        context.auth_manager.require_session(request)
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        async with database.session() as session:
+            db_service = DBService(session)
+            global_config = await db_service.get_global_model_config()
+            if not global_config:
+                global_config = await db_service.create_or_update_model_config(
+                    config_name="global-default",
+                    repository_id=None,
+                    is_default=True,
+                )
+
+            if payload.anthropic_base_url is not None:
+                global_config.anthropic_base_url = payload.anthropic_base_url or None
+            if payload.anthropic_auth_token is not None:
+                global_config.anthropic_auth_token = (
+                    payload.anthropic_auth_token or None
+                )
+
+            await session.flush()
+
+            return {
+                "success": True,
+                "message": "全局 Claude 配置已保存",
+                "anthropic_base_url": global_config.anthropic_base_url,
+                "has_auth_token": bool(global_config.anthropic_auth_token),
+            }
 
     @api_router.get("/version")
     async def api_version():
@@ -726,26 +795,76 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         async with database.session() as session:
             db_service = DBService(session)
             repo_obj = await db_service.get_repository(owner, repo)
+            global_config = await db_service.get_global_model_config()
 
             if not repo_obj:
+                effective_config = global_config
                 return {
-                    "configured": False,
-                    "anthropic_base_url": None,
-                    "has_auth_token": False,
+                    "inherit_global": True,
+                    "has_global_config": bool(
+                        global_config
+                        and (
+                            global_config.anthropic_base_url
+                            or global_config.anthropic_auth_token
+                        )
+                    ),
+                    "configured": bool(
+                        effective_config
+                        and (
+                            effective_config.anthropic_base_url
+                            or effective_config.anthropic_auth_token
+                        )
+                    ),
+                    "anthropic_base_url": (
+                        effective_config.anthropic_base_url
+                        if effective_config
+                        else None
+                    ),
+                    "has_auth_token": bool(
+                        effective_config.anthropic_auth_token
+                        if effective_config
+                        else False
+                    ),
+                    "global_base_url": (
+                        global_config.anthropic_base_url if global_config else None
+                    ),
+                    "global_has_auth_token": bool(
+                        global_config.anthropic_auth_token if global_config else False
+                    ),
                 }
 
-            model_config = await db_service.get_model_config(repo_obj.id)
-            if not model_config:
-                return {
-                    "configured": False,
-                    "anthropic_base_url": None,
-                    "has_auth_token": False,
-                }
+            repo_config = await db_service.get_repo_specific_model_config(repo_obj.id)
+            inherit_global = repo_config is None
+            effective_config = repo_config or global_config
 
             return {
-                "configured": True,
-                "anthropic_base_url": model_config.anthropic_base_url,
-                "has_auth_token": bool(model_config.anthropic_auth_token),
+                "inherit_global": inherit_global,
+                "has_global_config": bool(
+                    global_config
+                    and (
+                        global_config.anthropic_base_url
+                        or global_config.anthropic_auth_token
+                    )
+                ),
+                "configured": bool(
+                    effective_config
+                    and (
+                        effective_config.anthropic_base_url
+                        or effective_config.anthropic_auth_token
+                    )
+                ),
+                "anthropic_base_url": (
+                    effective_config.anthropic_base_url if effective_config else None
+                ),
+                "has_auth_token": bool(
+                    effective_config.anthropic_auth_token if effective_config else False
+                ),
+                "global_base_url": (
+                    global_config.anthropic_base_url if global_config else None
+                ),
+                "global_has_auth_token": bool(
+                    global_config.anthropic_auth_token if global_config else False
+                ),
             }
 
     @api_router.put("/repos/{owner}/{repo}/claude-config")
@@ -762,6 +881,25 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
         async with database.session() as session:
             db_service = DBService(session)
+
+            if payload.inherit_global:
+                repo_obj = await db_service.get_repository(owner, repo)
+                if repo_obj:
+                    await db_service.delete_repo_model_config(repo_obj.id)
+
+                global_config = await db_service.get_global_model_config()
+                await session.flush()
+                return {
+                    "success": True,
+                    "inherit_global": True,
+                    "message": "已切换为继承全局 Claude 配置",
+                    "anthropic_base_url": (
+                        global_config.anthropic_base_url if global_config else None
+                    ),
+                    "has_auth_token": bool(
+                        global_config.anthropic_auth_token if global_config else False
+                    ),
+                }
 
             # 获取或创建仓库
             repo_obj = await db_service.get_or_create_repository(owner, repo)
@@ -785,6 +923,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
             return {
                 "success": True,
+                "inherit_global": False,
                 "message": "Claude 配置已保存",
                 "anthropic_base_url": model_config.anthropic_base_url,
                 "has_auth_token": bool(model_config.anthropic_auth_token),

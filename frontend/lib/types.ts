@@ -19,6 +19,16 @@ export type RepoClaudeConfig = {
   configured: boolean;
   anthropic_base_url?: string | null;
   has_auth_token: boolean;
+  inherit_global: boolean;
+  has_global_config: boolean;
+  global_base_url?: string | null;
+  global_has_auth_token: boolean;
+};
+
+export type GlobalClaudeConfig = {
+  configured: boolean;
+  anthropic_base_url?: string | null;
+  has_auth_token: boolean;
 };
 
 export type UsageSummary = {

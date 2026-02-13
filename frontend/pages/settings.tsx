@@ -1,10 +1,10 @@
 import Head from 'next/head';
 import Image from 'next/image';
-import { useContext, useEffect, useState } from 'react';
-import { Button, Card, CardBody, CardHeader, Chip } from '@heroui/react';
-import { User } from 'lucide-react';
+import { useCallback, useContext, useEffect, useState } from 'react';
+import { Button, Card, CardBody, CardHeader, Chip, Input, addToast } from '@heroui/react';
+import { Bot, User } from 'lucide-react';
 import { AuthContext } from '../lib/auth';
-import { PublicConfig, UsageSummary } from '../lib/types';
+import { GlobalClaudeConfig, PublicConfig, UsageSummary } from '../lib/types';
 
 export default function SettingsPage() {
   const { status: authStatus } = useContext(AuthContext);
@@ -12,6 +12,36 @@ export default function SettingsPage() {
   const [stats, setStats] = useState<UsageSummary | null>(null);
   const [reviewCount, setReviewCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [globalClaude, setGlobalClaude] = useState<GlobalClaudeConfig | null>(null);
+  const [globalClaudeLoading, setGlobalClaudeLoading] = useState(true);
+  const [globalClaudeSaving, setGlobalClaudeSaving] = useState(false);
+  const [globalBaseUrl, setGlobalBaseUrl] = useState('');
+  const [globalAuthToken, setGlobalAuthToken] = useState('');
+
+  const fetchGlobalClaude = useCallback(async () => {
+    if (!authStatus.loggedIn) {
+      setGlobalClaude(null);
+      setGlobalClaudeLoading(false);
+      return;
+    }
+
+    setGlobalClaudeLoading(true);
+    try {
+      const res = await fetch('/api/config/claude-global');
+      if (res.ok) {
+        const data: GlobalClaudeConfig = await res.json();
+        setGlobalClaude(data);
+        setGlobalBaseUrl(data.anthropic_base_url || '');
+      } else {
+        setGlobalClaude(null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch global Claude config:', error);
+      setGlobalClaude(null);
+    } finally {
+      setGlobalClaudeLoading(false);
+    }
+  }, [authStatus.loggedIn]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -39,6 +69,10 @@ export default function SettingsPage() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    fetchGlobalClaude();
+  }, [fetchGlobalClaude]);
+
   const refreshStats = async () => {
     try {
       const statsRes = await fetch('/api/stats');
@@ -49,6 +83,42 @@ export default function SettingsPage() {
       }
     } catch (error) {
       console.error('Failed to refresh stats:', error);
+    }
+  };
+
+  const saveGlobalClaudeConfig = async () => {
+    if (!authStatus.loggedIn) {
+      addToast({ title: '请先登录后再配置', color: 'warning' });
+      return;
+    }
+
+    setGlobalClaudeSaving(true);
+    try {
+      const res = await fetch('/api/config/claude-global', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          anthropic_base_url: globalBaseUrl || null,
+          anthropic_auth_token: globalAuthToken || null,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        addToast({ title: '全局 Claude 配置已保存', color: 'success' });
+        setGlobalAuthToken('');
+        setGlobalClaude({
+          configured: !!(data.anthropic_base_url || data.has_auth_token),
+          anthropic_base_url: data.anthropic_base_url,
+          has_auth_token: data.has_auth_token,
+        });
+      } else {
+        addToast({ title: data.detail || '保存失败', color: 'danger' });
+      }
+    } catch {
+      addToast({ title: '无法连接后端', color: 'danger' });
+    } finally {
+      setGlobalClaudeSaving(false);
     }
   };
 
@@ -160,8 +230,62 @@ export default function SettingsPage() {
               </div>
             </div>
             <p className="text-default-400 text-xs mt-4 m-0">
-              Claude 配置（Base URL / API Key）请在各仓库的配置页面中单独设置
+              各仓库可在配置页选择“与全局设置保持一致”，仅在需要时单独覆盖
             </p>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
+                <Bot size={18} />
+              </span>
+              <h2 className="m-0 text-xl font-bold tracking-tight">Claude 全局配置</h2>
+            </div>
+            {globalClaude?.has_auth_token && (
+              <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
+            )}
+          </CardHeader>
+          <CardBody>
+            {!authStatus.loggedIn ? (
+              <p className="text-default-500 m-0">登录后可配置全局 Claude 设置</p>
+            ) : globalClaudeLoading ? (
+              <p className="text-default-500 m-0">加载中...</p>
+            ) : (
+              <>
+                <div className="flex flex-col gap-3">
+                  <Input
+                    label="Base URL"
+                    value={globalBaseUrl}
+                    onValueChange={setGlobalBaseUrl}
+                    placeholder="https://api.anthropic.com (留空使用默认)"
+                    variant="bordered"
+                  />
+                  <Input
+                    label="API Key"
+                    type="password"
+                    value={globalAuthToken}
+                    onValueChange={setGlobalAuthToken}
+                    placeholder={globalClaude?.has_auth_token ? '已配置（输入新值覆盖）' : 'sk-ant-...'}
+                    variant="bordered"
+                  />
+                </div>
+                <div className="mt-4 flex items-center gap-3 flex-wrap">
+                  <Button
+                    color="primary"
+                    onPress={saveGlobalClaudeConfig}
+                    isDisabled={globalClaudeSaving}
+                    isLoading={globalClaudeSaving}
+                  >
+                    保存全局配置
+                  </Button>
+                  <span className="text-default-400 text-xs">
+                    默认给所有仓库使用；仓库页可关闭继承并单独覆盖
+                  </span>
+                </div>
+              </>
+            )}
           </CardBody>
         </Card>
       </div>

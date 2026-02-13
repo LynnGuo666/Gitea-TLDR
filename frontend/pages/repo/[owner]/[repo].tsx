@@ -8,6 +8,8 @@ import {
   CardHeader,
   Chip,
   Input,
+  Tab,
+  Tabs,
   Switch,
   addToast,
 } from '@heroui/react';
@@ -22,7 +24,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { Skeleton } from '../../../components/ui';
-import { PublicConfig, RepoClaudeConfig } from '../../../lib/types';
+import { RepoClaudeConfig } from '../../../lib/types';
 import { AuthContext } from '../../../lib/auth';
 
 const defaultEvents = ['pull_request', 'issue_comment'];
@@ -87,7 +89,6 @@ type PullRequest = {
 export default function RepoConfigPage() {
   const router = useRouter();
   const { owner, repo } = router.query;
-  const [config, setConfig] = useState<PublicConfig | null>(null);
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
@@ -104,6 +105,9 @@ export default function RepoConfigPage() {
   const [claudeAuthToken, setClaudeAuthToken] = useState('');
   const [claudeConfigLoading, setClaudeConfigLoading] = useState(true);
   const [claudeSaving, setClaudeSaving] = useState(false);
+  const [inheritGlobal, setInheritGlobal] = useState(true);
+  const [inheritSaving, setInheritSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('webhook');
   // Pull Requests
   const [pulls, setPulls] = useState<PullRequest[]>([]);
   const [pullsLoading, setPullsLoading] = useState(true);
@@ -143,14 +147,19 @@ export default function RepoConfigPage() {
       if (res.ok) {
         const data = await res.json();
         setClaudeConfig(data);
+        setInheritGlobal(data.inherit_global ?? true);
         if (data.anthropic_base_url) {
           setClaudeBaseUrl(data.anthropic_base_url);
+        } else {
+          setClaudeBaseUrl('');
         }
       } else {
         setClaudeConfig(null);
+        setInheritGlobal(true);
       }
     } catch {
       setClaudeConfig(null);
+      setInheritGlobal(true);
     } finally {
       setClaudeConfigLoading(false);
     }
@@ -174,13 +183,6 @@ export default function RepoConfigPage() {
       setPullsLoading(false);
     }
   }, [owner, repo, requiresLogin]);
-
-  useEffect(() => {
-    fetch('/api/config/public')
-      .then((res) => res.json())
-      .then(setConfig)
-      .catch(() => setConfig(null));
-  }, []);
 
   const canEditRepo = webhookStatus?.can_setup_webhook ?? true;
 
@@ -269,7 +271,7 @@ export default function RepoConfigPage() {
   };
 
   const saveClaudeConfig = async () => {
-    if (requiresLogin || !owner || !repo || !canEditRepo) return;
+    if (requiresLogin || !owner || !repo || !canEditRepo || inheritGlobal) return;
 
     setClaudeSaving(true);
     try {
@@ -279,16 +281,22 @@ export default function RepoConfigPage() {
         body: JSON.stringify({
           anthropic_base_url: claudeBaseUrl || null,
           anthropic_auth_token: claudeAuthToken || null,
+          inherit_global: false,
         }),
       });
       const data = await res.json();
       if (res.ok) {
         addToast({ title: 'Claude 配置已保存', color: 'success' });
-        setClaudeConfig({
+        setInheritGlobal(false);
+        setClaudeConfig((prev) => ({
           configured: true,
           anthropic_base_url: data.anthropic_base_url,
           has_auth_token: data.has_auth_token,
-        });
+          inherit_global: false,
+          has_global_config: prev?.has_global_config ?? false,
+          global_base_url: prev?.global_base_url ?? null,
+          global_has_auth_token: prev?.global_has_auth_token ?? false,
+        }));
         setClaudeAuthToken('');
       } else {
         addToast({ title: data.detail || '保存失败', color: 'danger' });
@@ -297,6 +305,39 @@ export default function RepoConfigPage() {
       addToast({ title: '无法连接后端', color: 'danger' });
     } finally {
       setClaudeSaving(false);
+    }
+  };
+
+  const toggleInheritGlobal = async (nextValue: boolean) => {
+    if (requiresLogin || !owner || !repo || !canEditRepo || inheritSaving) return;
+
+    setInheritSaving(true);
+    try {
+      const res = await fetch(`/api/repos/${owner}/${repo}/claude-config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inherit_global: nextValue }),
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        setInheritGlobal(nextValue);
+        addToast({
+          title: nextValue ? '已切换为全局设置' : '已切换为仓库独立设置',
+          color: 'success',
+        });
+        if (nextValue) {
+          setClaudeBaseUrl(data.anthropic_base_url || '');
+          setClaudeAuthToken('');
+        }
+        await fetchClaudeConfig();
+      } else {
+        addToast({ title: data.detail || '切换失败', color: 'danger' });
+      }
+    } catch {
+      addToast({ title: '无法连接后端', color: 'danger' });
+    } finally {
+      setInheritSaving(false);
     }
   };
 
@@ -328,6 +369,23 @@ export default function RepoConfigPage() {
           </CardBody>
         </Card>
 
+        <Card>
+          <CardBody className="py-2">
+            <Tabs
+              selectedKey={activeTab}
+              onSelectionChange={(key) => setActiveTab(String(key))}
+              variant="underlined"
+              color="primary"
+            >
+              <Tab key="webhook" title="自动审查" />
+              <Tab key="focus" title="审查方向" />
+              <Tab key="claude" title="Claude 配置" />
+              <Tab key="pulls" title="最新 PR" />
+            </Tabs>
+          </CardBody>
+        </Card>
+
+        {activeTab === 'webhook' && (
         <Card>
           <CardHeader className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -409,7 +467,9 @@ export default function RepoConfigPage() {
             )}
           </CardBody>
         </Card>
+        )}
 
+        {activeTab === 'focus' && (
         <Card>
           <CardHeader className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -442,7 +502,9 @@ export default function RepoConfigPage() {
             </div>
           </CardBody>
         </Card>
+        )}
 
+        {activeTab === 'claude' && (
         <Card>
           <CardHeader className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -465,45 +527,88 @@ export default function RepoConfigPage() {
               </div>
             ) : (
               <>
-                <div className="flex flex-col gap-3">
-                  <Input
-                    label="Base URL"
-                    value={claudeBaseUrl}
-                    onValueChange={setClaudeBaseUrl}
-                    placeholder="https://api.anthropic.com (留空使用默认)"
-                    isDisabled={!canEditRepo}
-                    variant="bordered"
-                  />
-                  <Input
-                    label="API Key"
-                    type="password"
-                    value={claudeAuthToken}
-                    onValueChange={setClaudeAuthToken}
-                    placeholder={claudeConfig?.has_auth_token ? '已配置（输入新值覆盖）' : 'sk-ant-...'}
-                    isDisabled={!canEditRepo}
-                    variant="bordered"
+                <div className="flex items-center justify-between gap-4 rounded-xl bg-default-100 px-4 py-3 mb-4">
+                  <div>
+                    <p className="m-0 text-sm font-medium">与全局设置保持一致</p>
+                    <p className="m-0 mt-1 text-xs text-default-500">
+                      {inheritGlobal
+                        ? '当前使用全局 Claude 配置'
+                        : '当前使用此仓库的独立 Claude 配置'}
+                    </p>
+                  </div>
+                  <Switch
+                    isSelected={inheritGlobal}
+                    isDisabled={!canEditRepo || inheritSaving}
+                    onValueChange={toggleInheritGlobal}
+                    aria-label="与全局设置保持一致"
                   />
                 </div>
-                <div className="mt-4 flex items-center gap-3 flex-wrap">
-                  <Button
-                    color="primary"
-                    onPress={saveClaudeConfig}
-                    isDisabled={claudeSaving || !canEditRepo}
-                    isLoading={claudeSaving}
-                  >
-                    保存配置
-                  </Button>
-                  <span className="text-default-400 text-xs">
-                    {canEditRepo
-                      ? '配置后，审查 PR 时将使用此仓库的 API Key'
-                      : '组织仓库需要组织管理员权限才能修改 Claude 配置'}
-                  </span>
+
+                {inheritGlobal ? (
+                  <div className="rounded-xl bg-default-100 px-4 py-3">
+                    {claudeConfig?.has_global_config ? (
+                      <>
+                        <p className="m-0 text-sm text-default-700">
+                          Base URL: {claudeConfig.global_base_url || '默认官方地址'}
+                        </p>
+                        <p className="m-0 mt-1 text-sm text-default-700">
+                          API Key: {claudeConfig.global_has_auth_token ? '已配置' : '未配置'}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="m-0 text-sm text-warning-600">
+                        尚未配置全局 Claude 设置，请先在“用户中心”中配置
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-col gap-3">
+                      <Input
+                        label="Base URL"
+                        value={claudeBaseUrl}
+                        onValueChange={setClaudeBaseUrl}
+                        placeholder="https://api.anthropic.com (留空使用默认)"
+                        isDisabled={!canEditRepo}
+                        variant="bordered"
+                      />
+                      <Input
+                        label="API Key"
+                        type="password"
+                        value={claudeAuthToken}
+                        onValueChange={setClaudeAuthToken}
+                        placeholder={claudeConfig?.has_auth_token ? '已配置（输入新值覆盖）' : 'sk-ant-...'}
+                        isDisabled={!canEditRepo}
+                        variant="bordered"
+                      />
+                    </div>
+                    <div className="mt-4 flex items-center gap-3 flex-wrap">
+                      <Button
+                        color="primary"
+                        onPress={saveClaudeConfig}
+                        isDisabled={claudeSaving || !canEditRepo}
+                        isLoading={claudeSaving}
+                      >
+                        保存配置
+                      </Button>
+                      <span className="text-default-400 text-xs">
+                        {canEditRepo
+                          ? '配置后，审查 PR 时将使用此仓库的 API Key'
+                          : '组织仓库需要组织管理员权限才能修改 Claude 配置'}
+                      </span>
+                    </div>
+                  </>
+                )}
+                <div className="mt-3 text-default-400 text-xs">
+                  全局配置在“用户中心”维护，仓库仅在需要时单独覆盖
                 </div>
               </>
             )}
           </CardBody>
         </Card>
+        )}
 
+        {activeTab === 'pulls' && (
         <Card>
           <CardHeader className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -599,6 +704,7 @@ export default function RepoConfigPage() {
             )}
           </CardBody>
         </Card>
+        )}
       </div>
     </>
   );

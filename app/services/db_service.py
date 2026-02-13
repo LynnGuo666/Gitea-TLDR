@@ -99,6 +99,31 @@ class DBService:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_repo_specific_model_config(
+        self, repository_id: int
+    ) -> Optional[ModelConfig]:
+        """获取仓库级配置（不回退到全局）"""
+        stmt = select(ModelConfig).where(ModelConfig.repository_id == repository_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_global_model_config(self) -> Optional[ModelConfig]:
+        """获取全局默认模型配置"""
+        stmt = select(ModelConfig).where(
+            ModelConfig.repository_id.is_(None), ModelConfig.is_default == True
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def delete_repo_model_config(self, repository_id: int) -> bool:
+        """删除仓库级模型配置（启用全局继承）"""
+        config = await self.get_repo_specific_model_config(repository_id)
+        if not config:
+            return False
+        await self.session.delete(config)
+        await self.session.flush()
+        return True
+
     async def create_or_update_model_config(
         self,
         config_name: str,
@@ -226,9 +251,10 @@ class DBService:
             review_session.error_message = error_message
 
         if completed:
-            review_session.completed_at = datetime.utcnow()
+            completed_at = datetime.utcnow()
+            review_session.completed_at = completed_at
             if review_session.started_at:
-                delta = review_session.completed_at - review_session.started_at
+                delta = completed_at - review_session.started_at
                 review_session.duration_seconds = delta.total_seconds()
 
         await self.session.flush()
