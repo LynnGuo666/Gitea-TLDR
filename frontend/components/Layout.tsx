@@ -112,7 +112,7 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <AuthContext.Provider value={authContextValue}>
       <div className="flex min-h-dvh">
-        <aside className="w-full sm:w-60 sidebar-glass border-b sm:border-b-0 sm:border-r border-divider/50 flex sm:flex-col justify-between shrink-0">
+        <aside className="w-full sm:w-60 sidebar-glass border-b sm:border-b-0 sm:border-r border-divider/50 flex sm:flex-col justify-between shrink-0 sm:h-dvh sm:sticky sm:top-0 sm:self-start">
           <div className="p-4 sm:px-5 sm:py-5 border-b border-divider flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 font-semibold">
               <strong className="hidden sm:inline text-foreground">Gitea PR Reviewer</strong>
@@ -143,7 +143,7 @@ export default function Layout({ children }: LayoutProps) {
                   href={item.href}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm no-underline transition-colors whitespace-nowrap ${
                     active
-                      ? 'bg-primary/10 font-semibold text-primary sm:border-l-3 sm:border-primary'
+                      ? 'bg-primary/10 font-semibold text-primary'
                       : 'text-foreground/80 hover:bg-default-100/60'
                   }`}
                 >
@@ -208,7 +208,7 @@ export default function Layout({ children }: LayoutProps) {
             )}
           </div>
         </aside>
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 sm:px-8 pb-12 bg-default-50">
+        <main className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 sm:px-8 pb-12 bg-default-50">
           {!authStatus.enabled ? (
             <section className="max-w-lg mx-auto mt-16 text-center flex flex-col gap-4">
               <h1 className="m-0">需要配置 OAuth</h1>
