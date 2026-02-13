@@ -436,10 +436,11 @@ cp .env.example .env
 # - ANTHROPIC_AUTH_TOKEN (如果使用Claude Code)
 ```
 
-2. 启动服务：
+2. 拉取并启动服务：
 
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 3. 验证配置加载（可选）：
@@ -516,15 +517,15 @@ docker run -d \
 项目配置了GitHub Actions自动构建，可以直接拉取镜像：
 
 ```bash
-# 拉取最新镜像
-docker pull ghcr.io/your-username/gitea-tldr:latest
+# 拉取 main 分支镜像
+docker pull ghcr.io/lynnguo666/gitea-tldr:main
 
 # 运行（推荐使用.env文件）
 docker run -d \
   --name gitea-pr-reviewer \
   -p 8000:8000 \
   --env-file .env \
-  ghcr.io/your-username/gitea-tldr:latest
+  ghcr.io/lynnguo666/gitea-tldr:main
 
 # 或直接指定环境变量
 docker run -d \
@@ -534,7 +535,7 @@ docker run -d \
   -e GITEA_TOKEN=your_token \
   -e ANTHROPIC_BASE_URL=https://api.anthropic.com \
   -e ANTHROPIC_AUTH_TOKEN=your_anthropic_token \
-  ghcr.io/your-username/gitea-tldr:latest
+  ghcr.io/lynnguo666/gitea-tldr:main
 ```
 
 #### Docker镜像特性

@@ -1,10 +1,6 @@
-version: '3.8'
-
 services:
   gitea-pr-reviewer:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/lynnguo666/gitea-tldr:main
     container_name: gitea-pr-reviewer
     env_file:
       - .env  # 从 .env 文件读取所有环境变量
