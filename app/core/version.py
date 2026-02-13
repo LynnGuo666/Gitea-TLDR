@@ -2,12 +2,21 @@
 版本信息模块
 """
 
-__version__ = "1.12.0"
-__release_date__ = "2026-01-21"
+__version__ = "1.13.0"
+__release_date__ = "2026-02-13"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.13.0": {
+        "date": "2026-02-13",
+        "changes": [
+            "优化：统一前端页面标题体系，新增 PageHeader 与 SectionHeader 组件",
+            "优化：仓库配置页 Tab 内容移除重复分区标题，减少分割线干扰",
+            "优化：仓库配置页改为顶部全局刷新，一次刷新 Webhook/Claude/PR 数据",
+            "优化：仓库页与设置页内容宽度统一为 max-w-[1100px]，与主页保持一致",
+        ],
+    },
     "1.12.0": {
         "date": "2026-01-21",
         "changes": [
