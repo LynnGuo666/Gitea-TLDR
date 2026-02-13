@@ -154,56 +154,55 @@ export default function Layout({ children }: LayoutProps) {
             })}
           </nav>
           <div className="hidden sm:block p-4 mt-auto">
-            <VersionDisplay compact />
             {authStatus.enabled ? (
-              authStatus.loggedIn ? (
-                <Dropdown placement="top-start">
-                  <DropdownTrigger>
-                    <button className="w-full rounded-xl p-2.5 flex items-center gap-3 bg-default-100 cursor-pointer transition-colors hover:bg-default-200 text-left">
-                      {authStatus.user?.avatar_url ? (
-                        <Avatar
-                          src={authStatus.user.avatar_url}
-                          name={authStatus.user.username || 'U'}
-                          size="sm"
-                        />
-                      ) : (
-                        <Avatar
-                          name={(authStatus.user?.username || 'U')[0]}
-                          size="sm"
-                        />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <strong className="block text-sm text-foreground truncate">
-                          {authStatus.user?.full_name || authStatus.user?.username || '已登录'}
-                        </strong>
-                        <span className="block text-xs text-default-500 truncate">
-                          @{authStatus.user?.username || ''}
-                        </span>
-                      </div>
-                    </button>
-                  </DropdownTrigger>
-                  <DropdownMenu
-                    aria-label="用户菜单"
-                    onAction={(key) => {
-                      if (key === 'logout') logout();
-                    }}
-                  >
+              <Dropdown placement="top-start">
+                <DropdownTrigger>
+                  <button className="w-full rounded-xl p-2.5 flex items-center gap-3 cursor-pointer transition-colors hover:bg-default-100 text-left">
+                    {authStatus.loggedIn && authStatus.user?.avatar_url ? (
+                      <Avatar
+                        src={authStatus.user.avatar_url}
+                        name={authStatus.user.username || 'U'}
+                        size="sm"
+                      />
+                    ) : (
+                      <Avatar
+                        name={(authStatus.user?.username || 'U')[0]}
+                        size="sm"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <strong className="block text-sm text-foreground truncate">
+                        {authStatus.loggedIn
+                          ? authStatus.user?.full_name || authStatus.user?.username || '已登录'
+                          : '未登录'}
+                      </strong>
+                      <span className="block text-xs text-default-500 truncate">
+                        {authStatus.loggedIn ? `@${authStatus.user?.username || ''}` : '点击登录'}
+                      </span>
+                    </div>
+                  </button>
+                </DropdownTrigger>
+                <DropdownMenu
+                  aria-label="用户菜单"
+                  onAction={(key) => {
+                    if (key === 'logout') logout();
+                    if (key === 'login') beginLogin();
+                  }}
+                >
+                  <DropdownItem key="version" isReadOnly textValue="版本信息" className="cursor-default">
+                    <VersionDisplay inline />
+                  </DropdownItem>
+                  {authStatus.loggedIn ? (
                     <DropdownItem key="logout" startContent={<LogOut size={16} />}>
                       退出登录
                     </DropdownItem>
-                  </DropdownMenu>
-                </Dropdown>
-              ) : (
-                <Button
-                  variant="bordered"
-                  color="primary"
-                  fullWidth
-                  radius="full"
-                  onPress={beginLogin}
-                >
-                  连接 PKUGit
-                </Button>
-              )
+                  ) : (
+                    <DropdownItem key="login" startContent={<User size={16} />}>
+                      连接 PKUGit
+                    </DropdownItem>
+                  )}
+                </DropdownMenu>
+              </Dropdown>
             ) : (
               <p className="text-sm text-default-500 m-0">请配置 OAuth 登录</p>
             )}

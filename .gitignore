@@ -73,3 +73,5 @@ out/
 
 # Project agents plans
 agents/
+.ai/
+.claude/

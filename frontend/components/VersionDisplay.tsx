@@ -11,9 +11,10 @@ type VersionInfo = {
 
 type VersionDisplayProps = {
   compact?: boolean;
+  inline?: boolean;
 };
 
-export function VersionDisplay({ compact = false }: VersionDisplayProps) {
+export function VersionDisplay({ compact = false, inline = false }: VersionDisplayProps) {
   const [versionInfo, setVersionInfo] = useState<VersionInfo>({
     frontend: FRONTEND_VERSION,
     backend: '加载中...',
@@ -41,6 +42,29 @@ export function VersionDisplay({ compact = false }: VersionDisplayProps) {
   }, []);
 
   const versionMatch = versionInfo.frontend === versionInfo.backend;
+
+  if (inline) {
+    return (
+      <div className="w-full p-0.5 text-xs">
+        <div className="mb-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-default-500">
+          <span>版本</span>
+          {!versionMatch && !loading && <span className="text-warning">⚠</span>}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-default-500 text-[11px]">前端</span>
+            <span className="font-mono text-foreground text-[11px] font-medium">{versionInfo.frontend}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-default-500 text-[11px]">后端</span>
+            <span className="font-mono text-foreground text-[11px] font-medium">
+              {loading ? '...' : versionInfo.backend}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (compact) {
     return (
