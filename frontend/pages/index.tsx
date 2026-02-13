@@ -98,58 +98,97 @@ export default function Home() {
             title="我的仓库"
             actions={
               <div className="flex items-center gap-2">
-              <span className="rounded-full border border-dashed border-default-300 px-4 py-1.5 text-sm text-default-500">
-                {repoCountLabel}
-              </span>
-              {!needsAuth && !loading && (
-                <>
-                  <Button
-                    isIconOnly
-                    variant="bordered"
-                    size="sm"
-                    onPress={() => fetchRepos(true)}
-                    isDisabled={refreshing}
-                    aria-label="刷新仓库列表"
-                  >
-                    <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
-                  </Button>
-                  <Select
-                    size="sm"
-                    selectedKeys={new Set([ownerFilter])}
-                    onSelectionChange={(keys) => {
-                      if (keys === 'all') return;
-                      const key = Array.from(keys)[0] as string;
-                      if (key) setOwnerFilter(key as 'all' | 'personal' | 'org');
-                    }}
-                    isDisabled={refreshing}
-                    className="w-32"
-                    aria-label="所有者筛选"
-                  >
-                    <SelectItem key="all">全部</SelectItem>
-                    <SelectItem key="personal">个人仓库</SelectItem>
-                    <SelectItem key="org">组织仓库</SelectItem>
-                  </Select>
-                  <Select
-                    size="sm"
-                    selectedKeys={new Set([readonlyFilter])}
-                    onSelectionChange={(keys) => {
-                      if (keys === 'all') return;
-                      const key = Array.from(keys)[0] as string;
-                      if (key) setReadonlyFilter(key as 'all' | 'readonly' | 'writable');
-                    }}
-                    isDisabled={refreshing}
-                    className="w-32"
-                    aria-label="权限筛选"
-                  >
-                    <SelectItem key="all">全部权限</SelectItem>
-                    <SelectItem key="writable">可管理</SelectItem>
-                    <SelectItem key="readonly">只读</SelectItem>
-                  </Select>
-                </>
-              )}
+                <span className="rounded-full border border-dashed border-default-300 px-4 py-1.5 text-sm text-default-500">
+                  {repoCountLabel}
+                </span>
+                {!needsAuth && !loading && (
+                  <>
+                    <Button
+                      isIconOnly
+                      variant="bordered"
+                      size="sm"
+                      onPress={() => fetchRepos(true)}
+                      isDisabled={refreshing}
+                      aria-label="刷新仓库列表"
+                    >
+                      <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+                    </Button>
+                    <div className="hidden sm:flex items-center gap-2">
+                      <Select
+                        size="sm"
+                        selectedKeys={new Set([ownerFilter])}
+                        onSelectionChange={(keys) => {
+                          if (keys === 'all') return;
+                          const key = Array.from(keys)[0] as string;
+                          if (key) setOwnerFilter(key as 'all' | 'personal' | 'org');
+                        }}
+                        isDisabled={refreshing}
+                        className="w-32"
+                        aria-label="所有者筛选"
+                      >
+                        <SelectItem key="all">全部</SelectItem>
+                        <SelectItem key="personal">个人仓库</SelectItem>
+                        <SelectItem key="org">组织仓库</SelectItem>
+                      </Select>
+                      <Select
+                        size="sm"
+                        selectedKeys={new Set([readonlyFilter])}
+                        onSelectionChange={(keys) => {
+                          if (keys === 'all') return;
+                          const key = Array.from(keys)[0] as string;
+                          if (key) setReadonlyFilter(key as 'all' | 'readonly' | 'writable');
+                        }}
+                        isDisabled={refreshing}
+                        className="w-32"
+                        aria-label="权限筛选"
+                      >
+                        <SelectItem key="all">全部权限</SelectItem>
+                        <SelectItem key="writable">可管理</SelectItem>
+                        <SelectItem key="readonly">只读</SelectItem>
+                      </Select>
+                    </div>
+                  </>
+                )}
               </div>
             }
           />
+
+          {!needsAuth && !loading && (
+            <div className="flex sm:hidden items-center gap-2">
+              <Select
+                size="sm"
+                selectedKeys={new Set([ownerFilter])}
+                onSelectionChange={(keys) => {
+                  if (keys === 'all') return;
+                  const key = Array.from(keys)[0] as string;
+                  if (key) setOwnerFilter(key as 'all' | 'personal' | 'org');
+                }}
+                isDisabled={refreshing}
+                className="flex-1"
+                aria-label="所有者筛选"
+              >
+                <SelectItem key="all">全部</SelectItem>
+                <SelectItem key="personal">个人仓库</SelectItem>
+                <SelectItem key="org">组织仓库</SelectItem>
+              </Select>
+              <Select
+                size="sm"
+                selectedKeys={new Set([readonlyFilter])}
+                onSelectionChange={(keys) => {
+                  if (keys === 'all') return;
+                  const key = Array.from(keys)[0] as string;
+                  if (key) setReadonlyFilter(key as 'all' | 'readonly' | 'writable');
+                }}
+                isDisabled={refreshing}
+                className="flex-1"
+                aria-label="权限筛选"
+              >
+                <SelectItem key="all">全部权限</SelectItem>
+                <SelectItem key="writable">可管理</SelectItem>
+                <SelectItem key="readonly">只读</SelectItem>
+              </Select>
+            </div>
+          )}
 
           {needsAuth ? (
             <div className="flex flex-col items-center justify-center py-12 text-default-500 gap-4">

@@ -10,13 +10,13 @@ body {
 
 /* Glassmorphism sidebar */
 .sidebar-glass {
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.86);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
 :is(.dark *).sidebar-glass {
-  background: rgba(18, 18, 18, 0.78);
+  background: rgba(18, 18, 18, 0.9);
 }
 
 /* Apple Large Title */

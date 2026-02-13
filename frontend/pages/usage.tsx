@@ -179,32 +179,34 @@ export default function UsagePage() {
             </div>
 
             {groupedByDate.length > 0 ? (
-              <Table aria-label="用量明细">
-                <TableHeader>
-                  <TableColumn>日期</TableColumn>
-                  <TableColumn>输入 Tokens</TableColumn>
-                  <TableColumn>输出 Tokens</TableColumn>
-                  <TableColumn>请求</TableColumn>
-                  <TableColumn>费用</TableColumn>
-                </TableHeader>
-                <TableBody>
-                  {groupedByDate.map((entry) => {
-                    const cost = (
-                      (entry.inputTokens / 1_000_000) * USD_PER_MILLION_INPUT +
-                      (entry.outputTokens / 1_000_000) * USD_PER_MILLION_OUTPUT
-                    ).toFixed(2);
-                    return (
-                      <TableRow key={entry.date}>
-                        <TableCell>{entry.date}</TableCell>
-                        <TableCell>{entry.inputTokens.toLocaleString()}</TableCell>
-                        <TableCell>{entry.outputTokens.toLocaleString()}</TableCell>
-                        <TableCell>{entry.requests}</TableCell>
-                        <TableCell>${cost}</TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <div className="overflow-x-auto">
+                <Table aria-label="用量明细">
+                  <TableHeader>
+                    <TableColumn>日期</TableColumn>
+                    <TableColumn>输入 Tokens</TableColumn>
+                    <TableColumn>输出 Tokens</TableColumn>
+                    <TableColumn>请求</TableColumn>
+                    <TableColumn>费用</TableColumn>
+                  </TableHeader>
+                  <TableBody>
+                    {groupedByDate.map((entry) => {
+                      const cost = (
+                        (entry.inputTokens / 1_000_000) * USD_PER_MILLION_INPUT +
+                        (entry.outputTokens / 1_000_000) * USD_PER_MILLION_OUTPUT
+                      ).toFixed(2);
+                      return (
+                        <TableRow key={entry.date}>
+                          <TableCell>{entry.date}</TableCell>
+                          <TableCell>{entry.inputTokens.toLocaleString()}</TableCell>
+                          <TableCell>{entry.outputTokens.toLocaleString()}</TableCell>
+                          <TableCell>{entry.requests}</TableCell>
+                          <TableCell>${cost}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-default-500">
                 <p className="m-0">暂无使用记录</p>

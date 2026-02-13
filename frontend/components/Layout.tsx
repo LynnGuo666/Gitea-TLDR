@@ -10,7 +10,7 @@ import {
   DropdownItem,
   Avatar,
 } from '@heroui/react';
-import { BarChart3, User, Sun, Moon, Shield, LogOut, LayoutGrid } from 'lucide-react';
+import { BarChart3, User, Sun, Moon, Shield, LogOut, LayoutGrid, Menu, X } from 'lucide-react';
 import { VersionDisplay } from './VersionDisplay';
 import {
   AuthContext,
@@ -50,6 +50,7 @@ export default function Layout({ children }: LayoutProps) {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState(defaultAuthStatus);
   const [mounted, setMounted] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
   const isWindowFocused = useWindowFocus();
   const authRefreshInFlightRef = useRef(false);
@@ -109,13 +110,132 @@ export default function Layout({ children }: LayoutProps) {
     setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
   };
 
+  // 路由切换时自动关闭手机菜单
+  useEffect(() => {
+    const handleRouteChange = () => setMobileMenuOpen(false);
+    router.events.on('routeChangeComplete', handleRouteChange);
+    return () => router.events.off('routeChangeComplete', handleRouteChange);
+  }, [router.events]);
+
   return (
     <AuthContext.Provider value={authContextValue}>
-      <div className="flex min-h-dvh">
-        <aside className="w-full sm:w-60 sidebar-glass border-b sm:border-b-0 sm:border-r border-divider/50 flex sm:flex-col justify-between shrink-0 sm:h-dvh sm:sticky sm:top-0 sm:self-start">
-          <div className="p-4 sm:px-5 sm:py-5 border-b border-divider flex items-center justify-between gap-2">
+      <div className="flex flex-col sm:flex-row min-h-dvh">
+        {/* ── 移动端：固定顶部栏 ── */}
+        <header className="sm:hidden sticky top-0 z-50 sidebar-glass border-b border-divider/50 relative">
+          <div className="flex items-center justify-between px-4 h-14">
             <div className="flex items-center gap-2.5 font-semibold">
-              <strong className="hidden sm:inline text-foreground">Gitea PR Reviewer</strong>
+              <strong className="text-foreground text-base">GPR</strong>
+            </div>
+            <div className="flex items-center gap-1">
+              {authStatus.enabled && (
+                <Dropdown placement="bottom-end">
+                  <DropdownTrigger>
+                    <Button isIconOnly variant="light" size="sm" className="data-[hover=true]:bg-default/40">
+                      {authStatus.loggedIn && authStatus.user?.avatar_url ? (
+                        <Avatar
+                          src={authStatus.user.avatar_url}
+                          name={authStatus.user.username || 'U'}
+                          className="w-6 h-6 text-tiny"
+                        />
+                      ) : (
+                        <Avatar
+                          name={(authStatus.user?.username || 'U')[0]}
+                          className="w-6 h-6 text-tiny"
+                        />
+                      )}
+                    </Button>
+                  </DropdownTrigger>
+                  <DropdownMenu
+                    aria-label="用户菜单"
+                    onAction={(key) => {
+                      if (key === 'logout') logout();
+                      if (key === 'login') beginLogin();
+                    }}
+                  >
+                    <DropdownItem key="user-info" isReadOnly textValue="用户信息" className="h-14 gap-2 opacity-100 cursor-default">
+                      <div className="font-semibold">
+                        {authStatus.loggedIn ? (authStatus.user?.full_name || authStatus.user?.username) : '未登录'}
+                      </div>
+                      <div className="text-tiny text-default-500">
+                        {authStatus.loggedIn ? `@${authStatus.user?.username}` : '点击下方登录'}
+                      </div>
+                    </DropdownItem>
+                    <DropdownItem key="version" isReadOnly textValue="版本信息" className="cursor-default">
+                      <VersionDisplay inline />
+                    </DropdownItem>
+                    {authStatus.loggedIn ? (
+                      <DropdownItem key="logout" startContent={<LogOut size={16} />}>
+                        退出登录
+                      </DropdownItem>
+                    ) : (
+                      <DropdownItem key="login" startContent={<User size={16} />}>
+                        连接 PKUGit
+                      </DropdownItem>
+                    )}
+                  </DropdownMenu>
+                </Dropdown>
+              )}
+              {mounted && (
+                <Button
+                  isIconOnly
+                  variant="light"
+                  size="sm"
+                  onPress={toggleTheme}
+                  aria-label="切换主题"
+                >
+                  {resolvedTheme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                </Button>
+              )}
+              <Button
+                isIconOnly
+                variant="light"
+                size="sm"
+                onPress={() => setMobileMenuOpen((v) => !v)}
+                aria-label={mobileMenuOpen ? '关闭菜单' : '打开菜单'}
+              >
+                {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+              </Button>
+            </div>
+          </div>
+
+          <nav
+            className={`absolute left-0 right-0 top-full border-b border-divider/50 sidebar-glass px-3 py-2 flex flex-col gap-1 shadow-md transition-all duration-200 ease-out origin-top ${
+              mobileMenuOpen
+                ? 'opacity-100 translate-y-0 pointer-events-auto'
+                : 'opacity-0 -translate-y-1 pointer-events-none'
+            }`}
+            aria-hidden={!mobileMenuOpen}
+          >
+            {navItems.map((item) => {
+              if (item.adminOnly && !authStatus.loggedIn) return null;
+              const isExact = item.href === '/';
+              const active = isExact
+                ? router.pathname === '/'
+                : router.pathname === item.href || router.pathname.startsWith(item.href + '/');
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm no-underline transition-colors ${
+                    active
+                      ? 'bg-primary/10 font-semibold text-primary'
+                      : 'text-foreground/80 hover:bg-default-100/60'
+                  }`}
+                >
+                  <Icon size={20} />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        </header>
+
+        {/* ── 桌面端：左侧侧边栏 ── */}
+        <aside className="hidden sm:flex w-60 sidebar-glass border-r border-divider/50 flex-col justify-between shrink-0 h-dvh sticky top-0 self-start">
+          <div className="px-5 py-5 border-b border-divider flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 font-semibold">
+              <strong className="text-foreground">Gitea PR Reviewer</strong>
             </div>
             {mounted && (
               <Button
@@ -129,7 +249,7 @@ export default function Layout({ children }: LayoutProps) {
               </Button>
             )}
           </div>
-          <nav className="flex flex-row sm:flex-col overflow-x-auto sm:overflow-visible px-3 py-2 sm:py-4 gap-1 flex-1">
+          <nav className="flex flex-col overflow-visible py-4 px-3 gap-1 flex-1">
             {navItems.map((item) => {
               if (item.adminOnly && !authStatus.loggedIn) return null;
               const isExact = item.href === '/';
@@ -153,7 +273,7 @@ export default function Layout({ children }: LayoutProps) {
               );
             })}
           </nav>
-          <div className="hidden sm:block p-4 mt-auto">
+          <div className="p-4 mt-auto">
             {authStatus.enabled ? (
               <Dropdown placement="top-start">
                 <DropdownTrigger>
@@ -208,6 +328,7 @@ export default function Layout({ children }: LayoutProps) {
             )}
           </div>
         </aside>
+
         <main className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 sm:px-8 pb-12 bg-default-50">
           {!authStatus.enabled ? (
             <section className="max-w-lg mx-auto mt-16 text-center flex flex-col gap-4">

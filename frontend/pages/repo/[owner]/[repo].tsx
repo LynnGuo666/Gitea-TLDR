@@ -657,9 +657,9 @@ export default function RepoConfigPage() {
                             <span>{timeAgo}</span>
                           </div>
                           <div className="text-xs text-default-400 mt-1 flex items-center gap-1">
-                            <code className="bg-default-100 px-1.5 py-0.5 rounded text-[11px]">{pr.head.ref}</code>
+                            <code className="bg-default-100 px-1.5 py-0.5 rounded text-[11px] max-w-[120px] truncate">{pr.head.ref}</code>
                             <ChevronRight size={12} />
-                            <code className="bg-default-100 px-1.5 py-0.5 rounded text-[11px]">{pr.base.ref}</code>
+                            <code className="bg-default-100 px-1.5 py-0.5 rounded text-[11px] max-w-[120px] truncate">{pr.base.ref}</code>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
