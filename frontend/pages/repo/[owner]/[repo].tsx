@@ -1,8 +1,27 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useContext, useEffect, useState, useCallback } from 'react';
-import { RepoIcon, BotIcon, SettingsIcon, RefreshIcon } from '../../../components/icons';
-import { useToast, Skeleton } from '../../../components/ui';
+import {
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  Chip,
+  Input,
+  Switch,
+  addToast,
+} from '@heroui/react';
+import {
+  FolderGit2,
+  Bot,
+  Settings,
+  RefreshCw,
+  GitPullRequest,
+  ArrowLeft,
+  ExternalLink,
+  ChevronRight,
+} from 'lucide-react';
+import { Skeleton } from '../../../components/ui';
 import { PublicConfig, RepoClaudeConfig } from '../../../lib/types';
 import { AuthContext } from '../../../lib/auth';
 
@@ -90,7 +109,6 @@ export default function RepoConfigPage() {
   const [pullsLoading, setPullsLoading] = useState(true);
 
   const { status: authStatus, beginLogin } = useContext(AuthContext);
-  const { addToast } = useToast();
   const requiresLogin = authStatus.enabled && !authStatus.loggedIn;
 
   const fetchWebhookStatus = useCallback(async () => {
@@ -202,13 +220,13 @@ export default function RepoConfigPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        addToast('Webhook 已启用', 'success');
+        addToast({ title: 'Webhook 已启用', color: 'success' });
         await fetchWebhookStatus();
       } else {
-        addToast(data.detail || 'Webhook 配置失败', 'error');
+        addToast({ title: data.detail || 'Webhook 配置失败', color: 'danger' });
       }
     } catch {
-      addToast('无法连接后端', 'error');
+      addToast({ title: '无法连接后端', color: 'danger' });
     } finally {
       setToggling(false);
     }
@@ -223,7 +241,7 @@ export default function RepoConfigPage() {
         method: 'DELETE',
       });
       if (res.ok) {
-        addToast('Webhook 已禁用', 'success');
+        addToast({ title: 'Webhook 已禁用', color: 'success' });
         setWebhookStatus({
           configured: false,
           active: false,
@@ -233,10 +251,10 @@ export default function RepoConfigPage() {
         });
       } else {
         const data = await res.json();
-        addToast(data.detail || '删除 Webhook 失败', 'error');
+        addToast({ title: data.detail || '删除 Webhook 失败', color: 'danger' });
       }
     } catch {
-      addToast('无法连接后端', 'error');
+      addToast({ title: '无法连接后端', color: 'danger' });
     } finally {
       setToggling(false);
     }
@@ -265,19 +283,18 @@ export default function RepoConfigPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        addToast('Claude 配置已保存', 'success');
+        addToast({ title: 'Claude 配置已保存', color: 'success' });
         setClaudeConfig({
           configured: true,
           anthropic_base_url: data.anthropic_base_url,
           has_auth_token: data.has_auth_token,
         });
-        // 清空 token 输入框（安全考虑）
         setClaudeAuthToken('');
       } else {
-        addToast(data.detail || '保存失败', 'error');
+        addToast({ title: data.detail || '保存失败', color: 'danger' });
       }
     } catch {
-      addToast('无法连接后端', 'error');
+      addToast({ title: '无法连接后端', color: 'danger' });
     } finally {
       setClaudeSaving(false);
     }
@@ -294,340 +311,295 @@ export default function RepoConfigPage() {
       <Head>
         <title>{`${owner}/${repo} - 配置`}</title>
       </Head>
-      <main className="dashboard">
-        <section className="card">
-          <div className="repo-header">
-            <button className="back-button" onClick={() => router.push('/')}>
-              ← 返回
-            </button>
-            <div className="repo-title">
-              <span className="icon-badge">
-                <RepoIcon size={20} />
-              </span>
-              <h1>{`${owner}/${repo}`}</h1>
+      <div className="max-w-[1100px] mx-auto flex flex-col gap-5">
+        <Card>
+          <CardBody>
+            <div className="flex items-center gap-4">
+              <Button variant="light" size="sm" onPress={() => router.push('/')}>
+                <ArrowLeft size={16} /> 返回
+              </Button>
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
+                  <FolderGit2 size={20} />
+                </span>
+                <h1 className="m-0 text-xl font-bold tracking-tight">{`${owner}/${repo}`}</h1>
+              </div>
             </div>
-          </div>
-        </section>
+          </CardBody>
+        </Card>
 
-        {/* Webhook 状态卡片 */}
-        <section className="card">
-          <div className="panel-header">
-            <div className="section-title">
-              <span className="icon-badge">
-                <SettingsIcon size={18} />
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
+                <Settings size={18} />
               </span>
-              <h2>自动审查</h2>
+              <h2 className="m-0 text-xl font-bold tracking-tight">自动审查</h2>
             </div>
             {!requiresLogin && !statusLoading && (
-              <button
-                className={`refresh-button ${statusLoading ? 'spinning' : ''}`}
-                onClick={fetchWebhookStatus}
-                title="刷新状态"
-              >
-                <RefreshIcon size={16} />
-              </button>
+              <Button isIconOnly variant="bordered" size="sm" onPress={fetchWebhookStatus} aria-label="刷新状态">
+                <RefreshCw size={16} />
+              </Button>
             )}
-          </div>
-
-          {requiresLogin ? (
-            <div className="webhook-status-card">
-              <div className="webhook-status-info">
-                <h3>需要登录</h3>
-                <p>连接 Gitea 后才能查看和配置 Webhook</p>
-              </div>
-              <button className="primary-button" onClick={beginLogin}>
-                登录
-              </button>
-            </div>
-          ) : statusLoading ? (
-            <div className="webhook-status-card">
-              <Skeleton width={200} height={20} />
-              <Skeleton width={52} height={28} />
-            </div>
-          ) : (
-            <div className="webhook-status-card">
-              <div className="webhook-status-info">
-                <h3>
-                  <span className={`status-dot ${isWebhookEnabled ? 'active' : 'inactive'}`} />
-                  {isWebhookEnabled ? 'Webhook 已启用' : 'Webhook 未启用'}
-                </h3>
-                <p>
-                  {canEditRepo
-                    ? isWebhookEnabled
-                      ? `监听事件: ${webhookStatus?.events?.join(', ') || '无'}`
-                      : '启用后，PR 将自动触发代码审查'
-                    : '组织仓库需要组织管理员权限才能修改配置'}
-                </p>
-              </div>
-              <div
-                className={`toggle-switch-track ${isWebhookEnabled ? 'active' : ''} ${toggling ? 'loading' : ''} ${canEditRepo ? '' : 'disabled'}`}
-                onClick={toggling || !canEditRepo ? undefined : handleToggle}
-                role="switch"
-                aria-checked={isWebhookEnabled}
-                aria-disabled={!canEditRepo}
-                tabIndex={canEditRepo ? 0 : -1}
-                onKeyDown={(e) => {
-                  if (!canEditRepo) return;
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    if (!toggling) handleToggle();
-                  }
-                }}
-              >
-                <div className="toggle-switch-thumb" />
-              </div>
-            </div>
-          )}
-
-          {/* 高级配置 - 仅在未启用时显示 */}
-          {!requiresLogin && !statusLoading && !isWebhookEnabled && canEditRepo && (
-            <>
-              <p className="muted" style={{ marginTop: 'var(--spacing-md)' }}>
-                启用前可选择监听的事件：
-              </p>
-              <div className="chip-row" style={{ marginTop: 'var(--spacing-sm)' }}>
-                {defaultEvents.map((event) => (
-                  <button
-                    key={event}
-                    className={`chip ${events.includes(event) ? 'active' : ''}`}
-                    onClick={() => toggleEvent(event)}
-                  >
-                    {event}
-                  </button>
-                ))}
-                <label className="switch">
-                  <input
-                    type="checkbox"
-                    checked={bringBot}
-                    onChange={(e) => setBringBot(e.target.checked)}
-                  />
-                  <span>邀请 bot 协作</span>
-                </label>
-              </div>
-            </>
-          )}
-        </section>
-
-        {/* 审查方向 */}
-        <section className="card">
-          <div className="panel-header">
-            <div className="section-title">
-              <span className="icon-badge">
-                <BotIcon size={18} />
-              </span>
-              <h2>审查方向</h2>
-            </div>
-            <span className="badge-soft">{reviewFocus.length} 个已启用</span>
-          </div>
-          <div className="focus-grid">
-            {reviewCatalog.map((item) => (
-              <button
-                key={item.key}
-                className={`focus-chip ${reviewFocus.includes(item.key) ? 'active' : ''}`}
-                onClick={() => toggleFocus(item.key)}
-              >
+          </CardHeader>
+          <CardBody>
+            {requiresLogin ? (
+              <div className="flex items-center justify-between gap-4">
                 <div>
-                  <strong>{item.label}</strong>
-                  <p>{item.detail}</p>
+                  <h3 className="m-0 text-base">需要登录</h3>
+                  <p className="m-0 text-default-500 text-sm mt-1">连接 Gitea 后才能查看和配置 Webhook</p>
                 </div>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* Claude 配置 */}
-        <section className="card">
-          <div className="panel-header">
-            <div className="section-title">
-              <span className="icon-badge">
-                <SettingsIcon size={18} />
-              </span>
-              <h2>Claude 配置</h2>
-            </div>
-            {claudeConfig?.has_auth_token && (
-              <span className="badge-soft success">已配置 Token</span>
+                <Button color="primary" onPress={beginLogin}>登录</Button>
+              </div>
+            ) : statusLoading ? (
+              <div className="flex items-center justify-between gap-4">
+                <Skeleton width={200} height={20} />
+                <Skeleton width={52} height={28} />
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="m-0 text-base flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${isWebhookEnabled ? 'bg-success' : 'bg-default-300'}`} />
+                    {isWebhookEnabled ? 'Webhook 已启用' : 'Webhook 未启用'}
+                  </h3>
+                  <p className="m-0 text-default-500 text-sm mt-1">
+                    {canEditRepo
+                      ? isWebhookEnabled
+                        ? `监听事件: ${webhookStatus?.events?.join(', ') || '无'}`
+                        : '启用后，PR 将自动触发代码审查'
+                      : '组织仓库需要组织管理员权限才能修改配置'}
+                  </p>
+                </div>
+                <Switch
+                  isSelected={!!isWebhookEnabled}
+                  isDisabled={toggling || !canEditRepo}
+                  onValueChange={() => { if (!toggling) handleToggle(); }}
+                  aria-label="切换 Webhook"
+                />
+              </div>
             )}
-          </div>
 
-          {requiresLogin ? (
-            <p className="muted">登录后可配置 Claude API</p>
-          ) : claudeConfigLoading ? (
-            <div style={{ padding: 'var(--spacing-md)' }}>
-              <Skeleton width="100%" height={40} />
-              <div style={{ marginTop: 'var(--spacing-sm)' }}>
-                <Skeleton width="100%" height={40} />
+            {!requiresLogin && !statusLoading && !isWebhookEnabled && canEditRepo && (
+              <div className="mt-4 border-t border-divider pt-4">
+                <p className="text-default-500 text-sm m-0 mb-2">启用前可选择监听的事件：</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {defaultEvents.map((event) => (
+                    <Chip
+                      key={event}
+                      variant={events.includes(event) ? 'solid' : 'bordered'}
+                      color={events.includes(event) ? 'primary' : 'default'}
+                      className="cursor-pointer"
+                      onClick={() => toggleEvent(event)}
+                    >
+                      {event}
+                    </Chip>
+                  ))}
+                  <label className="flex items-center gap-2 text-sm cursor-pointer ml-2">
+                    <input
+                      type="checkbox"
+                      checked={bringBot}
+                      onChange={(e) => setBringBot(e.target.checked)}
+                      className="accent-primary"
+                    />
+                    <span>邀请 bot 协作</span>
+                  </label>
+                </div>
               </div>
-            </div>
-          ) : (
-            <>
-              <div className="input-grid">
-                <label className="input-field">
-                  <span>Base URL</span>
-                  <input
-                    type="text"
-                    value={claudeBaseUrl}
-                    onChange={(e) => setClaudeBaseUrl(e.target.value)}
-                    placeholder="https://api.anthropic.com (留空使用默认)"
-                    disabled={!canEditRepo}
-                  />
-                </label>
-                <label className="input-field">
-                  <span>API Key</span>
-                  <input
-                    type="password"
-                    value={claudeAuthToken}
-                    onChange={(e) => setClaudeAuthToken(e.target.value)}
-                    placeholder={claudeConfig?.has_auth_token ? '已配置（输入新值覆盖）' : 'sk-ant-...'}
-                    disabled={!canEditRepo}
-                  />
-                </label>
-              </div>
-              <div style={{ marginTop: 'var(--spacing-md)', display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center', flexWrap: 'wrap' }}>
-                <button
-                  className="primary-button"
-                  onClick={saveClaudeConfig}
-                  disabled={claudeSaving || !canEditRepo}
-                >
-                  {claudeSaving ? '保存中...' : '保存配置'}
-                </button>
-                <span className="muted small">
-                  {canEditRepo
-                    ? '配置后，审查 PR 时将使用此仓库的 API Key'
-                    : '组织仓库需要组织管理员权限才能修改 Claude 配置'}
-                </span>
-              </div>
-            </>
-          )}
-        </section>
-
-        {/* 最新 Pull Requests */}
-        <section className="card">
-          <div className="panel-header">
-            <div className="section-title">
-              <span className="icon-badge">
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="18" cy="18" r="3"></circle>
-                  <circle cx="6" cy="6" r="3"></circle>
-                  <path d="M13 6h3a2 2 0 0 1 2 2v7"></path>
-                  <line x1="6" y1="9" x2="6" y2="21"></line>
-                </svg>
-              </span>
-              <h2>最新 Pull Requests</h2>
-            </div>
-            {!requiresLogin && !pullsLoading && pulls.length > 0 && (
-              <button
-                className={`refresh-button ${pullsLoading ? 'spinning' : ''}`}
-                onClick={fetchPulls}
-                title="刷新 PR"
-              >
-                <RefreshIcon size={16} />
-              </button>
             )}
-          </div>
+          </CardBody>
+        </Card>
 
-          {requiresLogin ? (
-            <p className="muted">登录后可查看 Pull Request</p>
-          ) : pullsLoading ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
-              <Skeleton width="100%" height={80} />
-              <Skeleton width="100%" height={80} />
-              <Skeleton width="100%" height={80} />
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
+                <Bot size={18} />
+              </span>
+              <h2 className="m-0 text-xl font-bold tracking-tight">审查方向</h2>
             </div>
-          ) : pulls.length === 0 ? (
-            <p className="muted">暂无 Pull Request</p>
-          ) : (
-            <div className="pr-list">
-              {pulls.map((pr) => {
-                const prDate = new Date(pr.updated_at);
-                const now = new Date();
-                const diffMs = now.getTime() - prDate.getTime();
-                const diffMins = Math.floor(diffMs / 60000);
-                const diffHours = Math.floor(diffMs / 3600000);
-                const diffDays = Math.floor(diffMs / 86400000);
-                
-                let timeAgo = '';
-                if (diffDays > 0) {
-                  timeAgo = `${diffDays} 天前`;
-                } else if (diffHours > 0) {
-                  timeAgo = `${diffHours} 小时前`;
-                } else if (diffMins > 0) {
-                  timeAgo = `${diffMins} 分钟前`;
-                } else {
-                  timeAgo = '刚刚';
-                }
-
-                let statusClass = 'pr-status-open';
-                let statusText = '打开';
-                if (pr.merged) {
-                  statusClass = 'pr-status-merged';
-                  statusText = '已合并';
-                } else if (pr.state === 'closed') {
-                  statusClass = 'pr-status-closed';
-                  statusText = '已关闭';
-                }
-
+            <Chip size="sm" variant="flat">{reviewFocus.length} 个已启用</Chip>
+          </CardHeader>
+          <CardBody>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {reviewCatalog.map((item) => {
+                const active = reviewFocus.includes(item.key);
                 return (
-                  <a
-                    key={pr.id}
-                    href={pr.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="pr-item"
+                  <button
+                    key={item.key}
+                    className={`text-left p-4 rounded-xl transition-all cursor-pointer ${
+                      active
+                        ? 'bg-primary-50 ring-1 ring-primary'
+                        : 'bg-default-100 hover:bg-default-200'
+                    }`}
+                    onClick={() => toggleFocus(item.key)}
                   >
-                    <div className="pr-avatar">
-                      <img src={pr.user.avatar_url} alt={pr.user.login} />
-                    </div>
-                    <div className="pr-content">
-                      <div className="pr-title">{pr.title}</div>
-                      <div className="pr-meta">
-                        <span className="pr-number">#{pr.number}</span>
-                        <span className="pr-sep">•</span>
-                        <span className="pr-author">{pr.user.login}</span>
-                        <span className="pr-sep">•</span>
-                        <span className="pr-time">{timeAgo}</span>
-                      </div>
-                      <div className="pr-branches">
-                        <code>{pr.head.ref}</code>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="9 18 15 12 9 6"></polyline>
-                        </svg>
-                        <code>{pr.base.ref}</code>
-                      </div>
-                    </div>
-                    <div className="pr-status-row">
-                      <span className={`pr-status ${statusClass}`}>{statusText}</span>
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="pr-arrow"
-                      >
-                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                        <polyline points="15 3 21 3 21 9"></polyline>
-                        <line x1="10" y1="14" x2="21" y2="3"></line>
-                      </svg>
-                    </div>
-                  </a>
+                    <strong className="text-sm text-foreground">{item.label}</strong>
+                    <p className="m-0 text-xs text-default-500 mt-1">{item.detail}</p>
+                  </button>
                 );
               })}
             </div>
-          )}
-        </section>
-      </main>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
+                <Settings size={18} />
+              </span>
+              <h2 className="m-0 text-xl font-bold tracking-tight">Claude 配置</h2>
+            </div>
+            {claudeConfig?.has_auth_token && (
+              <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
+            )}
+          </CardHeader>
+          <CardBody>
+            {requiresLogin ? (
+              <p className="text-default-500 m-0">登录后可配置 Claude API</p>
+            ) : claudeConfigLoading ? (
+              <div className="flex flex-col gap-3">
+                <Skeleton width="100%" height={40} />
+                <Skeleton width="100%" height={40} />
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-col gap-3">
+                  <Input
+                    label="Base URL"
+                    value={claudeBaseUrl}
+                    onValueChange={setClaudeBaseUrl}
+                    placeholder="https://api.anthropic.com (留空使用默认)"
+                    isDisabled={!canEditRepo}
+                    variant="bordered"
+                  />
+                  <Input
+                    label="API Key"
+                    type="password"
+                    value={claudeAuthToken}
+                    onValueChange={setClaudeAuthToken}
+                    placeholder={claudeConfig?.has_auth_token ? '已配置（输入新值覆盖）' : 'sk-ant-...'}
+                    isDisabled={!canEditRepo}
+                    variant="bordered"
+                  />
+                </div>
+                <div className="mt-4 flex items-center gap-3 flex-wrap">
+                  <Button
+                    color="primary"
+                    onPress={saveClaudeConfig}
+                    isDisabled={claudeSaving || !canEditRepo}
+                    isLoading={claudeSaving}
+                  >
+                    保存配置
+                  </Button>
+                  <span className="text-default-400 text-xs">
+                    {canEditRepo
+                      ? '配置后，审查 PR 时将使用此仓库的 API Key'
+                      : '组织仓库需要组织管理员权限才能修改 Claude 配置'}
+                  </span>
+                </div>
+              </>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
+                <GitPullRequest size={18} />
+              </span>
+              <h2 className="m-0 text-xl font-bold tracking-tight">最新 Pull Requests</h2>
+            </div>
+            {!requiresLogin && !pullsLoading && pulls.length > 0 && (
+              <Button isIconOnly variant="bordered" size="sm" onPress={fetchPulls} aria-label="刷新 PR">
+                <RefreshCw size={16} className={pullsLoading ? 'animate-spin' : ''} />
+              </Button>
+            )}
+          </CardHeader>
+          <CardBody>
+            {requiresLogin ? (
+              <p className="text-default-500 m-0">登录后可查看 Pull Request</p>
+            ) : pullsLoading ? (
+              <div className="flex flex-col gap-3">
+                <Skeleton width="100%" height={80} />
+                <Skeleton width="100%" height={80} />
+                <Skeleton width="100%" height={80} />
+              </div>
+            ) : pulls.length === 0 ? (
+              <p className="text-default-500 m-0">暂无 Pull Request</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {pulls.map((pr) => {
+                  const prDate = new Date(pr.updated_at);
+                  const now = new Date();
+                  const diffMs = now.getTime() - prDate.getTime();
+                  const diffMins = Math.floor(diffMs / 60000);
+                  const diffHours = Math.floor(diffMs / 3600000);
+                  const diffDays = Math.floor(diffMs / 86400000);
+
+                  let timeAgo = '';
+                  if (diffDays > 0) {
+                    timeAgo = `${diffDays} 天前`;
+                  } else if (diffHours > 0) {
+                    timeAgo = `${diffHours} 小时前`;
+                  } else if (diffMins > 0) {
+                    timeAgo = `${diffMins} 分钟前`;
+                  } else {
+                    timeAgo = '刚刚';
+                  }
+
+                  let statusColor: 'success' | 'danger' | 'primary' = 'primary';
+                  let statusText = '打开';
+                  if (pr.merged) {
+                    statusColor = 'success';
+                    statusText = '已合并';
+                  } else if (pr.state === 'closed') {
+                    statusColor = 'danger';
+                    statusText = '已关闭';
+                  }
+
+                  return (
+                    <a
+                      key={pr.id}
+                      href={pr.html_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group flex items-center gap-3 p-3 rounded-xl bg-default-100 no-underline text-foreground transition-all hover:bg-default-200"
+                    >
+                      <img
+                        src={pr.user.avatar_url}
+                        alt={pr.user.login}
+                        className="w-9 h-9 rounded-full shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{pr.title}</div>
+                        <div className="text-xs text-default-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                          <span>#{pr.number}</span>
+                          <span>·</span>
+                          <span>{pr.user.login}</span>
+                          <span>·</span>
+                          <span>{timeAgo}</span>
+                        </div>
+                        <div className="text-xs text-default-400 mt-1 flex items-center gap-1">
+                          <code className="bg-default-100 px-1.5 py-0.5 rounded text-[11px]">{pr.head.ref}</code>
+                          <ChevronRight size={12} />
+                          <code className="bg-default-100 px-1.5 py-0.5 rounded text-[11px]">{pr.base.ref}</code>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Chip size="sm" variant="flat" color={statusColor}>{statusText}</Chip>
+                        <ExternalLink size={16} className="text-default-400 group-hover:text-primary transition-colors" />
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      </div>
     </>
   );
 }

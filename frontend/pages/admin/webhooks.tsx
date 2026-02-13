@@ -1,5 +1,7 @@
 import Head from 'next/head';
 import Link from 'next/link';
+import { Card, CardBody, CardHeader, Button } from '@heroui/react';
+import { ArrowLeft } from 'lucide-react';
 
 export default function AdminWebhooksPage() {
   return (
@@ -7,20 +9,22 @@ export default function AdminWebhooksPage() {
       <Head>
         <title>Webhook 日志 - 管理后台</title>
       </Head>
-      <main className="dashboard">
-        <section className="card">
-          <div className="panel-header">
-            <h1>Webhook 日志</h1>
-            <Link href="/admin" className="ghost-button">
+      <div className="max-w-[1100px] mx-auto">
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <h1 className="m-0 text-2xl font-bold tracking-tight">Webhook 日志</h1>
+            <Button as={Link} href="/admin" variant="bordered" size="sm" startContent={<ArrowLeft size={16} />}>
               返回管理后台
-            </Link>
-          </div>
-          <p className="muted">
-            Webhook 日志界面还在开发中。后端接口已就绪（/api/admin/webhooks/logs），
-            后续会在此展示日志列表与详情。
-          </p>
-        </section>
-      </main>
+            </Button>
+          </CardHeader>
+          <CardBody>
+            <p className="text-default-500 m-0">
+              Webhook 日志界面还在开发中。后端接口已就绪（/api/admin/webhooks/logs），
+              后续会在此展示日志列表与详情。
+            </p>
+          </CardBody>
+        </Card>
+      </div>
     </>
   );
 }

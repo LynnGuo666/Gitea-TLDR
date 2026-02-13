@@ -1,14 +1,28 @@
 import type { AppProps } from 'next/app';
+import Head from 'next/head';
+import { HeroUIProvider, ToastProvider } from '@heroui/react';
+import { Agentation } from 'agentation';
+import { ThemeProvider as NextThemesProvider } from 'next-themes';
 import Layout from '../components/Layout';
-import { ToastProvider } from '../components/ui';
 import '../styles/globals.css';
 
 export default function MyApp({ Component, pageProps }: AppProps) {
   return (
-    <ToastProvider>
-      <Layout>
-        <Component {...pageProps} />
-      </Layout>
-    </ToastProvider>
+    <>
+      <Head>
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#609926" />
+      </Head>
+      <NextThemesProvider attribute="class" defaultTheme="system">
+        <HeroUIProvider>
+          <ToastProvider placement="bottom-right" />
+          <Layout>
+            <Component {...pageProps} />
+            {process.env.NODE_ENV === 'development' && <Agentation />}
+          </Layout>
+        </HeroUIProvider>
+      </NextThemesProvider>
+    </>
   );
 }

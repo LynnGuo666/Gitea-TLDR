@@ -1,32 +1,6 @@
-# Repository Guidelines
+# Claude 指令
 
-## Project Structure & Module Organization
-- `app/` holds all FastAPI services: `main.py` bootstraps the server, `api/` exposes routes, `services/` houses the Gitea client, webhook handler, repo manager, and Claude integration, while `core/` stores config and version helpers.  
-- `frontend/` is a Next.js dashboard; build artifacts land in `frontend/out` and are auto-served when present.  
-- Ops artifacts live at the repo root: `.env.example`, `requirements.txt`, `Dockerfile`, `docker-compose.yml`, and `build.sh`. Keep new modules aligned with this layout so backends stay under `app/` and UI code under `frontend/`.
-
-## Build, Test, and Development Commands
-- Python setup: `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`.  
-- Run the API: `python app/main.py` (prints version + debug status) or `uvicorn app.main:app --reload`.  
-- Frontend: `cd frontend && npm install && npm run build` to produce `out/`.  
-- Docker: `docker compose up --build` starts the API, worker, and frontend in one stack. Document any new scripts inside `build.sh`.
-
-## Coding Style & Naming Conventions
-- Python code follows PEP 8 with 4-space indentation and full type hints, mirroring existing services.  
-- Use descriptive module-level loggers and guard debug logs with `settings.debug`.  
-- Environment-driven options belong in `app/core/config.py` with uppercase env names (`AUTO_REQUEST_REVIEWER`, `BOT_USERNAME`, etc.).  
-- Frontend components use functional React with hooks and CSS modules already in place; keep file names in `PascalCase.tsx`.
-
-## Testing Guidelines
-- There is no automated suite yet; when adding tests place them under `tests/` and use `pytest`. Provide fixtures for webhook payloads and mock Gitea responses via `httpx_mock`.  
-- Until tests exist, verify flows manually: trigger `POST /webhook` with sample payloads and confirm PR comments, reviews, statuses, and reviewer assignment occur as expected. Record reproduction steps in PRs.
-
-## Commit & Pull Request Guidelines
-- Follow semantic-style commit subjects (`feat:`, `fix:`, `chore:`) consistent with the changelog. Reference modules touched (e.g., `feat: auto-request reviewers in webhook handler`).  
-- PRs should include: problem statement, summary of changes, testing evidence (commands or screenshots), configuration updates (env vars, secrets, OAuth values), and **explicit version bumps** when behavior changes ship. Update both `app/core/version.py` and `CHANGELOG.md` together to keep release metadata in sync.  
-- Update `CHANGELOG.md` when shipping user-visible behavior or configuration changes.
-
-## Security & Configuration Tips
-- Never commit secrets; rely on `.env` locally and document new variables in `.env.example`.  
-- When touching OAuth or webhook features, verify signature validation paths in `app/api/routes.py` and mention any new required headers in the README’s configuration section.  
-- Run with `DEBUG=false` before releasing to ensure sensitive payloads are not logged.
+1. 在执行 **任何文件读取或修改操作之前**，必须先阅读 `AGENTS.md`，并确认当前任务遵循其中全部规则与流程。
+2. 若 `AGENTS.md` 有更新，则需重新阅读后方可继续操作；禁止在不了解最新指南的情况下对仓库做出更改。
+3. 执行任务过程中，如遇到 `AGENTS.md` 与其他指令冲突，优先遵循 `AGENTS.md` 并在 PR/Issue 中说明差异。
+4. 以上要求适用于一切代码编辑、文档维护、配置调整与测试命令执行。
