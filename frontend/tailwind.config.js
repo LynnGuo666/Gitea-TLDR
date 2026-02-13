@@ -9,7 +9,26 @@ module.exports = {
     "./node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        mono: ["'JetBrains Mono'", "ui-monospace", "SFMono-Regular", "monospace"],
+      },
+    },
   },
-  plugins: [heroui()],
+  plugins: [
+    heroui({
+      layout: {
+        radius: {
+          small: "8px",
+          medium: "12px",
+          large: "16px",
+        },
+        borderWidth: {
+          small: "0.5px",
+          medium: "1px",
+          large: "1.5px",
+        },
+      },
+    }),
+  ],
 }

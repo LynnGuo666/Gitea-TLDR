@@ -95,7 +95,7 @@ export default function AdminDashboard() {
       <div className="max-w-[1100px] mx-auto flex flex-col gap-5">
         <Card>
           <CardHeader className="flex items-center justify-between">
-            <h1 className="m-0 text-xl font-semibold">管理后台</h1>
+            <h1 className="m-0 page-title">管理后台</h1>
             <Button
               isIconOnly
               variant="bordered"
@@ -178,7 +178,7 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="mt-8">
-                  <h2 className="m-0 mb-4 text-base font-semibold">快捷操作</h2>
+                  <h2 className="m-0 mb-4 text-lg font-bold tracking-tight">快捷操作</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     {[
                       { href: '/admin/config', icon: Settings, title: '全局配置', desc: '管理系统配置' },

@@ -322,7 +322,7 @@ export default function RepoConfigPage() {
                 <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
                   <FolderGit2 size={20} />
                 </span>
-                <h1 className="m-0 text-lg font-semibold">{`${owner}/${repo}`}</h1>
+                <h1 className="m-0 text-xl font-bold tracking-tight">{`${owner}/${repo}`}</h1>
               </div>
             </div>
           </CardBody>
@@ -334,7 +334,7 @@ export default function RepoConfigPage() {
               <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
                 <Settings size={18} />
               </span>
-              <h2 className="m-0 text-lg font-semibold">自动审查</h2>
+              <h2 className="m-0 text-xl font-bold tracking-tight">自动审查</h2>
             </div>
             {!requiresLogin && !statusLoading && (
               <Button isIconOnly variant="bordered" size="sm" onPress={fetchWebhookStatus} aria-label="刷新状态">
@@ -416,7 +416,7 @@ export default function RepoConfigPage() {
               <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
                 <Bot size={18} />
               </span>
-              <h2 className="m-0 text-lg font-semibold">审查方向</h2>
+              <h2 className="m-0 text-xl font-bold tracking-tight">审查方向</h2>
             </div>
             <Chip size="sm" variant="flat">{reviewFocus.length} 个已启用</Chip>
           </CardHeader>
@@ -449,7 +449,7 @@ export default function RepoConfigPage() {
               <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
                 <Settings size={18} />
               </span>
-              <h2 className="m-0 text-lg font-semibold">Claude 配置</h2>
+              <h2 className="m-0 text-xl font-bold tracking-tight">Claude 配置</h2>
             </div>
             {claudeConfig?.has_auth_token && (
               <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
@@ -510,7 +510,7 @@ export default function RepoConfigPage() {
               <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
                 <GitPullRequest size={18} />
               </span>
-              <h2 className="m-0 text-lg font-semibold">最新 Pull Requests</h2>
+              <h2 className="m-0 text-xl font-bold tracking-tight">最新 Pull Requests</h2>
             </div>
             {!requiresLogin && !pullsLoading && pulls.length > 0 && (
               <Button isIconOnly variant="bordered" size="sm" onPress={fetchPulls} aria-label="刷新 PR">

@@ -93,7 +93,7 @@ export default function Home() {
       <div className="max-w-[1100px] mx-auto flex flex-col gap-8">
         <section className="flex flex-col gap-6">
           <div className="flex items-end justify-between flex-wrap gap-2.5">
-            <h2 className="m-0">我的仓库</h2>
+            <h1 className="m-0 page-title">我的仓库</h1>
             <div className="flex items-center gap-2">
               <span className="rounded-full border border-dashed border-default-300 px-4 py-1.5 text-sm text-default-500">
                 {repoCountLabel}

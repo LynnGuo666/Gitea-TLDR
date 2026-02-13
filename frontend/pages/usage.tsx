@@ -136,7 +136,7 @@ export default function UsagePage() {
               <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
                 <BarChart3 size={18} />
               </span>
-              <h2 className="m-0 text-lg font-semibold">用量统计</h2>
+              <h2 className="m-0 text-xl font-bold tracking-tight">用量统计</h2>
             </div>
             <div className="flex items-center gap-3">
               <Button

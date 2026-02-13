@@ -73,7 +73,7 @@ export default function SettingsPage() {
             <span className="w-8 h-8 rounded-lg border border-default-300 flex items-center justify-center">
               <User size={18} />
             </span>
-            <h2 className="m-0 text-lg font-semibold">用户信息</h2>
+            <h2 className="m-0 text-xl font-bold tracking-tight">用户信息</h2>
           </CardHeader>
           <CardBody>
             {authStatus.loggedIn && authStatus.user ? (
@@ -108,7 +108,7 @@ export default function SettingsPage() {
 
         <Card>
           <CardHeader className="flex items-center justify-between">
-            <h2 className="m-0 text-lg font-semibold">使用统计</h2>
+            <h2 className="m-0 text-xl font-bold tracking-tight">使用统计</h2>
             <Button variant="bordered" size="sm" onPress={refreshStats}>
               刷新
             </Button>
@@ -136,7 +136,7 @@ export default function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <h2 className="m-0 text-lg font-semibold">服务状态</h2>
+            <h2 className="m-0 text-xl font-bold tracking-tight">服务状态</h2>
           </CardHeader>
           <CardBody>
             <div className="flex flex-col gap-3">

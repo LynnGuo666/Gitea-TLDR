@@ -12,7 +12,7 @@ export default function AdminWebhooksPage() {
       <div className="max-w-[1100px] mx-auto">
         <Card>
           <CardHeader className="flex items-center justify-between">
-            <h1 className="m-0 text-xl font-semibold">Webhook 日志</h1>
+            <h1 className="m-0 text-2xl font-bold tracking-tight">Webhook 日志</h1>
             <Button as={Link} href="/admin" variant="bordered" size="sm" startContent={<ArrowLeft size={16} />}>
               返回管理后台
             </Button>

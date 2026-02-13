@@ -11,7 +11,8 @@ import {
   DropdownItem,
   Avatar,
 } from '@heroui/react';
-import { LayoutGrid, BarChart3, User, Sun, Moon, Shield, LogOut } from 'lucide-react';
+import { BarChart3, User, Sun, Moon, Shield, LogOut, LayoutGrid } from 'lucide-react';
+import { GiteaLogo } from './GiteaLogo';
 import { VersionDisplay } from './VersionDisplay';
 import {
   AuthContext,
@@ -86,11 +87,11 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <AuthContext.Provider value={authContextValue}>
       <div className="flex min-h-dvh">
-        <aside className="w-full sm:w-60 bg-content1 border-b sm:border-b-0 sm:border-r border-divider flex sm:flex-col justify-between shrink-0">
+        <aside className="w-full sm:w-60 sidebar-glass border-b sm:border-b-0 sm:border-r border-divider/50 flex sm:flex-col justify-between shrink-0">
           <div className="p-4 sm:px-5 sm:py-5 border-b border-divider flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 font-semibold">
-              <span className="w-8 h-8 rounded-lg bg-foreground text-background flex items-center justify-center">
-                <LayoutGrid size={18} />
+              <span className="w-8 h-8 rounded-lg bg-[#609926] flex items-center justify-center">
+                <GiteaLogo size={20} />
               </span>
               <strong className="hidden sm:inline text-foreground">Gitea PR Reviewer</strong>
             </div>
@@ -120,8 +121,8 @@ export default function Layout({ children }: LayoutProps) {
                   href={item.href}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm no-underline transition-colors whitespace-nowrap ${
                     active
-                      ? 'bg-default-100 font-semibold text-foreground'
-                      : 'text-foreground hover:bg-default-100'
+                      ? 'bg-primary/10 font-semibold text-primary sm:border-l-3 sm:border-primary'
+                      : 'text-foreground/80 hover:bg-default-100/60'
                   }`}
                 >
                   <Icon size={20} />

@@ -1,0 +1,11 @@
+{
+  "name": "Gitea PR Reviewer",
+  "short_name": "PR Reviewer",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#609926",
+  "icons": [
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any" }
+  ]
+}
