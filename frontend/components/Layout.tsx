@@ -137,7 +137,7 @@ export default function Layout({ children }: LayoutProps) {
               authStatus.loggedIn ? (
                 <Dropdown placement="top-start">
                   <DropdownTrigger>
-                    <button className="w-full border border-divider rounded-xl p-2.5 flex items-center gap-3 bg-transparent cursor-pointer transition-colors hover:bg-default-100 text-left">
+                    <button className="w-full rounded-xl p-2.5 flex items-center gap-3 bg-default-100 cursor-pointer transition-colors hover:bg-default-200 text-left">
                       {authStatus.user?.avatar_url ? (
                         <Avatar
                           src={authStatus.user.avatar_url}
@@ -187,7 +187,7 @@ export default function Layout({ children }: LayoutProps) {
             )}
           </div>
         </aside>
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 sm:px-8 pb-12">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 sm:px-8 pb-12 bg-default-50">
           {!authStatus.enabled ? (
             <section className="max-w-lg mx-auto mt-16 text-center flex flex-col gap-4">
               <h1 className="m-0">需要配置 OAuth</h1>

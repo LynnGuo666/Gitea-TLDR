@@ -127,7 +127,7 @@ export default function AdminDashboard() {
             ) : stats ? (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="border border-divider rounded-xl p-4">
+                  <div className="rounded-xl p-4 bg-content1 shadow-sm">
                     <div className="flex items-center gap-2 text-default-500 mb-2">
                       <BarChart3 size={20} />
                       <h3 className="m-0 text-sm font-medium">审查次数</h3>
@@ -140,7 +140,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  <div className="border border-divider rounded-xl p-4">
+                  <div className="rounded-xl p-4 bg-content1 shadow-sm">
                     <div className="flex items-center gap-2 text-default-500 mb-2">
                       <Coins size={20} />
                       <h3 className="m-0 text-sm font-medium">Token 消耗</h3>
@@ -153,7 +153,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  <div className="border border-divider rounded-xl p-4">
+                  <div className="rounded-xl p-4 bg-content1 shadow-sm">
                     <div className="flex items-center gap-2 text-default-500 mb-2">
                       <Activity size={20} />
                       <h3 className="m-0 text-sm font-medium">Webhook</h3>
@@ -165,7 +165,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  <div className="border border-divider rounded-xl p-4">
+                  <div className="rounded-xl p-4 bg-content1 shadow-sm">
                     <div className="flex items-center gap-2 text-default-500 mb-2">
                       <FolderGit2 size={20} />
                       <h3 className="m-0 text-sm font-medium">仓库</h3>
@@ -188,7 +188,7 @@ export default function AdminDashboard() {
                     ].map(({ href, icon: Icon, title, desc }) => (
                       <button
                         key={href}
-                        className="text-left p-4 rounded-xl border border-divider bg-transparent cursor-pointer transition-all hover:border-default-300 hover:bg-default-50 hover:-translate-y-0.5 hover:shadow-sm"
+                        className="text-left p-4 rounded-xl bg-content1 shadow-sm cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5"
                         onClick={() => router.push(href)}
                       >
                         <div className="flex items-center gap-2 mb-1">

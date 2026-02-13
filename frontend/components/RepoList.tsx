@@ -35,7 +35,7 @@ export default function RepoList({ repos }: RepoListProps) {
           animationFillMode: 'both' as const,
         };
 
-        const itemClassName = `group flex items-center gap-4 p-4 sm:p-5 bg-content1 border border-divider rounded-xl no-underline text-foreground transition-all hover:border-default-300 hover:bg-default-50 hover:-translate-y-0.5 hover:shadow-md ${
+        const itemClassName = `group flex items-center gap-4 p-4 sm:p-5 bg-content1 rounded-xl no-underline text-foreground shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 ${
           isReadOnly ? 'cursor-default' : 'cursor-pointer'
         }`;
 

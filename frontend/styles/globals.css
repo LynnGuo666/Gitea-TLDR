@@ -27,6 +27,16 @@ body {
   line-height: 1.2;
 }
 
+/* Apple-style Card: borderless with soft shadow */
+[data-slot="base"].bg-content1 {
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+:is(.dark *) [data-slot="base"].bg-content1 {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
 @keyframes repoFadeUp {
   from {
     opacity: 0;
