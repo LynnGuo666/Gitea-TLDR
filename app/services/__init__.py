@@ -7,6 +7,7 @@ from .gitea_client import GiteaClient
 from .repo_manager import RepoManager
 from .repo_registry import RepoRegistry
 from .claude_analyzer import ClaudeAnalyzer
+from .review_engine import ReviewEngine
 from .webhook_handler import WebhookHandler
 from .auth_manager import AuthManager
 
@@ -15,6 +16,7 @@ __all__ = [
     "RepoManager",
     "RepoRegistry",
     "ClaudeAnalyzer",
+    "ReviewEngine",
     "WebhookHandler",
     "AuthManager",
 ]

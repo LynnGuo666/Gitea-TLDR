@@ -30,11 +30,11 @@ class ApiKey(Base, TimestampMixin):
     key_alias: Mapped[str] = mapped_column(
         String(100), unique=True, nullable=False, index=True, comment="Key 别名"
     )
-    anthropic_base_url: Mapped[Optional[str]] = mapped_column(
-        String(500), nullable=True, comment="Anthropic API Base URL"
+    provider_api_base_url: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True, comment="Provider API Base URL"
     )
-    anthropic_auth_token: Mapped[str] = mapped_column(
-        String(500), nullable=False, comment="Anthropic Auth Token（加密存储）"
+    provider_auth_token: Mapped[str] = mapped_column(
+        String(500), nullable=False, comment="Provider Auth Token（加密存储）"
     )
     priority: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False, comment="优先级（数字越大优先级越高）"

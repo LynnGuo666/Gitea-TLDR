@@ -26,7 +26,7 @@ class AdminSettings(Base, TimestampMixin):
         String(50),
         nullable=False,
         index=True,
-        comment="配置分类：claude/review/performance/advanced",
+        comment="配置分类：provider/review/performance/advanced",
     )
     description: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True, comment="配置说明"

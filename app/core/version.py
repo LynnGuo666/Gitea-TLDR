@@ -2,12 +2,24 @@
 版本信息模块
 """
 
-__version__ = "1.13.1"
-__release_date__ = "2026-02-13"
+__version__ = "1.14.0"
+__release_date__ = "2026-02-14"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.14.0": {
+        "date": "2026-02-14",
+        "changes": [
+            "重构：引入 Provider/Adapter 模式，支持多审查引擎（Claude Code、Codex 等）",
+            "新增：ReviewProvider 抽象基类、ClaudeCodeProvider 实现、ProviderRegistry 注册表",
+            "新增：ReviewEngine 统一入口，根据配置路由到对应 Provider",
+            "新增：API 端点 /api/config/provider-global 与 /api/repos/{owner}/{repo}/provider-config",
+            "重构：数据库字段重命名 anthropic_* → provider_*，claude_api_calls → provider_api_calls",
+            "优化：保留旧 API 端点与字段别名，确保向后兼容",
+            "优化：前端 AI 审查配置 Tab 更新为 Provider 抽象命名",
+        ],
+    },
     "1.13.1": {
         "date": "2026-02-13",
         "changes": [
@@ -185,7 +197,7 @@ def get_version_banner() -> str:
 ║                                                              ║
 ║             Gitea PR Reviewer v{__version__}                    ║
 ║                                                              ║
-║  基于Claude Code的Gitea Pull Request自动审查工具             ║
+║  基于多引擎的Gitea Pull Request自动审查工具             ║
 ║  Release Date: {__release_date__}                            ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝

@@ -128,7 +128,7 @@ class DBService:
         self,
         config_name: str,
         repository_id: Optional[int] = None,
-        model_name: str = "claude",
+        model_name: str = "claude_code",
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
         custom_prompt: Optional[str] = None,
@@ -334,6 +334,7 @@ class DBService:
         estimated_output_tokens: int = 0,
         gitea_api_calls: int = 0,
         claude_api_calls: int = 0,
+        provider_api_calls: int = 0,
         clone_operations: int = 0,
     ) -> UsageStat:
         """记录使用量统计"""
@@ -344,7 +345,7 @@ class DBService:
             estimated_input_tokens=estimated_input_tokens,
             estimated_output_tokens=estimated_output_tokens,
             gitea_api_calls=gitea_api_calls,
-            claude_api_calls=claude_api_calls,
+            provider_api_calls=provider_api_calls or claude_api_calls,
             clone_operations=clone_operations,
         )
         self.session.add(stat)
@@ -382,7 +383,7 @@ class DBService:
             func.sum(UsageStat.estimated_input_tokens).label("total_input_tokens"),
             func.sum(UsageStat.estimated_output_tokens).label("total_output_tokens"),
             func.sum(UsageStat.gitea_api_calls).label("total_gitea_calls"),
-            func.sum(UsageStat.claude_api_calls).label("total_claude_calls"),
+            func.sum(UsageStat.provider_api_calls).label("total_provider_calls"),
             func.sum(UsageStat.clone_operations).label("total_clones"),
             func.count(UsageStat.id).label("record_count"),
         )
@@ -401,7 +402,8 @@ class DBService:
             "total_input_tokens": row.total_input_tokens or 0,
             "total_output_tokens": row.total_output_tokens or 0,
             "total_gitea_calls": row.total_gitea_calls or 0,
-            "total_claude_calls": row.total_claude_calls or 0,
+            "total_provider_calls": row.total_provider_calls or 0,
+            "total_claude_calls": row.total_provider_calls or 0,
             "total_clones": row.total_clones or 0,
             "record_count": row.record_count or 0,
         }

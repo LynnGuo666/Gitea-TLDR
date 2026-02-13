@@ -7,7 +7,7 @@ import { AuthContext } from '../lib/auth';
 import { apiFetch } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import SectionHeader from '../components/SectionHeader';
-import { GlobalClaudeConfig, PublicConfig, UsageSummary } from '../lib/types';
+import { GlobalProviderConfig, PublicConfig, UsageSummary } from '../lib/types';
 
 export default function SettingsPage() {
   const { status: authStatus } = useContext(AuthContext);
@@ -15,34 +15,34 @@ export default function SettingsPage() {
   const [stats, setStats] = useState<UsageSummary | null>(null);
   const [reviewCount, setReviewCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [globalClaude, setGlobalClaude] = useState<GlobalClaudeConfig | null>(null);
-  const [globalClaudeLoading, setGlobalClaudeLoading] = useState(true);
-  const [globalClaudeSaving, setGlobalClaudeSaving] = useState(false);
+  const [globalProvider, setGlobalProvider] = useState<GlobalProviderConfig | null>(null);
+  const [globalProviderLoading, setGlobalProviderLoading] = useState(true);
+  const [globalProviderSaving, setGlobalProviderSaving] = useState(false);
   const [globalBaseUrl, setGlobalBaseUrl] = useState('');
   const [globalAuthToken, setGlobalAuthToken] = useState('');
 
-  const fetchGlobalClaude = useCallback(async () => {
+  const fetchGlobalProvider = useCallback(async () => {
     if (!authStatus.loggedIn) {
-      setGlobalClaude(null);
-      setGlobalClaudeLoading(false);
+      setGlobalProvider(null);
+      setGlobalProviderLoading(false);
       return;
     }
 
-    setGlobalClaudeLoading(true);
+    setGlobalProviderLoading(true);
     try {
-      const res = await apiFetch('/api/config/claude-global');
+      const res = await apiFetch('/api/config/provider-global');
       if (res.ok) {
-        const data: GlobalClaudeConfig = await res.json();
-        setGlobalClaude(data);
-        setGlobalBaseUrl(data.anthropic_base_url || '');
+        const data: GlobalProviderConfig = await res.json();
+        setGlobalProvider(data);
+        setGlobalBaseUrl(data.provider_api_base_url || data.anthropic_base_url || '');
       } else {
-        setGlobalClaude(null);
+        setGlobalProvider(null);
       }
     } catch (error) {
-      console.error('Failed to fetch global Claude config:', error);
-      setGlobalClaude(null);
+      console.error('Failed to fetch global provider config:', error);
+      setGlobalProvider(null);
     } finally {
-      setGlobalClaudeLoading(false);
+      setGlobalProviderLoading(false);
     }
   }, [authStatus.loggedIn]);
 
@@ -73,8 +73,8 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
-    fetchGlobalClaude();
-  }, [fetchGlobalClaude]);
+    fetchGlobalProvider();
+  }, [fetchGlobalProvider]);
 
   const refreshStats = async () => {
     try {
@@ -89,29 +89,30 @@ export default function SettingsPage() {
     }
   };
 
-  const saveGlobalClaudeConfig = async () => {
+  const saveGlobalProviderConfig = async () => {
     if (!authStatus.loggedIn) {
       addToast({ title: '请先登录后再配置', color: 'warning' });
       return;
     }
 
-    setGlobalClaudeSaving(true);
+    setGlobalProviderSaving(true);
     try {
-      const res = await apiFetch('/api/config/claude-global', {
+      const res = await apiFetch('/api/config/provider-global', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          anthropic_base_url: globalBaseUrl || null,
+          provider_api_base_url: globalBaseUrl || null,
           anthropic_auth_token: globalAuthToken || null,
         }),
       });
 
       const data = await res.json();
       if (res.ok) {
-        addToast({ title: '全局 Claude 配置已保存', color: 'success' });
+        addToast({ title: '全局 AI 审查配置已保存', color: 'success' });
         setGlobalAuthToken('');
-        setGlobalClaude({
-          configured: !!(data.anthropic_base_url || data.has_auth_token),
+        setGlobalProvider({
+          configured: !!(data.provider_api_base_url || data.anthropic_base_url || data.has_auth_token),
+          provider_api_base_url: data.provider_api_base_url,
           anthropic_base_url: data.anthropic_base_url,
           has_auth_token: data.has_auth_token,
         });
@@ -121,7 +122,7 @@ export default function SettingsPage() {
     } catch {
       addToast({ title: '无法连接后端', color: 'danger' });
     } finally {
-      setGlobalClaudeSaving(false);
+      setGlobalProviderSaving(false);
     }
   };
 
@@ -142,7 +143,7 @@ export default function SettingsPage() {
       </Head>
       <div className="max-w-[1100px] mx-auto">
         <div className="pb-4">
-          <PageHeader title="用户中心" subtitle="查看账号、使用统计和全局 Claude 默认配置" />
+          <PageHeader title="用户中心" subtitle="查看账号、使用统计和全局 AI 审查默认配置" />
         </div>
 
         <section className="py-5 border-t border-divider/60">
@@ -192,7 +193,7 @@ export default function SettingsPage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
                   { value: reviewCount, label: 'PR 审查次数' },
-                  { value: stats?.total_claude_calls || 0, label: 'Claude API 调用' },
+                  { value: stats?.total_provider_calls || stats?.total_claude_calls || 0, label: '审查引擎调用' },
                   {
                     value: formatNumber((stats?.total_input_tokens || 0) + (stats?.total_output_tokens || 0)),
                     label: '总 Token 使用量',
@@ -238,18 +239,18 @@ export default function SettingsPage() {
 
         <section className="py-5 border-t border-divider/60">
           <SectionHeader
-            title="Claude 全局配置"
+            title="全局 AI 审查配置"
             icon={<Bot size={18} />}
             actions={
-              globalClaude?.has_auth_token ? (
+              globalProvider?.has_auth_token ? (
                 <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
               ) : null
             }
           />
           <div className="mt-4">
             {!authStatus.loggedIn ? (
-              <p className="text-default-500 m-0">登录后可配置全局 Claude 设置</p>
-            ) : globalClaudeLoading ? (
+              <p className="text-default-500 m-0">登录后可配置全局 AI 审查设置</p>
+            ) : globalProviderLoading ? (
               <p className="text-default-500 m-0">加载中...</p>
             ) : (
               <>
@@ -266,16 +267,16 @@ export default function SettingsPage() {
                     type="password"
                     value={globalAuthToken}
                     onValueChange={setGlobalAuthToken}
-                    placeholder={globalClaude?.has_auth_token ? '已配置（输入新值覆盖）' : 'sk-ant-...'}
+                    placeholder={globalProvider?.has_auth_token ? '已配置（输入新值覆盖）' : 'sk-ant-...'}
                     variant="bordered"
                   />
                 </div>
                 <div className="mt-4 flex items-center gap-3 flex-wrap">
                   <Button
                     color="primary"
-                    onPress={saveGlobalClaudeConfig}
-                    isDisabled={globalClaudeSaving}
-                    isLoading={globalClaudeSaving}
+                    onPress={saveGlobalProviderConfig}
+                    isDisabled={globalProviderSaving}
+                    isLoading={globalProviderSaving}
                   >
                     保存全局配置
                   </Button>

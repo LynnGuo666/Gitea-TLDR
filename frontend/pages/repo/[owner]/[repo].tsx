@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import PageHeader from '../../../components/PageHeader';
 import { Skeleton } from '../../../components/ui';
-import { RepoClaudeConfig } from '../../../lib/types';
+import { RepoProviderConfig } from '../../../lib/types';
 import { AuthContext } from '../../../lib/auth';
 import { apiFetch } from '../../../lib/api';
 
@@ -96,11 +96,11 @@ export default function RepoConfigPage() {
     'performance',
   ]);
   // Claude 配置状态
-  const [claudeConfig, setClaudeConfig] = useState<RepoClaudeConfig | null>(null);
-  const [claudeBaseUrl, setClaudeBaseUrl] = useState('');
-  const [claudeAuthToken, setClaudeAuthToken] = useState('');
-  const [claudeConfigLoading, setClaudeConfigLoading] = useState(true);
-  const [claudeSaving, setClaudeSaving] = useState(false);
+  const [providerConfig, setProviderConfig] = useState<RepoProviderConfig | null>(null);
+  const [providerBaseUrl, setProviderBaseUrl] = useState('');
+  const [providerAuthToken, setProviderAuthToken] = useState('');
+  const [providerConfigLoading, setProviderConfigLoading] = useState(true);
+  const [providerSaving, setProviderSaving] = useState(false);
   const [inheritGlobal, setInheritGlobal] = useState(true);
   const [inheritSaving, setInheritSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('webhook');
@@ -135,30 +135,31 @@ export default function RepoConfigPage() {
     }
   }, [owner, repo, requiresLogin]);
 
-  const fetchClaudeConfig = useCallback(async () => {
+  const fetchProviderConfig = useCallback(async () => {
     if (!owner || !repo || requiresLogin) return;
 
-    setClaudeConfigLoading(true);
+    setProviderConfigLoading(true);
     try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/claude-config`);
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/provider-config`);
       if (res.ok) {
         const data = await res.json();
-        setClaudeConfig(data);
+        setProviderConfig(data);
         setInheritGlobal(data.inherit_global ?? true);
-        if (data.anthropic_base_url) {
-          setClaudeBaseUrl(data.anthropic_base_url);
+        const baseUrl = data.provider_api_base_url || data.anthropic_base_url;
+        if (baseUrl) {
+          setProviderBaseUrl(baseUrl);
         } else {
-          setClaudeBaseUrl('');
+          setProviderBaseUrl('');
         }
       } else {
-        setClaudeConfig(null);
+        setProviderConfig(null);
         setInheritGlobal(true);
       }
     } catch {
-      setClaudeConfig(null);
+      setProviderConfig(null);
       setInheritGlobal(true);
     } finally {
-      setClaudeConfigLoading(false);
+      setProviderConfigLoading(false);
     }
   }, [owner, repo, requiresLogin]);
 
@@ -186,20 +187,20 @@ export default function RepoConfigPage() {
   useEffect(() => {
     if (owner && repo && !requiresLogin) {
       fetchWebhookStatus();
-      fetchClaudeConfig();
+      fetchProviderConfig();
       fetchPulls();
     } else {
       setStatusLoading(false);
-      setClaudeConfigLoading(false);
+      setProviderConfigLoading(false);
       setPullsLoading(false);
     }
-  }, [owner, repo, requiresLogin, fetchWebhookStatus, fetchClaudeConfig, fetchPulls]);
+  }, [owner, repo, requiresLogin, fetchWebhookStatus, fetchProviderConfig, fetchPulls]);
 
   const refreshAll = async () => {
     if (requiresLogin) return;
     setRefreshingAll(true);
     try {
-      await Promise.all([fetchWebhookStatus(), fetchClaudeConfig(), fetchPulls()]);
+      await Promise.all([fetchWebhookStatus(), fetchProviderConfig(), fetchPulls()]);
     } finally {
       setRefreshingAll(false);
     }
@@ -277,26 +278,27 @@ export default function RepoConfigPage() {
     }
   };
 
-  const saveClaudeConfig = async () => {
+  const saveProviderConfig = async () => {
     if (requiresLogin || !owner || !repo || !canEditRepo || inheritGlobal) return;
 
-    setClaudeSaving(true);
+    setProviderSaving(true);
     try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/claude-config`, {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/provider-config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          anthropic_base_url: claudeBaseUrl || null,
-          anthropic_auth_token: claudeAuthToken || null,
+          provider_api_base_url: providerBaseUrl || null,
+          anthropic_auth_token: providerAuthToken || null,
           inherit_global: false,
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        addToast({ title: 'Claude 配置已保存', color: 'success' });
+        addToast({ title: 'AI 审查配置已保存', color: 'success' });
         setInheritGlobal(false);
-        setClaudeConfig((prev) => ({
+        setProviderConfig((prev) => ({
           configured: true,
+          provider_api_base_url: data.provider_api_base_url,
           anthropic_base_url: data.anthropic_base_url,
           has_auth_token: data.has_auth_token,
           inherit_global: false,
@@ -304,14 +306,14 @@ export default function RepoConfigPage() {
           global_base_url: prev?.global_base_url ?? null,
           global_has_auth_token: prev?.global_has_auth_token ?? false,
         }));
-        setClaudeAuthToken('');
+        setProviderAuthToken('');
       } else {
         addToast({ title: data.detail || '保存失败', color: 'danger' });
       }
     } catch {
       addToast({ title: '无法连接后端', color: 'danger' });
     } finally {
-      setClaudeSaving(false);
+      setProviderSaving(false);
     }
   };
 
@@ -320,7 +322,7 @@ export default function RepoConfigPage() {
 
     setInheritSaving(true);
     try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/claude-config`, {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/provider-config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ inherit_global: nextValue }),
@@ -334,10 +336,10 @@ export default function RepoConfigPage() {
           color: 'success',
         });
         if (nextValue) {
-          setClaudeBaseUrl(data.anthropic_base_url || '');
-          setClaudeAuthToken('');
+          setProviderBaseUrl(data.provider_api_base_url || data.anthropic_base_url || '');
+          setProviderAuthToken('');
         }
-        await fetchClaudeConfig();
+        await fetchProviderConfig();
       } else {
         addToast({ title: data.detail || '切换失败', color: 'danger' });
       }
@@ -386,7 +388,7 @@ export default function RepoConfigPage() {
           >
             <Tab key="webhook" title="自动审查" />
             <Tab key="focus" title="审查方向" />
-            <Tab key="claude" title="Claude 配置" />
+            <Tab key="claude" title="AI 审查配置" />
             <Tab key="pulls" title="最新 PR" />
           </Tabs>
         </section>
@@ -493,7 +495,7 @@ export default function RepoConfigPage() {
 
         {activeTab === 'claude' && (
           <section className="py-5">
-            {claudeConfig?.has_auth_token ? (
+            {providerConfig?.has_auth_token ? (
               <div className="mb-4 flex justify-end">
                 <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
               </div>
@@ -501,8 +503,8 @@ export default function RepoConfigPage() {
 
             <div>
               {requiresLogin ? (
-                <p className="text-default-500 m-0">登录后可配置 Claude API</p>
-              ) : claudeConfigLoading ? (
+                <p className="text-default-500 m-0">登录后可配置 AI 审查 API</p>
+              ) : providerConfigLoading ? (
                 <div className="flex flex-col gap-3">
                   <Skeleton width="100%" height={40} />
                   <Skeleton width="100%" height={40} />
@@ -514,8 +516,8 @@ export default function RepoConfigPage() {
                       <p className="m-0 text-sm font-medium">与全局设置保持一致</p>
                       <p className="m-0 mt-1 text-xs text-default-500">
                         {inheritGlobal
-                          ? '当前使用全局 Claude 配置'
-                          : '当前使用此仓库的独立 Claude 配置'}
+                          ? '当前使用全局 AI 审查配置'
+                          : '当前使用此仓库的独立 AI 审查配置'}
                       </p>
                     </div>
                     <Switch
@@ -528,18 +530,18 @@ export default function RepoConfigPage() {
 
                   {inheritGlobal ? (
                     <div className="rounded-xl bg-default-100 px-4 py-3">
-                      {claudeConfig?.has_global_config ? (
+                      {providerConfig?.has_global_config ? (
                         <>
                           <p className="m-0 text-sm text-default-700">
-                            Base URL: {claudeConfig.global_base_url || '默认官方地址'}
+                            Base URL: {providerConfig.global_base_url || '默认官方地址'}
                           </p>
                           <p className="m-0 mt-1 text-sm text-default-700">
-                            API Key: {claudeConfig.global_has_auth_token ? '已配置' : '未配置'}
+                            API Key: {providerConfig.global_has_auth_token ? '已配置' : '未配置'}
                           </p>
                         </>
                       ) : (
                         <p className="m-0 text-sm text-warning-600">
-                          尚未配置全局 Claude 设置，请先在“用户中心”中配置
+                          尚未配置全局 AI 审查设置，请先在「用户中心」中配置
                         </p>
                       )}
                     </div>
@@ -548,8 +550,8 @@ export default function RepoConfigPage() {
                       <div className="flex flex-col gap-3">
                         <Input
                           label="Base URL"
-                          value={claudeBaseUrl}
-                          onValueChange={setClaudeBaseUrl}
+                          value={providerBaseUrl}
+                          onValueChange={setProviderBaseUrl}
                           placeholder="https://api.anthropic.com (留空使用默认)"
                           isDisabled={!canEditRepo}
                           variant="bordered"
@@ -557,9 +559,9 @@ export default function RepoConfigPage() {
                         <Input
                           label="API Key"
                           type="password"
-                          value={claudeAuthToken}
-                          onValueChange={setClaudeAuthToken}
-                          placeholder={claudeConfig?.has_auth_token ? '已配置（输入新值覆盖）' : 'sk-ant-...'}
+                          value={providerAuthToken}
+                          onValueChange={setProviderAuthToken}
+                          placeholder={providerConfig?.has_auth_token ? '已配置（输入新值覆盖）' : 'sk-ant-...'}
                           isDisabled={!canEditRepo}
                           variant="bordered"
                         />
@@ -567,16 +569,16 @@ export default function RepoConfigPage() {
                       <div className="mt-4 flex items-center gap-3 flex-wrap">
                         <Button
                           color="primary"
-                          onPress={saveClaudeConfig}
-                          isDisabled={claudeSaving || !canEditRepo}
-                          isLoading={claudeSaving}
+                          onPress={saveProviderConfig}
+                          isDisabled={providerSaving || !canEditRepo}
+                          isLoading={providerSaving}
                         >
                           保存配置
                         </Button>
                         <span className="text-default-400 text-xs">
                           {canEditRepo
                             ? '配置后，审查 PR 时将使用此仓库的 API Key'
-                            : '组织仓库需要组织管理员权限才能修改 Claude 配置'}
+                            : '组织仓库需要组织管理员权限才能修改 AI 审查配置'}
                         </span>
                       </div>
                     </>
