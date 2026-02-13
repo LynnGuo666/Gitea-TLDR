@@ -1,6 +1,7 @@
 services:
   gitea-pr-reviewer:
     image: ghcr.io/lynnguo666/gitea-tldr:main
+    pull_policy: always
     container_name: gitea-pr-reviewer
     env_file:
       - .env  # 从 .env 文件读取所有环境变量
@@ -9,8 +10,6 @@ services:
     volumes:
       # 持久化工作目录（可选）
       - pr-reviewer-data:/tmp/gitea-pr-reviewer
-      # 将本机前端目录挂载进容器，供FastAPI托管静态文件
-      - ./frontend:/app/frontend
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

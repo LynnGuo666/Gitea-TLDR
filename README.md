@@ -436,10 +436,9 @@ cp .env.example .env
 # - ANTHROPIC_AUTH_TOKEN (如果使用Claude Code)
 ```
 
-2. 拉取并启动服务：
+2. 一条命令启动服务：
 
 ```bash
-docker compose pull
 docker compose up -d
 ```
 
@@ -491,7 +490,6 @@ docker run -d \
   -p 8000:8000 \
   --env-file .env \
   -v pr-reviewer-data:/tmp/gitea-pr-reviewer \
-  -v ./frontend:/app/frontend \
   gitea-pr-reviewer
 ```
 
@@ -543,6 +541,7 @@ docker run -d \
 - 基于 `python:3.11-slim`
 - 已预装 Node.js 20.x 和 npm
 - 已预装 Claude Code CLI（通过npm安装）
+- 已内置前端静态产物（`/app/frontend/out`），可直接通过 `/ui` 访问
 - 支持 `linux/amd64` 和 `linux/arm64` 架构
 - 包含健康检查
 - 自动重启策略
