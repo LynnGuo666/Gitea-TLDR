@@ -1,7 +1,7 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useContext, useEffect, useState } from 'react';
-import { Button, Card, CardBody, CardHeader } from '@heroui/react';
+import { Button } from '@heroui/react';
 import { BarChart3, FolderGit2, Coins, Activity, RefreshCw, Settings, BookOpen, Webhook } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
 import SectionHeader from '../../components/SectionHeader';
@@ -47,7 +47,8 @@ export default function AdminDashboard() {
     try {
       const res = await apiFetch('/api/admin/dashboard/stats');
       if (res.status === 401 || res.status === 403) {
-        router.push('/');
+        setStats(null);
+        setError('当前账号没有管理后台权限');
         return;
       }
       if (!res.ok) {
@@ -72,12 +73,10 @@ export default function AdminDashboard() {
   if (!authStatus.loggedIn) {
     return (
       <div className="max-w-[1100px] mx-auto">
-          <Card>
-            <CardBody>
-              <h1 className="m-0 page-title">管理后台</h1>
-              <p className="text-default-500 m-0 mt-2">需要登录后才能访问管理后台</p>
-            </CardBody>
-          </Card>
+        <div className="rounded-lg border border-default-200 px-4 py-6 text-center sm:px-6">
+          <h1 className="m-0 page-title">管理后台</h1>
+          <p className="text-default-500 m-0 mt-2">需要登录后才能访问管理后台</p>
+        </div>
       </div>
     );
   }
@@ -96,122 +95,120 @@ export default function AdminDashboard() {
         <title>管理后台 - Dashboard</title>
       </Head>
       <div className="max-w-[1100px] mx-auto flex flex-col gap-5">
-        <Card>
-          <CardHeader>
-            <PageHeader
-              title="管理后台"
-              actions={
-                <Button
-                  isIconOnly
-                  variant="bordered"
-                  size="sm"
-                  onPress={fetchStats}
-                  isDisabled={loading}
-                  aria-label="刷新统计"
-                >
-                  <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                </Button>
-              }
-              className="w-full"
-            />
-          </CardHeader>
-          <CardBody>
-            {error && (
-              <div className="p-3 bg-danger-50 border border-danger rounded-lg text-danger text-sm mb-4">
-                {error}
-              </div>
-            )}
+        <PageHeader
+          title="管理后台"
+          actions={
+            <Button
+              isIconOnly
+              variant="bordered"
+              size="sm"
+              onPress={fetchStats}
+              isDisabled={loading}
+              aria-label="刷新统计"
+            >
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            </Button>
+          }
+        />
 
-            {showDatabaseWarning && (
-              <div className="p-3 bg-warning-50 border border-warning rounded-lg text-warning text-sm mb-4">
-                数据库未启用，当前展示的是空统计数据。请检查 `DATABASE_URL` 或 `WORK_DIR` 配置并重启服务。
-              </div>
-            )}
+        {error && (
+          <div className="p-3 bg-danger-50 border border-danger rounded-lg text-danger text-sm">
+            {error}
+          </div>
+        )}
 
-            {loading && !stats ? (
-              <div className="py-8 text-center">
-                <p className="text-default-500 m-0">加载中...</p>
-              </div>
-            ) : stats ? (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="rounded-xl p-4 bg-default-100">
-                    <div className="flex items-center gap-2 text-default-500 mb-2">
-                      <BarChart3 size={20} />
-                      <h3 className="m-0 text-sm font-medium">审查次数</h3>
-                    </div>
-                    <div className="text-2xl font-bold text-foreground">{formatNumber(stats.reviews.total)}</div>
-                    <div className="flex gap-3 mt-2 text-xs text-default-400">
-                      <span>今日: {stats.reviews.today}</span>
-                      <span>本周: {stats.reviews.week}</span>
-                      <span>本月: {stats.reviews.month}</span>
-                    </div>
-                  </div>
+        {showDatabaseWarning && (
+          <div className="p-3 bg-warning-50 border border-warning rounded-lg text-warning text-sm">
+            数据库未启用，当前展示的是空统计数据。请检查 `DATABASE_URL` 或 `WORK_DIR` 配置并重启服务。
+          </div>
+        )}
 
-                  <div className="rounded-xl p-4 bg-default-100">
-                    <div className="flex items-center gap-2 text-default-500 mb-2">
-                      <Coins size={20} />
-                      <h3 className="m-0 text-sm font-medium">Token 消耗</h3>
-                    </div>
-                    <div className="text-2xl font-bold text-foreground">{formatNumber(stats.tokens.total)}</div>
-                    <div className="flex gap-3 mt-2 text-xs text-default-400">
-                      <span>今日: {formatNumber(stats.tokens.today)}</span>
-                      <span>本周: {formatNumber(stats.tokens.week)}</span>
-                      <span>本月: {formatNumber(stats.tokens.month)}</span>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl p-4 bg-default-100">
-                    <div className="flex items-center gap-2 text-default-500 mb-2">
-                      <Activity size={20} />
-                      <h3 className="m-0 text-sm font-medium">Webhook</h3>
-                    </div>
-                    <div className="text-2xl font-bold text-foreground">{stats.webhooks.total}</div>
-                    <div className="flex gap-3 mt-2 text-xs text-default-400">
-                      <span>今日: {stats.webhooks.today}</span>
-                      <span>成功率: {stats.webhooks.success_rate.toFixed(1)}%</span>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl p-4 bg-default-100">
-                    <div className="flex items-center gap-2 text-default-500 mb-2">
-                      <FolderGit2 size={20} />
-                      <h3 className="m-0 text-sm font-medium">仓库</h3>
-                    </div>
-                    <div className="text-2xl font-bold text-foreground">{stats.repositories.total}</div>
-                    <div className="flex gap-3 mt-2 text-xs text-default-400">
-                      <span>活跃: {stats.repositories.active}</span>
-                    </div>
-                  </div>
+        {loading && !stats ? (
+          <div className="py-8 text-center rounded-lg border border-default-200">
+            <p className="text-default-500 m-0">加载中...</p>
+          </div>
+        ) : stats ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="rounded-lg border border-default-200 p-4">
+                <div className="flex items-center gap-2 text-default-500 mb-2">
+                  <BarChart3 size={20} />
+                  <h3 className="m-0 text-sm font-medium">审查次数</h3>
                 </div>
-
-                <div className="mt-8">
-                  <SectionHeader title="快捷操作" className="mb-4" />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {[
-                      { href: '/admin/config', icon: Settings, title: '全局配置', desc: '管理系统配置' },
-                      { href: '/admin/repos', icon: FolderGit2, title: '仓库管理', desc: '批量操作仓库' },
-                      { href: '/admin/reviews', icon: BookOpen, title: '审查历史', desc: '查看所有审查记录' },
-                      { href: '/admin/webhooks', icon: Webhook, title: 'Webhook 日志', desc: '查看请求日志' },
-                    ].map(({ href, icon: Icon, title, desc }) => (
-                      <button
-                        key={href}
-                        className="text-left p-4 rounded-xl bg-default-100 cursor-pointer transition-all hover:bg-default-200"
-                        onClick={() => router.push(href)}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <Icon size={16} className="text-default-500" />
-                          <h3 className="m-0 text-sm font-semibold">{title}</h3>
-                        </div>
-                        <p className="m-0 text-xs text-default-500">{desc}</p>
-                      </button>
-                    ))}
-                  </div>
+                <div className="text-2xl font-bold text-foreground">{formatNumber(stats.reviews.total)}</div>
+                <div className="flex gap-3 mt-2 text-xs text-default-400">
+                  <span>今日: {stats.reviews.today}</span>
+                  <span>本周: {stats.reviews.week}</span>
+                  <span>本月: {stats.reviews.month}</span>
                 </div>
-              </>
-            ) : null}
-          </CardBody>
-        </Card>
+              </div>
+
+              <div className="rounded-lg border border-default-200 p-4">
+                <div className="flex items-center gap-2 text-default-500 mb-2">
+                  <Coins size={20} />
+                  <h3 className="m-0 text-sm font-medium">Token 消耗</h3>
+                </div>
+                <div className="text-2xl font-bold text-foreground">{formatNumber(stats.tokens.total)}</div>
+                <div className="flex gap-3 mt-2 text-xs text-default-400">
+                  <span>今日: {formatNumber(stats.tokens.today)}</span>
+                  <span>本周: {formatNumber(stats.tokens.week)}</span>
+                  <span>本月: {formatNumber(stats.tokens.month)}</span>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-default-200 p-4">
+                <div className="flex items-center gap-2 text-default-500 mb-2">
+                  <Activity size={20} />
+                  <h3 className="m-0 text-sm font-medium">Webhook</h3>
+                </div>
+                <div className="text-2xl font-bold text-foreground">{stats.webhooks.total}</div>
+                <div className="flex gap-3 mt-2 text-xs text-default-400">
+                  <span>今日: {stats.webhooks.today}</span>
+                  <span>成功率: {stats.webhooks.success_rate.toFixed(1)}%</span>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-default-200 p-4">
+                <div className="flex items-center gap-2 text-default-500 mb-2">
+                  <FolderGit2 size={20} />
+                  <h3 className="m-0 text-sm font-medium">仓库</h3>
+                </div>
+                <div className="text-2xl font-bold text-foreground">{stats.repositories.total}</div>
+                <div className="flex gap-3 mt-2 text-xs text-default-400">
+                  <span>活跃: {stats.repositories.active}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-default-200 p-4 sm:p-5">
+              <SectionHeader title="快捷操作" className="mb-4" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {[
+                  { href: '/admin/config', icon: Settings, title: '全局配置', desc: '管理系统配置' },
+                  { href: '/admin/repos', icon: FolderGit2, title: '仓库管理', desc: '批量操作仓库' },
+                  { href: '/admin/reviews', icon: BookOpen, title: '审查历史', desc: '查看所有审查记录' },
+                  { href: '/admin/webhooks', icon: Webhook, title: 'Webhook 日志', desc: '查看请求日志' },
+                ].map(({ href, icon: Icon, title, desc }) => (
+                  <button
+                    key={href}
+                    className="text-left p-4 rounded-lg border border-default-200 bg-content1 cursor-pointer transition-colors hover:bg-default-100"
+                    onClick={() => router.push(href)}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <Icon size={16} className="text-default-500" />
+                      <h3 className="m-0 text-sm font-semibold">{title}</h3>
+                    </div>
+                    <p className="m-0 text-xs text-default-500">{desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="py-8 text-center rounded-lg border border-default-200 text-default-500">
+            暂无统计数据
+          </div>
+        )}
       </div>
     </>
   );

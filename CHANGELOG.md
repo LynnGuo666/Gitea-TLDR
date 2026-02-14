@@ -4,6 +4,20 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.19.3] - 2026-02-15
+
+### 新增功能 (Added)
+
+- **全局配置管理页面落地**: `/admin/config` 接入 `GET/PUT/DELETE /api/admin/settings`，支持配置列表展示、分类过滤、JSON 编辑与删除
+- **仓库管理页面完善**: `/admin/repos` 接入 `GET /api/repositories`，支持状态统计、关键词过滤与仓库详情跳转
+- **Webhook 日志页面完善**: `/admin/webhooks` 接入 `GET /api/admin/webhooks/logs` 与详情接口，支持状态筛选、分页和展开查看 payload
+
+### 优化 (Improved)
+
+- **管理后台布局统一**: 管理后台首页及管理子页面移除 Card 容器，统一为 `PageHeader + 分区边框` 结构，和现有页面规范保持一致
+- **权限反馈体验**: 管理后台首页在权限不足时改为页面内提示，不再静默跳转
+- **版本一致性**: 同步更新后端与前端版本号到 `1.19.3`
+
 ## [1.19.2] - 2026-02-15
 
 ### 新增功能 (Added)
