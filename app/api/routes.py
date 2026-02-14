@@ -84,6 +84,13 @@ class ProviderConfigRequest(BaseModel):
 ClaudeConfigRequest = ProviderConfigRequest
 
 
+class ReviewSettingsRequest(BaseModel):
+    """审查设置请求体"""
+
+    default_focus: Optional[List[str]] = Field(None, description="默认审查重点")
+    default_features: Optional[List[str]] = Field(None, description="默认功能列表")
+
+
 def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> bool:
     """
     验证webhook签名
@@ -571,6 +578,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         request: Request,
         owner: Optional[str] = Query(None, description="仓库所有者"),
         repo: Optional[str] = Query(None, description="仓库名称"),
+        success: Optional[bool] = Query(None, description="是否成功"),
         limit: int = Query(50, ge=1, le=200, description="返回数量"),
         offset: int = Query(0, ge=0, description="偏移量"),
     ):
@@ -586,6 +594,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             sessions = await db_service.list_review_sessions(
                 owner=owner,
                 repo_name=repo,
+                success=success,
                 limit=limit,
                 offset=offset,
             )
@@ -606,6 +615,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                         "enabled_features": s.get_features(),
                         "focus_areas": s.get_focus(),
                         "analysis_mode": s.analysis_mode,
+                        "provider_name": s.provider_name,
+                        "model_name": s.model_name,
+                        "config_source": s.config_source,
                         "overall_severity": s.overall_severity,
                         "overall_success": s.overall_success,
                         "error_message": s.error_message,
@@ -646,6 +658,12 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             return {
                 "id": review_session.id,
                 "repository_id": review_session.repository_id,
+                "repo_full_name": f"{review_session.repository.owner}/{review_session.repository.repo_name}"
+                if review_session.repository
+                else None,
+                "provider_name": review_session.provider_name,
+                "model_name": review_session.model_name,
+                "config_source": review_session.config_source,
                 "pr_number": review_session.pr_number,
                 "pr_title": review_session.pr_title,
                 "pr_author": review_session.pr_author,
@@ -682,6 +700,92 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                     }
                     for c in inline_comments
                 ],
+            }
+
+    @api_router.get("/my/reviews")
+    async def list_my_reviews(
+        request: Request,
+        success: Optional[bool] = Query(None, description="是否成功"),
+        limit: int = Query(50, ge=1, le=200, description="返回数量"),
+        offset: int = Query(0, ge=0, description="偏移量"),
+    ):
+        """获取当前用户有权限仓库的审查历史"""
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        try:
+            session_data = context.auth_manager.require_session(request)
+            client = context.auth_manager.build_user_client(session_data)
+            user_repos = await client.list_user_repos()
+        except Exception:
+            user_repos = None
+
+        async with database.session() as db_session:
+            db_service = DBService(db_session)
+
+            if user_repos:
+                repo_ids = []
+                for repo in user_repos:
+                    owner = repo.get("owner", {}).get("username") or repo.get(
+                        "owner", {}
+                    ).get("login")
+                    name = repo.get("name")
+                    if owner and name:
+                        db_repo = await db_service.get_repository(owner, name)
+                        if db_repo:
+                            repo_ids.append(db_repo.id)
+
+                if not repo_ids:
+                    return {"reviews": [], "total": 0, "limit": limit, "offset": offset}
+
+                sessions = await db_service.list_review_sessions_by_repo_ids(
+                    repository_ids=repo_ids,
+                    success=success,
+                    limit=limit,
+                    offset=offset,
+                )
+            else:
+                sessions = await db_service.list_review_sessions(
+                    success=success,
+                    limit=limit,
+                    offset=offset,
+                )
+
+            return {
+                "reviews": [
+                    {
+                        "id": s.id,
+                        "repository_id": s.repository_id,
+                        "repo_full_name": f"{s.repository.owner}/{s.repository.repo_name}"
+                        if s.repository
+                        else None,
+                        "pr_number": s.pr_number,
+                        "pr_title": s.pr_title,
+                        "pr_author": s.pr_author,
+                        "trigger_type": s.trigger_type,
+                        "analysis_mode": s.analysis_mode,
+                        "provider_name": s.provider_name,
+                        "model_name": s.model_name,
+                        "config_source": s.config_source,
+                        "overall_severity": s.overall_severity,
+                        "overall_success": s.overall_success,
+                        "inline_comments_count": s.inline_comments_count,
+                        "started_at": s.started_at.isoformat()
+                        if s.started_at
+                        else None,
+                        "completed_at": s.completed_at.isoformat()
+                        if s.completed_at
+                        else None,
+                        "duration_seconds": s.duration_seconds,
+                    }
+                    for s in sessions
+                ],
+                "total": len(sessions),
+                "limit": limit,
+                "offset": offset,
             }
 
     # ==================== 使用量统计 API ====================
@@ -1026,6 +1130,70 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "provider_api_base_url": model_config.provider_api_base_url,
                 "has_auth_token": bool(model_config.provider_auth_token),
                 "provider_has_auth_token": bool(model_config.provider_auth_token),
+            }
+
+    @api_router.get("/repos/{owner}/{repo}/review-settings")
+    async def get_review_settings(owner: str, repo: str, request: Request):
+        """获取仓库的审查设置（focus + features）"""
+        context.auth_manager.require_session(request)
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        async with database.session() as session:
+            db_service = DBService(session)
+            repo_obj = await db_service.get_repository(owner, repo)
+            if not repo_obj:
+                return {
+                    "default_focus": ["quality", "security", "performance", "logic"],
+                    "default_features": ["comment"],
+                }
+
+            config = await db_service.get_model_config(repo_obj.id)
+            return {
+                "default_focus": (
+                    config.get_focus()
+                    if config
+                    else ["quality", "security", "performance", "logic"]
+                ),
+                "default_features": (config.get_features() if config else ["comment"]),
+            }
+
+    @api_router.put("/repos/{owner}/{repo}/review-settings")
+    async def update_review_settings(
+        owner: str, repo: str, payload: ReviewSettingsRequest, request: Request
+    ):
+        """更新仓库的审查设置"""
+        context.auth_manager.require_session(request)
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        async with database.session() as session:
+            db_service = DBService(session)
+            repo_obj = await db_service.get_or_create_repository(owner, repo)
+
+            config = await db_service.get_repo_specific_model_config(repo_obj.id)
+            if not config:
+                config = await db_service.create_or_update_model_config(
+                    config_name=f"{owner}/{repo}",
+                    repository_id=repo_obj.id,
+                )
+
+            if payload.default_focus is not None:
+                config.set_focus(payload.default_focus)
+            if payload.default_features is not None:
+                config.set_features(payload.default_features)
+
+            await session.flush()
+
+            return {
+                "default_focus": config.get_focus(),
+                "default_features": config.get_features(),
             }
 
     @api_router.get("/repos/{owner}/{repo}/webhook-secret")

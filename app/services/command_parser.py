@@ -2,9 +2,10 @@
 命令解析器模块
 用于解析评论中的bot命令
 """
+
 import re
 import logging
-from typing import Optional, Tuple, List
+from typing import Optional, List
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -13,9 +14,10 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ReviewCommand:
     """审查命令数据类"""
+
     command: str  # 命令类型，如 "review"
-    features: List[str]  # 功能列表：comment, review, status
-    focus_areas: List[str]  # 审查重点
+    features: Optional[List[str]] = None  # 功能列表：comment, review, status
+    focus_areas: Optional[List[str]] = None  # 审查重点
 
 
 class CommandParser:
@@ -76,9 +78,8 @@ class CommandParser:
         Returns:
             ReviewCommand对象
         """
-        # 默认值
-        features = ["comment"]  # 默认只发评论
-        focus_areas = ["quality", "security", "performance", "logic"]  # 默认全部
+        features = None
+        focus_areas = None
 
         # 解析 --features 参数
         features_match = re.search(r"--features\s+(\S+)", comment)
@@ -89,7 +90,7 @@ class CommandParser:
             valid_features = ["comment", "review", "status"]
             features = [f for f in features if f in valid_features]
             if not features:
-                features = ["comment"]  # 如果没有有效功能，使用默认值
+                features = None
 
         # 解析 --focus 参数
         focus_match = re.search(r"--focus\s+(\S+)", comment)
@@ -100,14 +101,12 @@ class CommandParser:
             valid_areas = ["quality", "security", "performance", "logic"]
             focus_areas = [f for f in focus_areas if f in valid_areas]
             if not focus_areas:
-                focus_areas = ["quality", "security", "performance", "logic"]
+                focus_areas = None
 
         logger.info(f"解析到 /review 命令: features={features}, focus={focus_areas}")
 
         return ReviewCommand(
-            command="review",
-            features=features,
-            focus_areas=focus_areas
+            command="review", features=features, focus_areas=focus_areas
         )
 
     def is_bot_command(self, comment_body: str) -> bool:

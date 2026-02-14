@@ -83,7 +83,11 @@ class CodexProvider(ReviewProvider):
     # ------------------------------------------------------------------
 
     def _build_review_prompt(
-        self, diff_content: str, focus_areas: List[str], pr_info: dict
+        self,
+        diff_content: str,
+        focus_areas: List[str],
+        pr_info: dict,
+        custom_prompt: Optional[str] = None,
     ) -> str:
         """构建审查 prompt，将 diff 直接嵌入文本中。
 
@@ -149,6 +153,8 @@ JSON结构示例：
   ]
 }}
 """
+        if custom_prompt and custom_prompt.strip():
+            prompt += f"\n\n**额外审查要求：**\n{custom_prompt.strip()}"
         return prompt
 
     # ------------------------------------------------------------------
@@ -189,11 +195,14 @@ JSON结构示例：
         pr_info: dict,
         provider_api_base_url: Optional[str] = None,
         provider_auth_token: Optional[str] = None,
+        custom_prompt: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         """使用完整代码库上下文分析 PR（Codex 会读取 repo_path 目录）"""
         self._clear_last_error()
         try:
-            prompt = self._build_review_prompt(diff_content, focus_areas, pr_info)
+            prompt = self._build_review_prompt(
+                diff_content, focus_areas, pr_info, custom_prompt
+            )
 
             logger.info(f"开始使用 {self.DISPLAY_NAME} 分析PR，仓库路径: {repo_path}")
 
@@ -217,11 +226,14 @@ JSON结构示例：
         pr_info: dict,
         provider_api_base_url: Optional[str] = None,
         provider_auth_token: Optional[str] = None,
+        custom_prompt: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         """简单模式：仅基于 diff 分析（不指定工作目录）"""
         self._clear_last_error()
         try:
-            prompt = self._build_review_prompt(diff_content, focus_areas, pr_info)
+            prompt = self._build_review_prompt(
+                diff_content, focus_areas, pr_info, custom_prompt
+            )
 
             logger.info(f"开始使用 {self.DISPLAY_NAME} 分析PR（简单模式）")
 

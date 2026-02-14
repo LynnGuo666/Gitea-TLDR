@@ -33,7 +33,9 @@ class ClaudeCodeProvider(ReviewProvider):
     def display_name(self) -> str:
         return self.DISPLAY_NAME
 
-    def _build_review_prompt(self, focus_areas: List[str], pr_info: dict) -> str:
+    def _build_review_prompt(
+        self, focus_areas: List[str], pr_info: dict, custom_prompt: Optional[str] = None
+    ) -> str:
         focus_map = {
             "quality": "代码质量和最佳实践",
             "security": "安全漏洞（SQL注入、XSS、命令注入等）",
@@ -83,6 +85,8 @@ JSON结构示例：
   ]
 }}
 """
+        if custom_prompt and custom_prompt.strip():
+            prompt += f"\n\n**额外审查要求：**\n{custom_prompt.strip()}"
         return prompt
 
     async def analyze_pr(
@@ -93,10 +97,11 @@ JSON结构示例：
         pr_info: dict,
         provider_api_base_url: Optional[str] = None,
         provider_auth_token: Optional[str] = None,
+        custom_prompt: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         self._clear_last_error()
         try:
-            prompt = self._build_review_prompt(focus_areas, pr_info)
+            prompt = self._build_review_prompt(focus_areas, pr_info, custom_prompt)
 
             logger.info(f"开始使用 {self.DISPLAY_NAME} 分析PR，仓库路径: {repo_path}")
 
@@ -166,10 +171,11 @@ JSON结构示例：
         pr_info: dict,
         provider_api_base_url: Optional[str] = None,
         provider_auth_token: Optional[str] = None,
+        custom_prompt: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         self._clear_last_error()
         try:
-            prompt = self._build_review_prompt(focus_areas, pr_info)
+            prompt = self._build_review_prompt(focus_areas, pr_info, custom_prompt)
 
             logger.info(f"开始使用 {self.DISPLAY_NAME} 分析PR（简单模式）")
 
