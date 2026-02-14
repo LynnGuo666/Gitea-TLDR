@@ -73,6 +73,10 @@ def build_context(database: Database | None = None) -> AppContext:
         default_provider=settings.default_provider,
         cli_path=settings.claude_code_path,
         debug=settings.debug,
+        provider_cli_paths={
+            "claude_code": settings.claude_code_path,
+            "codex_cli": settings.codex_cli_path,
+        },
     )
 
     # 初始化仓库注册表（支持数据库存储）
@@ -116,6 +120,7 @@ def create_app() -> FastAPI:
         logger.info(
             f"审查引擎 ({settings.default_provider}) CLI路径: {settings.claude_code_path}"
         )
+        logger.info(f"可用引擎: {context.review_engine.registry.list_providers()}")
         logger.info(f"Debug模式: {'开启' if settings.debug else '关闭'}")
 
         # 初始化数据库

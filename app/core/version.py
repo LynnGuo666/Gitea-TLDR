@@ -2,12 +2,20 @@
 版本信息模块
 """
 
-__version__ = "1.14.0"
+__version__ = "1.15.0"
 __release_date__ = "2026-02-14"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.15.0": {
+        "date": "2026-02-14",
+        "changes": [
+            "新增：CodexProvider（OpenAI Codex CLI）审查引擎实现",
+            "新增：CODEX_CLI_PATH / CODEX_API_KEY 配置项",
+            "优化：ReviewEngine 支持多 CLI 路径动态选择",
+        ],
+    },
     "1.14.0": {
         "date": "2026-02-14",
         "changes": [

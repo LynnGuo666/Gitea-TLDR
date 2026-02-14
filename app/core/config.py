@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # Claude Code配置
     claude_code_path: str = Field("claude", description="Claude Code CLI路径")
 
+    # Codex CLI配置
+    codex_cli_path: str = Field("codex", description="Codex CLI路径")
+
     # 审查引擎配置
     default_provider: str = Field("claude_code", description="默认审查引擎提供者")
 

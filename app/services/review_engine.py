@@ -4,7 +4,7 @@
 
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from .providers.base import ReviewProvider, ReviewResult
 from .providers.registry import ProviderRegistry
@@ -20,10 +20,14 @@ class ReviewEngine:
         default_provider: str = "claude_code",
         cli_path: str = "claude",
         debug: bool = False,
+        provider_cli_paths: Optional[Dict[str, str]] = None,
     ):
         self.registry = ProviderRegistry()
         self.default_provider_name = default_provider
         self.debug = debug
+        self._cli_paths: Dict[str, str] = provider_cli_paths or {}
+        self._cli_paths.setdefault(default_provider, cli_path)
+
         self._default_provider = self.registry.create(
             default_provider, cli_path=cli_path, debug=debug
         )
@@ -72,5 +76,6 @@ class ReviewEngine:
 
     def _resolve_provider(self, name: Optional[str] = None) -> ReviewProvider:
         if name and name != self.default_provider_name:
-            return self.registry.create(name, debug=self.debug)
+            cli_path = self._cli_paths.get(name, name)
+            return self.registry.create(name, cli_path=cli_path, debug=self.debug)
         return self._default_provider

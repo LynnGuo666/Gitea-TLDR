@@ -19,8 +19,10 @@ class ProviderRegistry:
 
     def _register_builtins(self) -> None:
         from .claude_code import ClaudeCodeProvider
+        from .codex_cli import CodexProvider
 
         self.register("claude_code", ClaudeCodeProvider)
+        self.register("codex_cli", CodexProvider)
 
     def register(self, name: str, provider_class: Type[ReviewProvider]) -> None:
         self._providers[name] = provider_class
