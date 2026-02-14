@@ -21,7 +21,7 @@ from fastapi import (
     Query,
 )
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from app.core import (
     settings,
     __version__,
@@ -55,7 +55,7 @@ class ModelConfigRequest(BaseModel):
     repository_id: Optional[int] = Field(
         None, description="关联仓库ID（为空则为全局配置）"
     )
-    model_name: str = Field("claude_code", description="模型名称")
+    engine: str = Field("claude_code", description="模型名称")
     max_tokens: Optional[int] = Field(None, description="最大token数")
     temperature: Optional[float] = Field(None, description="温度参数")
     custom_prompt: Optional[str] = Field(None, description="自定义prompt模板")
@@ -69,14 +69,20 @@ class ProviderConfigRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    provider_name: Optional[str] = Field(
-        None, description="审查引擎名称，如 claude_code / codex_cli"
+    engine: Optional[str] = Field(
+        None,
+        alias="provider_name",
+        description="审查引擎名称，如 claude_code / codex_cli",
     )
-    provider_api_base_url: Optional[str] = Field(
-        None, alias="anthropic_base_url", description="Provider API Base URL"
+    api_url: Optional[str] = Field(
+        None,
+        validation_alias=AliasChoices("anthropic_base_url", "provider_api_base_url"),
+        description="Provider API Base URL",
     )
-    provider_auth_token: Optional[str] = Field(
-        None, alias="anthropic_auth_token", description="Provider Auth Token"
+    api_key: Optional[str] = Field(
+        None,
+        validation_alias=AliasChoices("anthropic_auth_token", "provider_auth_token"),
+        description="Provider Auth Token",
     )
     inherit_global: Optional[bool] = Field(None, description="是否继承全局 Claude 配置")
 
@@ -186,23 +192,16 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             if not global_config:
                 return {
                     "configured": False,
-                    "provider_name": settings.default_provider,
-                    "anthropic_base_url": None,
-                    "provider_api_base_url": None,
-                    "has_auth_token": False,
-                    "provider_has_auth_token": False,
+                    "engine": settings.default_provider,
+                    "api_url": None,
+                    "has_api_key": False,
                 }
 
             return {
-                "configured": bool(
-                    global_config.provider_api_base_url
-                    or global_config.provider_auth_token
-                ),
-                "provider_name": global_config.model_name or settings.default_provider,
-                "anthropic_base_url": global_config.provider_api_base_url,
-                "provider_api_base_url": global_config.provider_api_base_url,
-                "has_auth_token": bool(global_config.provider_auth_token),
-                "provider_has_auth_token": bool(global_config.provider_auth_token),
+                "configured": bool(global_config.api_url or global_config.api_key),
+                "engine": global_config.engine or settings.default_provider,
+                "api_url": global_config.api_url,
+                "has_api_key": bool(global_config.api_key),
             }
 
     @api_router.put("/config/claude-global")
@@ -228,25 +227,21 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                     is_default=True,
                 )
 
-            if payload.provider_api_base_url is not None:
-                global_config.provider_api_base_url = (
-                    payload.provider_api_base_url or None
-                )
-            if payload.provider_auth_token is not None:
-                global_config.provider_auth_token = payload.provider_auth_token or None
-            if payload.provider_name is not None:
-                global_config.model_name = payload.provider_name
+            if payload.api_url is not None:
+                global_config.api_url = payload.api_url or None
+            if payload.api_key is not None:
+                global_config.api_key = payload.api_key or None
+            if payload.engine is not None:
+                global_config.engine = payload.engine
 
             await session.flush()
 
             return {
                 "success": True,
                 "message": "全局 AI 审查配置已保存",
-                "provider_name": global_config.model_name,
-                "anthropic_base_url": global_config.provider_api_base_url,
-                "provider_api_base_url": global_config.provider_api_base_url,
-                "has_auth_token": bool(global_config.provider_auth_token),
-                "provider_has_auth_token": bool(global_config.provider_auth_token),
+                "engine": global_config.engine,
+                "api_url": global_config.api_url,
+                "has_api_key": bool(global_config.api_key),
             }
 
     @api_router.get("/version")
@@ -611,12 +606,12 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                         "pr_title": s.pr_title,
                         "pr_author": s.pr_author,
                         "trigger_type": s.trigger_type,
-                        "provider_name": s.provider_name,
+                        "engine": s.engine,
                         "enabled_features": s.get_features(),
                         "focus_areas": s.get_focus(),
                         "analysis_mode": s.analysis_mode,
-                        "provider_name": s.provider_name,
-                        "model_name": s.model_name,
+                        "engine": s.engine,
+                        "model": s.model,
                         "config_source": s.config_source,
                         "overall_severity": s.overall_severity,
                         "overall_success": s.overall_success,
@@ -661,8 +656,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "repo_full_name": f"{review_session.repository.owner}/{review_session.repository.repo_name}"
                 if review_session.repository
                 else None,
-                "provider_name": review_session.provider_name,
-                "model_name": review_session.model_name,
+                "engine": review_session.engine,
+                "model": review_session.model,
                 "config_source": review_session.config_source,
                 "pr_number": review_session.pr_number,
                 "pr_title": review_session.pr_title,
@@ -671,7 +666,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "base_branch": review_session.base_branch,
                 "head_sha": review_session.head_sha,
                 "trigger_type": review_session.trigger_type,
-                "provider_name": review_session.provider_name,
+                "engine": review_session.engine,
                 "enabled_features": review_session.get_features(),
                 "focus_areas": review_session.get_focus(),
                 "analysis_mode": review_session.analysis_mode,
@@ -767,8 +762,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                         "pr_author": s.pr_author,
                         "trigger_type": s.trigger_type,
                         "analysis_mode": s.analysis_mode,
-                        "provider_name": s.provider_name,
-                        "model_name": s.model_name,
+                        "engine": s.engine,
+                        "model": s.model,
                         "config_source": s.config_source,
                         "overall_severity": s.overall_severity,
                         "overall_success": s.overall_success,
@@ -875,7 +870,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                         "id": c.id,
                         "repository_id": c.repository_id,
                         "config_name": c.config_name,
-                        "model_name": c.model_name,
+                        "model": c.engine,
                         "max_tokens": c.max_tokens,
                         "temperature": c.temperature,
                         "custom_prompt": c.custom_prompt,
@@ -901,7 +896,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             config = await db_service.create_or_update_model_config(
                 config_name=payload.config_name,
                 repository_id=payload.repository_id,
-                model_name=payload.model_name,
+                engine=payload.engine,
                 max_tokens=payload.max_tokens,
                 temperature=payload.temperature,
                 custom_prompt=payload.custom_prompt,
@@ -914,7 +909,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "id": config.id,
                 "repository_id": config.repository_id,
                 "config_name": config.config_name,
-                "model_name": config.model_name,
+                "model": config.engine,
                 "is_default": config.is_default,
                 "message": "配置已保存",
             }
@@ -956,51 +951,29 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                     "inherit_global": True,
                     "has_global_config": bool(
                         global_config
-                        and (
-                            global_config.provider_api_base_url
-                            or global_config.provider_auth_token
-                        )
+                        and (global_config.api_url or global_config.api_key)
                     ),
                     "configured": bool(
                         effective_config
-                        and (
-                            effective_config.provider_api_base_url
-                            or effective_config.provider_auth_token
-                        )
+                        and (effective_config.api_url or effective_config.api_key)
                     ),
-                    "provider_name": (
-                        effective_config.model_name
+                    "engine": (
+                        effective_config.engine
                         if effective_config
                         else settings.default_provider
                     ),
-                    "anthropic_base_url": (
-                        effective_config.provider_api_base_url
-                        if effective_config
-                        else None
+                    "api_url": (effective_config.api_url if effective_config else None),
+                    "has_api_key": bool(
+                        effective_config.api_key if effective_config else False
                     ),
-                    "provider_api_base_url": (
-                        effective_config.provider_api_base_url
-                        if effective_config
-                        else None
+                    "global_api_url": (
+                        global_config.api_url if global_config else None
                     ),
-                    "has_auth_token": bool(
-                        effective_config.provider_auth_token
-                        if effective_config
-                        else False
+                    "global_has_api_key": bool(
+                        global_config.api_key if global_config else False
                     ),
-                    "provider_has_auth_token": bool(
-                        effective_config.provider_auth_token
-                        if effective_config
-                        else False
-                    ),
-                    "global_base_url": (
-                        global_config.provider_api_base_url if global_config else None
-                    ),
-                    "global_has_auth_token": bool(
-                        global_config.provider_auth_token if global_config else False
-                    ),
-                    "global_provider_name": (
-                        global_config.model_name
+                    "global_engine": (
+                        global_config.engine
                         if global_config
                         else settings.default_provider
                     ),
@@ -1013,46 +986,27 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             return {
                 "inherit_global": inherit_global,
                 "has_global_config": bool(
-                    global_config
-                    and (
-                        global_config.provider_api_base_url
-                        or global_config.provider_auth_token
-                    )
+                    global_config and (global_config.api_url or global_config.api_key)
                 ),
                 "configured": bool(
                     effective_config
-                    and (
-                        effective_config.provider_api_base_url
-                        or effective_config.provider_auth_token
-                    )
+                    and (effective_config.api_url or effective_config.api_key)
                 ),
-                "provider_name": (
-                    effective_config.model_name
+                "engine": (
+                    effective_config.engine
                     if effective_config
                     else settings.default_provider
                 ),
-                "anthropic_base_url": (
-                    effective_config.provider_api_base_url if effective_config else None
+                "api_url": (effective_config.api_url if effective_config else None),
+                "has_api_key": bool(
+                    effective_config.api_key if effective_config else False
                 ),
-                "provider_api_base_url": (
-                    effective_config.provider_api_base_url if effective_config else None
+                "global_api_url": (global_config.api_url if global_config else None),
+                "global_has_api_key": bool(
+                    global_config.api_key if global_config else False
                 ),
-                "has_auth_token": bool(
-                    effective_config.provider_auth_token if effective_config else False
-                ),
-                "provider_has_auth_token": bool(
-                    effective_config.provider_auth_token if effective_config else False
-                ),
-                "global_base_url": (
-                    global_config.provider_api_base_url if global_config else None
-                ),
-                "global_has_auth_token": bool(
-                    global_config.provider_auth_token if global_config else False
-                ),
-                "global_provider_name": (
-                    global_config.model_name
-                    if global_config
-                    else settings.default_provider
+                "global_engine": (
+                    global_config.engine if global_config else settings.default_provider
                 ),
             }
 
@@ -1083,17 +1037,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                     "success": True,
                     "inherit_global": True,
                     "message": "已切换为继承全局 Claude 配置",
-                    "anthropic_base_url": (
-                        global_config.provider_api_base_url if global_config else None
-                    ),
-                    "provider_api_base_url": (
-                        global_config.provider_api_base_url if global_config else None
-                    ),
-                    "has_auth_token": bool(
-                        global_config.provider_auth_token if global_config else False
-                    ),
-                    "provider_has_auth_token": bool(
-                        global_config.provider_auth_token if global_config else False
+                    "api_url": (global_config.api_url if global_config else None),
+                    "has_api_key": bool(
+                        global_config.api_key if global_config else False
                     ),
                 }
 
@@ -1110,14 +1056,12 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 )
 
             # 更新 Provider 配置
-            if payload.provider_api_base_url is not None:
-                model_config.provider_api_base_url = (
-                    payload.provider_api_base_url or None
-                )
-            if payload.provider_auth_token is not None:
-                model_config.provider_auth_token = payload.provider_auth_token or None
-            if payload.provider_name is not None:
-                model_config.model_name = payload.provider_name
+            if payload.api_url is not None:
+                model_config.api_url = payload.api_url or None
+            if payload.api_key is not None:
+                model_config.api_key = payload.api_key or None
+            if payload.engine is not None:
+                model_config.engine = payload.engine
 
             await session.flush()
 
@@ -1125,11 +1069,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "success": True,
                 "inherit_global": False,
                 "message": "AI 审查配置已保存",
-                "provider_name": model_config.model_name,
-                "anthropic_base_url": model_config.provider_api_base_url,
-                "provider_api_base_url": model_config.provider_api_base_url,
-                "has_auth_token": bool(model_config.provider_auth_token),
-                "provider_has_auth_token": bool(model_config.provider_auth_token),
+                "engine": model_config.engine,
+                "api_url": model_config.api_url,
+                "has_api_key": bool(model_config.api_key),
             }
 
     @api_router.get("/repos/{owner}/{repo}/review-settings")

@@ -43,24 +43,24 @@ class ReviewEngine:
         diff_content: str,
         focus_areas: List[str],
         pr_info: dict,
-        provider_api_base_url: Optional[str] = None,
-        provider_auth_token: Optional[str] = None,
-        provider_name: Optional[str] = None,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        engine: Optional[str] = None,
         custom_prompt: Optional[str] = None,
-        model_name: Optional[str] = None,
+        model: Optional[str] = None,
         wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
-        provider = self._resolve_provider(provider_name)
+        provider = self._resolve_provider(engine)
         self.last_error = None
         result = await provider.analyze_pr(
             repo_path,
             diff_content,
             focus_areas,
             pr_info,
-            provider_api_base_url=provider_api_base_url,
-            provider_auth_token=provider_auth_token,
+            api_url=api_url,
+            api_key=api_key,
             custom_prompt=custom_prompt,
-            model_name=model_name,
+            model=model,
             wire_api=wire_api,
         )
         if result is None:
@@ -72,23 +72,23 @@ class ReviewEngine:
         diff_content: str,
         focus_areas: List[str],
         pr_info: dict,
-        provider_api_base_url: Optional[str] = None,
-        provider_auth_token: Optional[str] = None,
-        provider_name: Optional[str] = None,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        engine: Optional[str] = None,
         custom_prompt: Optional[str] = None,
-        model_name: Optional[str] = None,
+        model: Optional[str] = None,
         wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
-        provider = self._resolve_provider(provider_name)
+        provider = self._resolve_provider(engine)
         self.last_error = None
         result = await provider.analyze_pr_simple(
             diff_content,
             focus_areas,
             pr_info,
-            provider_api_base_url=provider_api_base_url,
-            provider_auth_token=provider_auth_token,
+            api_url=api_url,
+            api_key=api_key,
             custom_prompt=custom_prompt,
-            model_name=model_name,
+            model=model,
             wire_api=wire_api,
         )
         if result is None:

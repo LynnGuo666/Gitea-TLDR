@@ -152,14 +152,14 @@ export default function RepoConfigPage() {
         const data = await res.json();
         setProviderConfig(data);
         setInheritGlobal(data.inherit_global ?? true);
-        const baseUrl = data.provider_api_base_url || data.anthropic_base_url;
+        const baseUrl = data.api_url;
         if (baseUrl) {
           setProviderBaseUrl(baseUrl);
         } else {
           setProviderBaseUrl('');
         }
-        if (data.provider_name) {
-          setSelectedProvider(data.provider_name);
+        if (data.engine) {
+          setSelectedProvider(data.engine);
         }
       } else {
         setProviderConfig(null);
@@ -361,9 +361,9 @@ export default function RepoConfigPage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider_name: selectedProvider,
-          provider_api_base_url: providerBaseUrl || null,
-          anthropic_auth_token: providerAuthToken || null,
+          engine: selectedProvider,
+          api_url: providerBaseUrl || null,
+          api_key: providerAuthToken || null,
           inherit_global: false,
         }),
       });
@@ -373,13 +373,12 @@ export default function RepoConfigPage() {
         setInheritGlobal(false);
         setProviderConfig((prev) => ({
           configured: true,
-          provider_api_base_url: data.provider_api_base_url,
-          anthropic_base_url: data.anthropic_base_url,
-          has_auth_token: data.has_auth_token,
+          api_url: data.api_url,
+          has_api_key: data.has_api_key,
           inherit_global: false,
           has_global_config: prev?.has_global_config ?? false,
-          global_base_url: prev?.global_base_url ?? null,
-          global_has_auth_token: prev?.global_has_auth_token ?? false,
+          global_api_url: prev?.global_api_url ?? null,
+          global_has_api_key: prev?.global_has_api_key ?? false,
         }));
         setProviderAuthToken('');
       } else {
@@ -411,7 +410,7 @@ export default function RepoConfigPage() {
           color: 'success',
         });
         if (nextValue) {
-          setProviderBaseUrl(data.provider_api_base_url || data.anthropic_base_url || '');
+          setProviderBaseUrl(data.api_url || '');
           setProviderAuthToken('');
         }
         await fetchProviderConfig();
@@ -598,7 +597,7 @@ export default function RepoConfigPage() {
 
         {activeTab === 'claude' && (
           <section className="py-5">
-            {providerConfig?.has_auth_token ? (
+            {providerConfig?.has_api_key ? (
               <div className="mb-4 flex justify-end">
                 <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
               </div>
@@ -636,13 +635,13 @@ export default function RepoConfigPage() {
                       {providerConfig?.has_global_config ? (
                         <>
                           <p className="m-0 text-sm text-default-700">
-                            审查引擎: {providerLabel(providerConfig.global_provider_name || 'claude_code')}
+                            审查引擎: {providerLabel(providerConfig.global_engine || 'claude_code')}
                           </p>
                           <p className="m-0 mt-1 text-sm text-default-700">
-                            Base URL: {providerConfig.global_base_url || '默认官方地址'}
+                            Base URL: {providerConfig.global_api_url || '默认官方地址'}
                           </p>
                           <p className="m-0 mt-1 text-sm text-default-700">
-                            API Key: {providerConfig.global_has_auth_token ? '已配置' : '未配置'}
+                            API Key: {providerConfig.global_has_api_key ? '已配置' : '未配置'}
                           </p>
                         </>
                       ) : (
@@ -685,7 +684,7 @@ export default function RepoConfigPage() {
                           type="password"
                           value={providerAuthToken}
                           onValueChange={setProviderAuthToken}
-                          placeholder={providerConfig?.has_auth_token ? '已配置（输入新值覆盖）' : currentPlaceholders.apiKey}
+                          placeholder={providerConfig?.has_api_key ? '已配置（输入新值覆盖）' : currentPlaceholders.apiKey}
                           isDisabled={!canEditRepo}
                           variant="bordered"
                         />

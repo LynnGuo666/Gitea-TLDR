@@ -17,24 +17,22 @@ export type PublicConfig = {
 
 export type RepoProviderConfig = {
   configured: boolean;
-  anthropic_base_url?: string | null; // deprecated
-  provider_api_base_url?: string | null;
-  provider_name?: string | null;
-  has_auth_token: boolean;
+  api_url?: string | null;
+  engine?: string | null;
+  has_api_key: boolean;
   inherit_global: boolean;
   has_global_config: boolean;
-  global_base_url?: string | null;
-  global_has_auth_token: boolean;
-  global_provider_name?: string | null;
+  global_api_url?: string | null;
+  global_has_api_key: boolean;
+  global_engine?: string | null;
 };
 export type RepoClaudeConfig = RepoProviderConfig;
 
 export type GlobalProviderConfig = {
   configured: boolean;
-  anthropic_base_url?: string | null; // deprecated
-  provider_api_base_url?: string | null;
-  provider_name?: string | null;
-  has_auth_token: boolean;
+  api_url?: string | null;
+  engine?: string | null;
+  has_api_key: boolean;
 };
 export type GlobalClaudeConfig = GlobalProviderConfig;
 

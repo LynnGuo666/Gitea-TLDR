@@ -254,11 +254,11 @@ class WebhookHandler:
             )
 
             # 查询仓库的 Anthropic 配置
-            anthropic_base_url = None
-            anthropic_auth_token = None
+            api_url = None
+            api_key = None
             wire_api = None
-            provider_name = self.review_engine.default_provider_name
-            model_name = provider_name
+            engine = self.review_engine.default_provider_name
+            model = engine
             config_source = "global_default"
 
             # 创建数据库记录
@@ -271,11 +271,11 @@ class WebhookHandler:
                     # 查询仓库的 ModelConfig 获取 Provider 配置
                     model_config = await db_service.get_model_config(repository_id)
                     if model_config:
-                        anthropic_base_url = model_config.provider_api_base_url
-                        anthropic_auth_token = model_config.provider_auth_token
+                        api_url = model_config.api_url
+                        api_key = model_config.api_key
                         wire_api = model_config.wire_api
-                        provider_name = model_config.model_name or provider_name
-                        model_name = provider_name
+                        engine = model_config.engine or engine
+                        model = engine
                         if model_config.repository_id == repository_id:
                             config_source = "repo_config"
                         else:
@@ -286,7 +286,7 @@ class WebhookHandler:
                         if features is None:
                             features = model_config.get_features()
 
-                        if anthropic_base_url or anthropic_auth_token:
+                        if api_url or api_key:
                             logger.info(
                                 f"使用仓库 {owner}/{repo_name} 的自定义 Anthropic 配置"
                             )
@@ -300,8 +300,8 @@ class WebhookHandler:
                         repository_id=repository_id,
                         pr_number=pr_number,
                         trigger_type=trigger_type,
-                        provider_name=provider_name,
-                        model_name=model_name,
+                        engine=engine,
+                        model=model,
                         config_source=config_source,
                         pr_title=pr_title,
                         pr_author=pr_author,
@@ -395,9 +395,10 @@ class WebhookHandler:
                     diff_content,
                     focus_areas,
                     pr_data,
-                    provider_api_base_url=anthropic_base_url,
-                    provider_auth_token=anthropic_auth_token,
-                    provider_name=provider_name,
+                    api_url=api_url,
+                    api_key=api_key,
+                    engine=engine,
+                    model=model,
                     wire_api=wire_api,
                 )
             else:
@@ -408,9 +409,10 @@ class WebhookHandler:
                     diff_content,
                     focus_areas,
                     pr_data,
-                    provider_api_base_url=anthropic_base_url,
-                    provider_auth_token=anthropic_auth_token,
-                    provider_name=provider_name,
+                    api_url=api_url,
+                    api_key=api_key,
+                    engine=engine,
+                    model=model,
                     wire_api=wire_api,
                 )
 
@@ -444,8 +446,8 @@ class WebhookHandler:
                         db_service = DBService(session)
                         await db_service.update_review_session(
                             review_session_id,
-                            provider_name=provider_name,
-                            model_name=model_name,
+                            engine=engine,
+                            model=model,
                             config_source=config_source,
                             analysis_mode=analysis_mode,
                             diff_size_bytes=diff_size,
@@ -522,8 +524,8 @@ class WebhookHandler:
                     # 更新审查会话
                     await db_service.update_review_session(
                         review_session_id,
-                        provider_name=analysis_result.provider_name or provider_name,
-                        model_name=analysis_result.provider_name or model_name,
+                        engine=analysis_result.provider_name or engine,
+                        model=analysis_result.provider_name or model,
                         config_source=config_source,
                         analysis_mode=analysis_mode,
                         diff_size_bytes=diff_size,

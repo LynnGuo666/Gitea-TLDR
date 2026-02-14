@@ -128,7 +128,7 @@ class DBService:
         self,
         config_name: str,
         repository_id: Optional[int] = None,
-        model_name: str = "claude_code",
+        engine: str = "claude_code",
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
         custom_prompt: Optional[str] = None,
@@ -155,7 +155,7 @@ class DBService:
             )
             self.session.add(config)
 
-        config.model_name = model_name
+        config.engine = engine
         config.max_tokens = max_tokens
         config.temperature = temperature
         config.custom_prompt = custom_prompt
@@ -182,8 +182,8 @@ class DBService:
         repository_id: int,
         pr_number: int,
         trigger_type: str,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
+        engine: Optional[str] = None,
+        model: Optional[str] = None,
         config_source: Optional[str] = None,
         pr_title: Optional[str] = None,
         pr_author: Optional[str] = None,
@@ -198,8 +198,8 @@ class DBService:
             repository_id=repository_id,
             pr_number=pr_number,
             trigger_type=trigger_type,
-            provider_name=provider_name,
-            model_name=model_name,
+            engine=engine,
+            model=model,
             config_source=config_source,
             pr_title=pr_title,
             pr_author=pr_author,
@@ -224,8 +224,8 @@ class DBService:
     async def update_review_session(
         self,
         session_id: int,
-        provider_name: Optional[str] = None,
-        model_name: Optional[str] = None,
+        engine: Optional[str] = None,
+        model: Optional[str] = None,
         config_source: Optional[str] = None,
         analysis_mode: Optional[str] = None,
         diff_size_bytes: Optional[int] = None,
@@ -244,10 +244,10 @@ class DBService:
         if not review_session:
             return None
 
-        if provider_name is not None:
-            review_session.provider_name = provider_name
-        if model_name is not None:
-            review_session.model_name = model_name
+        if engine is not None:
+            review_session.engine = engine
+        if model is not None:
+            review_session.model = model
         if config_source is not None:
             review_session.config_source = config_source
         if analysis_mode is not None:

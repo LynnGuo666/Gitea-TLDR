@@ -95,10 +95,10 @@ JSON结构示例：
         diff_content: str,
         focus_areas: List[str],
         pr_info: dict,
-        provider_api_base_url: Optional[str] = None,
-        provider_auth_token: Optional[str] = None,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
         custom_prompt: Optional[str] = None,
-        model_name: Optional[str] = None,
+        model: Optional[str] = None,
         wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         self._clear_last_error()
@@ -111,7 +111,7 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
-            custom_env = self._build_env(provider_api_base_url, provider_auth_token)
+            custom_env = self._build_env(api_url, api_key)
 
             process = await asyncio.create_subprocess_exec(
                 self.cli_path,
@@ -171,10 +171,10 @@ JSON结构示例：
         diff_content: str,
         focus_areas: List[str],
         pr_info: dict,
-        provider_api_base_url: Optional[str] = None,
-        provider_auth_token: Optional[str] = None,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
         custom_prompt: Optional[str] = None,
-        model_name: Optional[str] = None,
+        model: Optional[str] = None,
         wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         self._clear_last_error()
@@ -187,7 +187,7 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt - Simple Mode]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
-            custom_env = self._build_env(provider_api_base_url, provider_auth_token)
+            custom_env = self._build_env(api_url, api_key)
 
             process = await asyncio.create_subprocess_exec(
                 self.cli_path,
@@ -246,16 +246,16 @@ JSON结构示例：
 
     def _build_env(
         self,
-        provider_api_base_url: Optional[str],
-        provider_auth_token: Optional[str],
+        api_url: Optional[str],
+        api_key: Optional[str],
     ) -> dict:
         custom_env = os.environ.copy()
-        if provider_api_base_url:
-            custom_env["ANTHROPIC_BASE_URL"] = provider_api_base_url
+        if api_url:
+            custom_env["ANTHROPIC_BASE_URL"] = api_url
             if self.debug:
-                logger.debug(f"[Custom ANTHROPIC_BASE_URL] {provider_api_base_url}")
-        if provider_auth_token:
-            custom_env["ANTHROPIC_AUTH_TOKEN"] = provider_auth_token
+                logger.debug(f"[Custom ANTHROPIC_BASE_URL] {api_url}")
+        if api_key:
+            custom_env["ANTHROPIC_AUTH_TOKEN"] = api_key
             if self.debug:
                 logger.debug("[Custom ANTHROPIC_AUTH_TOKEN] (set)")
         return custom_env

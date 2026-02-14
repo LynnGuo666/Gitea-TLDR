@@ -23,7 +23,7 @@ class ModelConfig(Base, TimestampMixin):
         ForeignKey("repositories.id", ondelete="CASCADE"), nullable=True, index=True
     )
     config_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    model_name: Mapped[str] = mapped_column(
+    engine: Mapped[str] = mapped_column(
         String(100), default="claude_code", nullable=False
     )
     max_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -40,11 +40,14 @@ class ModelConfig(Base, TimestampMixin):
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Provider API 配置（仓库级别）
-    provider_api_base_url: Mapped[Optional[str]] = mapped_column(
+    api_url: Mapped[Optional[str]] = mapped_column(
         String(500), nullable=True, comment="Provider API Base URL"
     )
-    provider_auth_token: Mapped[Optional[str]] = mapped_column(
+    api_key: Mapped[Optional[str]] = mapped_column(
         String(500), nullable=True, comment="Provider Auth Token"
+    )
+    model: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True, comment="Actual LLM model identifier"
     )
     wire_api: Mapped[Optional[str]] = mapped_column(
         String(50),

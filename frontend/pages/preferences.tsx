@@ -34,9 +34,9 @@ export default function PreferencesPage() {
       }
       const data: GlobalProviderConfig = await res.json();
       setGlobalProvider(data);
-      setGlobalBaseUrl(data.provider_api_base_url || data.anthropic_base_url || '');
-      if (data.provider_name) {
-        setSelectedProvider(data.provider_name);
+      setGlobalBaseUrl(data.api_url || '');
+      if (data.engine) {
+        setSelectedProvider(data.engine);
       }
     } catch (error) {
       console.error('Failed to fetch global provider config:', error);
@@ -76,9 +76,9 @@ export default function PreferencesPage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider_name: selectedProvider,
-          provider_api_base_url: globalBaseUrl || null,
-          anthropic_auth_token: globalAuthToken || null,
+          engine: selectedProvider,
+          api_url: globalBaseUrl || null,
+          api_key: globalAuthToken || null,
         }),
       });
 
@@ -90,15 +90,14 @@ export default function PreferencesPage() {
 
       addToast({ title: '个人设置已保存', color: 'success' });
       setGlobalAuthToken('');
-      if (data.provider_name) {
-        setSelectedProvider(data.provider_name);
+      if (data.engine) {
+        setSelectedProvider(data.engine);
       }
       setGlobalProvider({
-        configured: !!(data.provider_api_base_url || data.anthropic_base_url || data.has_auth_token),
-        provider_api_base_url: data.provider_api_base_url,
-        anthropic_base_url: data.anthropic_base_url,
-        provider_name: data.provider_name,
-        has_auth_token: data.has_auth_token,
+        configured: !!(data.api_url || data.has_api_key),
+        api_url: data.api_url,
+        engine: data.engine,
+        has_api_key: data.has_api_key,
       });
     } catch {
       addToast({ title: '无法连接后端', color: 'danger' });
@@ -135,7 +134,7 @@ export default function PreferencesPage() {
             title="全局 AI 审查配置"
             icon={<Bot size={18} />}
             actions={
-              globalProvider?.has_auth_token ? (
+              globalProvider?.has_api_key ? (
                 <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
               ) : null
             }
@@ -178,7 +177,7 @@ export default function PreferencesPage() {
                     value={globalAuthToken}
                     onValueChange={setGlobalAuthToken}
                     placeholder={
-                      globalProvider?.has_auth_token
+                      globalProvider?.has_api_key
                         ? '已配置（输入新值覆盖）'
                         : currentPlaceholders.apiKey
                     }

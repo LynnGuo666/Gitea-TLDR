@@ -167,9 +167,9 @@ JSON结构示例：
 
     def _build_codex_home(
         self,
-        provider_api_base_url: Optional[str],
-        provider_auth_token: Optional[str],
-        model_name: Optional[str] = None,
+        api_url: Optional[str],
+        api_key: Optional[str],
+        model: Optional[str] = None,
         wire_api: Optional[str] = None,
     ) -> str:
         """生成临时 ``CODEX_HOME`` 目录并写入 ``config.toml``。
@@ -178,7 +178,7 @@ JSON结构示例：
             临时目录的绝对路径，调用方负责在 finally 中清理。
         """
         codex_home = tempfile.mkdtemp(prefix="codex_home_")
-        resolved_model = model_name or self.DEFAULT_MODEL
+        resolved_model = model or self.DEFAULT_MODEL
         resolved_wire_api = wire_api or _DEFAULT_WIRE_API
 
         lines = [
@@ -190,8 +190,8 @@ JSON结构示例：
             f'name = "Gitea PR Review"',
         ]
 
-        if provider_api_base_url:
-            lines.append(f'base_url = "{provider_api_base_url}"')
+        if api_url:
+            lines.append(f'base_url = "{api_url}"')
 
         lines.append(f'wire_api = "{resolved_wire_api}"')
         lines.append('env_key = "CODEX_API_KEY"')
@@ -211,7 +211,7 @@ JSON结构示例：
     def _build_env(
         self,
         codex_home: str,
-        provider_auth_token: Optional[str],
+        api_key: Optional[str],
     ) -> dict:
         """构建最小化子进程环境变量。
 
@@ -223,8 +223,8 @@ JSON结构示例：
             "PATH": os.environ.get("PATH", "/usr/bin:/usr/local/bin"),
             "HOME": os.environ.get("HOME", "/tmp"),
         }
-        if provider_auth_token:
-            minimal_env["CODEX_API_KEY"] = provider_auth_token
+        if api_key:
+            minimal_env["CODEX_API_KEY"] = api_key
         elif os.environ.get("OPENAI_API_KEY"):
             minimal_env["CODEX_API_KEY"] = os.environ["OPENAI_API_KEY"]
 
@@ -247,10 +247,10 @@ JSON结构示例：
         diff_content: str,
         focus_areas: List[str],
         pr_info: dict,
-        provider_api_base_url: Optional[str] = None,
-        provider_auth_token: Optional[str] = None,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
         custom_prompt: Optional[str] = None,
-        model_name: Optional[str] = None,
+        model: Optional[str] = None,
         wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         self._clear_last_error()
@@ -267,12 +267,12 @@ JSON结构示例：
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
             codex_home = self._build_codex_home(
-                provider_api_base_url,
-                provider_auth_token,
-                model_name=model_name,
+                api_url,
+                api_key,
+                model=model,
                 wire_api=wire_api,
             )
-            env = self._build_env(codex_home, provider_auth_token)
+            env = self._build_env(codex_home, api_key)
 
             return await self._run_codex_exec(prompt, env, cwd=str(repo_path))
 
@@ -288,10 +288,10 @@ JSON结构示例：
         diff_content: str,
         focus_areas: List[str],
         pr_info: dict,
-        provider_api_base_url: Optional[str] = None,
-        provider_auth_token: Optional[str] = None,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
         custom_prompt: Optional[str] = None,
-        model_name: Optional[str] = None,
+        model: Optional[str] = None,
         wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         self._clear_last_error()
@@ -308,12 +308,12 @@ JSON结构示例：
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
             codex_home = self._build_codex_home(
-                provider_api_base_url,
-                provider_auth_token,
-                model_name=model_name,
+                api_url,
+                api_key,
+                model=model,
                 wire_api=wire_api,
             )
-            env = self._build_env(codex_home, provider_auth_token)
+            env = self._build_env(codex_home, api_key)
 
             return await self._run_codex_exec(prompt, env, cwd=None)
 

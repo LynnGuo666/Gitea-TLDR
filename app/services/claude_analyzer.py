@@ -30,16 +30,16 @@ class ClaudeAnalyzer:
         diff_content: str,
         focus_areas: List[str],
         pr_info: dict,
-        anthropic_base_url: Optional[str] = None,
-        anthropic_auth_token: Optional[str] = None,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
     ) -> Optional[ClaudeReviewResult]:
         return await self._provider.analyze_pr(
             repo_path,
             diff_content,
             focus_areas,
             pr_info,
-            provider_api_base_url=anthropic_base_url,
-            provider_auth_token=anthropic_auth_token,
+            api_url=api_url,
+            api_key=api_key,
         )
 
     async def analyze_pr_simple(
@@ -47,13 +47,13 @@ class ClaudeAnalyzer:
         diff_content: str,
         focus_areas: List[str],
         pr_info: dict,
-        anthropic_base_url: Optional[str] = None,
-        anthropic_auth_token: Optional[str] = None,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
     ) -> Optional[ClaudeReviewResult]:
         return await self._provider.analyze_pr_simple(
             diff_content,
             focus_areas,
             pr_info,
-            provider_api_base_url=anthropic_base_url,
-            provider_auth_token=anthropic_auth_token,
+            api_url=api_url,
+            api_key=api_key,
         )

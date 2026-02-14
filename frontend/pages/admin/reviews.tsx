@@ -35,7 +35,7 @@ type ReviewItem = {
   pr_title: string | null;
   pr_author: string | null;
   trigger_type: string;
-  provider_name: string | null;
+  engine: string | null;
   enabled_features: string[];
   focus_areas: string[];
   analysis_mode: string | null;
@@ -367,7 +367,7 @@ export default function AdminReviewsPage() {
                       </TableCell>
                       <TableCell>
                         <Chip size="sm" variant="flat">
-                          {review.provider_name || 'claude_code'}
+                          {review.engine || 'claude_code'}
                         </Chip>
                       </TableCell>
                       <TableCell>{renderFocusChips(review.focus_areas)}</TableCell>

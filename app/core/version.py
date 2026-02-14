@@ -2,12 +2,21 @@
 版本信息模块
 """
 
-__version__ = "1.18.4"
+__version__ = "1.19.0"
 __release_date__ = "2026-02-15"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.19.0": {
+        "date": "2026-02-15",
+        "changes": [
+            "重构：数据库字段全面重命名，model_name→engine、provider_api_base_url→api_url、provider_auth_token→api_key，消除命名歧义",
+            "新增：model_configs 增加 model 字段，区分「用什么引擎」和「调什么模型」",
+            "重构：API 响应字段统一简化（engine/model/api_url/has_api_key），移除冗余的 anthropic_base_url/provider_has_auth_token",
+            "同步：统一更新前后端版本号到 1.19.0",
+        ],
+    },
     "1.18.4": {
         "date": "2026-02-15",
         "changes": [

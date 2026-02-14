@@ -17,8 +17,8 @@ type ReviewItem = {
   pr_author: string | null;
   trigger_type: string;
   analysis_mode: string | null;
-  provider_name: string | null;
-  model_name: string | null;
+  engine: string | null;
+  model: string | null;
   config_source: string | null;
   overall_severity: string | null;
   overall_success: boolean | null;
@@ -176,7 +176,7 @@ export default function ReviewsPage() {
           </div>
           <div>
             <span className="text-default-500 block text-xs mb-1">调用模型</span>
-            <Code size="sm">{detail.model_name || detail.provider_name || '—'}</Code>
+            <Code size="sm">{detail.model || detail.engine || '—'}</Code>
           </div>
           <div>
             <span className="text-default-500 block text-xs mb-1">变更大小</span>
@@ -342,8 +342,8 @@ export default function ReviewsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="text-small text-default-700">{review.provider_name || '—'}</span>
-                          <span className="text-tiny text-default-500">{review.model_name || '—'}</span>
+                          <span className="text-small text-default-700">{review.engine || '—'}</span>
+                          <span className="text-tiny text-default-500">{review.model || '—'}</span>
                         </div>
                       </TableCell>
                       <TableCell>

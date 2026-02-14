@@ -4,6 +4,23 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.19.0] - 2026-02-15
+
+### 重构 (Refactored)
+
+- **数据库字段全面重命名**: `model_configs` 表字段 `model_name→engine`、`provider_api_base_url→api_url`、`provider_auth_token→api_key`，消除"模型名"与"引擎名"的命名歧义
+- **审查记录字段重命名**: `review_sessions` 表字段 `provider_name→engine`、`model_name→model`
+- **API 响应字段统一简化**: 移除冗余的 `anthropic_base_url`、`provider_has_auth_token`，统一为 `engine`/`model`/`api_url`/`has_api_key`
+- **前端类型与字段全量同步**: 所有 TypeScript 类型定义和 API 调用点适配新字段名
+
+### 新增功能 (Added)
+
+- **model 字段**: `model_configs` 新增 `model` 列，用于存储实际调用的 LLM 模型标识（如 `gpt-5.2-codex`），与 `engine`（引擎标识）彻底分离
+
+### 优化 (Improved)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.19.0`
+
 ## [1.18.4] - 2026-02-15
 
 ### 新增功能 (Added)

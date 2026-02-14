@@ -86,8 +86,8 @@ class ProviderConfig:
 
     cli_path: str = ""
     debug: bool = False
-    provider_api_base_url: Optional[str] = None
-    provider_auth_token: Optional[str] = None
+    api_url: Optional[str] = None
+    api_key: Optional[str] = None
     extra: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -139,10 +139,10 @@ class ReviewProvider(ABC):
         diff_content: str,
         focus_areas: List[str],
         pr_info: dict,
-        provider_api_base_url: Optional[str] = None,
-        provider_auth_token: Optional[str] = None,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
         custom_prompt: Optional[str] = None,
-        model_name: Optional[str] = None,
+        model: Optional[str] = None,
         wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]: ...
 
@@ -152,9 +152,9 @@ class ReviewProvider(ABC):
         diff_content: str,
         focus_areas: List[str],
         pr_info: dict,
-        provider_api_base_url: Optional[str] = None,
-        provider_auth_token: Optional[str] = None,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
         custom_prompt: Optional[str] = None,
-        model_name: Optional[str] = None,
+        model: Optional[str] = None,
         wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]: ...

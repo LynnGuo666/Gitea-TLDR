@@ -38,10 +38,10 @@ class ReviewSession(Base):
     trigger_type: Mapped[str] = mapped_column(
         String(20), nullable=False, comment="auto / manual"
     )
-    provider_name: Mapped[Optional[str]] = mapped_column(
+    engine: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True, comment="审查引擎名称，如 claude_code / codex_cli"
     )
-    model_name: Mapped[Optional[str]] = mapped_column(
+    model: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True, comment="实际使用的模型标识"
     )
     config_source: Mapped[Optional[str]] = mapped_column(
