@@ -19,11 +19,13 @@ export type RepoProviderConfig = {
   configured: boolean;
   anthropic_base_url?: string | null; // deprecated
   provider_api_base_url?: string | null;
+  provider_name?: string | null;
   has_auth_token: boolean;
   inherit_global: boolean;
   has_global_config: boolean;
   global_base_url?: string | null;
   global_has_auth_token: boolean;
+  global_provider_name?: string | null;
 };
 export type RepoClaudeConfig = RepoProviderConfig;
 
@@ -31,9 +33,20 @@ export type GlobalProviderConfig = {
   configured: boolean;
   anthropic_base_url?: string | null; // deprecated
   provider_api_base_url?: string | null;
+  provider_name?: string | null;
   has_auth_token: boolean;
 };
 export type GlobalClaudeConfig = GlobalProviderConfig;
+
+export type ProviderInfo = {
+  name: string;
+  label: string;
+};
+
+export type ProvidersResponse = {
+  providers: ProviderInfo[];
+  default: string;
+};
 
 export type UsageSummary = {
   total_input_tokens: number;

@@ -1,13 +1,13 @@
 import Head from 'next/head';
 import Image from 'next/image';
 import { useCallback, useContext, useEffect, useState } from 'react';
-import { Button, Chip, Input, addToast } from '@heroui/react';
+import { Button, Chip, Input, Select, SelectItem, addToast } from '@heroui/react';
 import { Bot, User } from 'lucide-react';
 import { AuthContext } from '../lib/auth';
 import { apiFetch } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import SectionHeader from '../components/SectionHeader';
-import { GlobalProviderConfig, PublicConfig, UsageSummary } from '../lib/types';
+import { GlobalProviderConfig, ProviderInfo, PublicConfig, UsageSummary } from '../lib/types';
 
 export default function SettingsPage() {
   const { status: authStatus } = useContext(AuthContext);
@@ -20,6 +20,8 @@ export default function SettingsPage() {
   const [globalProviderSaving, setGlobalProviderSaving] = useState(false);
   const [globalBaseUrl, setGlobalBaseUrl] = useState('');
   const [globalAuthToken, setGlobalAuthToken] = useState('');
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState('claude_code');
 
   const fetchGlobalProvider = useCallback(async () => {
     if (!authStatus.loggedIn) {
@@ -35,6 +37,9 @@ export default function SettingsPage() {
         const data: GlobalProviderConfig = await res.json();
         setGlobalProvider(data);
         setGlobalBaseUrl(data.provider_api_base_url || data.anthropic_base_url || '');
+        if (data.provider_name) {
+          setSelectedProvider(data.provider_name);
+        }
       } else {
         setGlobalProvider(null);
       }
@@ -50,17 +55,26 @@ export default function SettingsPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const configRes = await apiFetch('/api/config/public');
+        const [configRes, statsRes, providersRes] = await Promise.all([
+          apiFetch('/api/config/public'),
+          apiFetch('/api/stats'),
+          apiFetch('/api/providers'),
+        ]);
+
         if (configRes.ok) {
           const configData = await configRes.json();
           setConfig(configData);
         }
 
-        const statsRes = await apiFetch('/api/stats');
         if (statsRes.ok) {
           const statsData = await statsRes.json();
           setStats(statsData.summary);
           setReviewCount(statsData.details?.length || 0);
+        }
+
+        if (providersRes.ok) {
+          const providersData = await providersRes.json();
+          setProviders(providersData.providers || []);
         }
       } catch (error) {
         console.error('Failed to fetch settings data:', error);
@@ -101,6 +115,7 @@ export default function SettingsPage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          provider_name: selectedProvider,
           provider_api_base_url: globalBaseUrl || null,
           anthropic_auth_token: globalAuthToken || null,
         }),
@@ -110,10 +125,14 @@ export default function SettingsPage() {
       if (res.ok) {
         addToast({ title: '全局 AI 审查配置已保存', color: 'success' });
         setGlobalAuthToken('');
+        if (data.provider_name) {
+          setSelectedProvider(data.provider_name);
+        }
         setGlobalProvider({
           configured: !!(data.provider_api_base_url || data.anthropic_base_url || data.has_auth_token),
           provider_api_base_url: data.provider_api_base_url,
           anthropic_base_url: data.anthropic_base_url,
+          provider_name: data.provider_name,
           has_auth_token: data.has_auth_token,
         });
       } else {
@@ -135,6 +154,19 @@ export default function SettingsPage() {
     }
     return num.toLocaleString();
   };
+
+  const providerPlaceholders: Record<string, { baseUrl: string; apiKey: string }> = {
+    claude_code: {
+      baseUrl: 'https://api.anthropic.com (留空使用默认)',
+      apiKey: 'sk-ant-...',
+    },
+    codex_cli: {
+      baseUrl: 'https://api.openai.com (留空使用默认)',
+      apiKey: 'sk-...',
+    },
+  };
+
+  const currentPlaceholders = providerPlaceholders[selectedProvider] || providerPlaceholders.claude_code;
 
   return (
     <>
@@ -255,11 +287,28 @@ export default function SettingsPage() {
             ) : (
               <>
                 <div className="flex flex-col gap-3">
+                  {providers.length > 0 && (
+                    <Select
+                      label="审查引擎"
+                      selectedKeys={new Set([selectedProvider])}
+                      onSelectionChange={(keys) => {
+                        if (keys === 'all') return;
+                        const key = Array.from(keys)[0] as string;
+                        if (key) setSelectedProvider(key);
+                      }}
+                      variant="bordered"
+                      aria-label="选择审查引擎"
+                    >
+                      {providers.map((p) => (
+                        <SelectItem key={p.name}>{p.label}</SelectItem>
+                      ))}
+                    </Select>
+                  )}
                   <Input
                     label="Base URL"
                     value={globalBaseUrl}
                     onValueChange={setGlobalBaseUrl}
-                    placeholder="https://api.anthropic.com (留空使用默认)"
+                    placeholder={currentPlaceholders.baseUrl}
                     variant="bordered"
                   />
                   <Input
@@ -267,7 +316,7 @@ export default function SettingsPage() {
                     type="password"
                     value={globalAuthToken}
                     onValueChange={setGlobalAuthToken}
-                    placeholder={globalProvider?.has_auth_token ? '已配置（输入新值覆盖）' : 'sk-ant-...'}
+                    placeholder={globalProvider?.has_auth_token ? '已配置（输入新值覆盖）' : currentPlaceholders.apiKey}
                     variant="bordered"
                   />
                 </div>

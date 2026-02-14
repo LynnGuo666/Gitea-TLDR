@@ -2,12 +2,22 @@
 版本信息模块
 """
 
-__version__ = "1.15.0"
+__version__ = "1.16.0"
 __release_date__ = "2026-02-14"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.16.0": {
+        "date": "2026-02-14",
+        "changes": [
+            "新增：前端引擎下拉选择器，全局设置和仓库配置页均可选择审查引擎",
+            "新增：GET /api/providers 端点，返回已注册的审查引擎列表",
+            "新增：provider_name 字段贯穿后端 API 与前端状态",
+            "优化：Base URL / API Key 占位符随引擎选择动态切换",
+            "优化：Docker 镜像同时预装 Claude Code CLI 和 Codex CLI",
+        ],
+    },
     "1.15.0": {
         "date": "2026-02-14",
         "changes": [

@@ -5,6 +5,8 @@ import {
   Button,
   Chip,
   Input,
+  Select,
+  SelectItem,
   Tab,
   Tabs,
   Switch,
@@ -19,7 +21,7 @@ import {
 } from 'lucide-react';
 import PageHeader from '../../../components/PageHeader';
 import { Skeleton } from '../../../components/ui';
-import { RepoProviderConfig } from '../../../lib/types';
+import { RepoProviderConfig, ProviderInfo } from '../../../lib/types';
 import { AuthContext } from '../../../lib/auth';
 import { apiFetch } from '../../../lib/api';
 
@@ -105,6 +107,8 @@ export default function RepoConfigPage() {
   const [inheritSaving, setInheritSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('webhook');
   const [refreshingAll, setRefreshingAll] = useState(false);
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState('claude_code');
   // Pull Requests
   const [pulls, setPulls] = useState<PullRequest[]>([]);
   const [pullsLoading, setPullsLoading] = useState(true);
@@ -151,6 +155,9 @@ export default function RepoConfigPage() {
         } else {
           setProviderBaseUrl('');
         }
+        if (data.provider_name) {
+          setSelectedProvider(data.provider_name);
+        }
       } else {
         setProviderConfig(null);
         setInheritGlobal(true);
@@ -189,6 +196,12 @@ export default function RepoConfigPage() {
       fetchWebhookStatus();
       fetchProviderConfig();
       fetchPulls();
+      apiFetch('/api/providers').then(async (res) => {
+        if (res.ok) {
+          const data = await res.json();
+          setProviders(data.providers || []);
+        }
+      }).catch(() => {});
     } else {
       setStatusLoading(false);
       setProviderConfigLoading(false);
@@ -287,6 +300,7 @@ export default function RepoConfigPage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          provider_name: selectedProvider,
           provider_api_base_url: providerBaseUrl || null,
           anthropic_auth_token: providerAuthToken || null,
           inherit_global: false,
@@ -355,6 +369,20 @@ export default function RepoConfigPage() {
   }
 
   const isWebhookEnabled = webhookStatus?.configured && webhookStatus?.active;
+
+  const providerPlaceholders: Record<string, { baseUrl: string; apiKey: string }> = {
+    claude_code: {
+      baseUrl: 'https://api.anthropic.com (留空使用默认)',
+      apiKey: 'sk-ant-...',
+    },
+    codex_cli: {
+      baseUrl: 'https://api.openai.com (留空使用默认)',
+      apiKey: 'sk-...',
+    },
+  };
+
+  const currentPlaceholders = providerPlaceholders[selectedProvider] || providerPlaceholders.claude_code;
+  const providerLabel = (name: string) => providers.find((p) => p.name === name)?.label || name;
 
   return (
     <>
@@ -533,6 +561,9 @@ export default function RepoConfigPage() {
                       {providerConfig?.has_global_config ? (
                         <>
                           <p className="m-0 text-sm text-default-700">
+                            审查引擎: {providerLabel(providerConfig.global_provider_name || 'claude_code')}
+                          </p>
+                          <p className="m-0 mt-1 text-sm text-default-700">
                             Base URL: {providerConfig.global_base_url || '默认官方地址'}
                           </p>
                           <p className="m-0 mt-1 text-sm text-default-700">
@@ -548,11 +579,29 @@ export default function RepoConfigPage() {
                   ) : (
                     <>
                       <div className="flex flex-col gap-3">
+                        {providers.length > 0 && (
+                          <Select
+                            label="审查引擎"
+                            selectedKeys={new Set([selectedProvider])}
+                            onSelectionChange={(keys) => {
+                              if (keys === 'all') return;
+                              const key = Array.from(keys)[0] as string;
+                              if (key) setSelectedProvider(key);
+                            }}
+                            isDisabled={!canEditRepo}
+                            variant="bordered"
+                            aria-label="选择审查引擎"
+                          >
+                            {providers.map((p) => (
+                              <SelectItem key={p.name}>{p.label}</SelectItem>
+                            ))}
+                          </Select>
+                        )}
                         <Input
                           label="Base URL"
                           value={providerBaseUrl}
                           onValueChange={setProviderBaseUrl}
-                          placeholder="https://api.anthropic.com (留空使用默认)"
+                          placeholder={currentPlaceholders.baseUrl}
                           isDisabled={!canEditRepo}
                           variant="bordered"
                         />
@@ -561,7 +610,7 @@ export default function RepoConfigPage() {
                           type="password"
                           value={providerAuthToken}
                           onValueChange={setProviderAuthToken}
-                          placeholder={providerConfig?.has_auth_token ? '已配置（输入新值覆盖）' : 'sk-ant-...'}
+                          placeholder={providerConfig?.has_auth_token ? '已配置（输入新值覆盖）' : currentPlaceholders.apiKey}
                           isDisabled={!canEditRepo}
                           variant="bordered"
                         />

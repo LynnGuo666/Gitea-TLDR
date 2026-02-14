@@ -46,9 +46,6 @@ class ModelConfig(Base, TimestampMixin):
     provider_auth_token: Mapped[Optional[str]] = mapped_column(
         String(500), nullable=True, comment="Provider Auth Token"
     )
-    anthropic_auth_token: Mapped[Optional[str]] = mapped_column(
-        String(500), nullable=True, comment="Anthropic Auth Token"
-    )
 
     # 关系
     repository: Mapped[Optional["Repository"]] = relationship(
