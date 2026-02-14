@@ -13,6 +13,13 @@ export type AuthStatus = {
   user?: AuthUser | null;
 };
 
+export type AdminStatus = {
+  enabled: boolean;
+  loggedIn: boolean;
+  isAdmin: boolean;
+  role?: string | null;
+};
+
 export type AuthContextValue = {
   status: AuthStatus;
   refresh: () => void;
@@ -57,6 +64,20 @@ export async function beginOAuthLogin(): Promise<void> {
   } else {
     throw new Error('缺少授权地址');
   }
+}
+
+export async function fetchAdminStatus(): Promise<AdminStatus> {
+  const res = await apiFetch('/api/auth/admin-status', { credentials: 'include' });
+  if (!res.ok) {
+    throw new Error('无法加载管理员状态');
+  }
+  const data = await res.json();
+  return {
+    enabled: Boolean(data.enabled),
+    loggedIn: Boolean(data.logged_in ?? data.loggedIn),
+    isAdmin: Boolean(data.is_admin ?? data.isAdmin),
+    role: data.role,
+  };
 }
 
 export async function requestLogout(): Promise<void> {

@@ -11,6 +11,7 @@ import logging
 import secrets
 from datetime import datetime
 from typing import List, Optional
+from sqlalchemy import select
 from fastapi import (
     APIRouter,
     Request,
@@ -31,6 +32,7 @@ from app.core import (
     get_all_changelogs,
 )
 from app.core.context import AppContext
+from app.models import AdminUser
 
 logger = logging.getLogger(__name__)
 
@@ -265,6 +267,60 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     async def auth_status(request: Request):
         """返回当前会话状态"""
         return context.auth_manager.get_status_payload(request)
+
+    @api_router.get("/auth/admin-status")
+    async def auth_admin_status(request: Request):
+        session = context.auth_manager.get_session(request)
+        logged_in = bool(session)
+
+        if not settings.admin_enabled:
+            return {
+                "enabled": False,
+                "logged_in": logged_in,
+                "is_admin": False,
+                "role": None,
+            }
+
+        if not session:
+            return {
+                "enabled": True,
+                "logged_in": False,
+                "is_admin": False,
+                "role": None,
+            }
+
+        database = context.database
+        if not database:
+            return {
+                "enabled": True,
+                "logged_in": True,
+                "is_admin": True,
+                "role": "super_admin",
+            }
+
+        username = session.user.get("username")
+        if not username:
+            return {
+                "enabled": True,
+                "logged_in": True,
+                "is_admin": False,
+                "role": None,
+            }
+
+        async with database.session() as db_session:
+            stmt = select(AdminUser).where(
+                AdminUser.username == username,
+                AdminUser.is_active == True,
+            )
+            result = await db_session.execute(stmt)
+            admin = result.scalar_one_or_none()
+
+        return {
+            "enabled": True,
+            "logged_in": True,
+            "is_admin": bool(admin),
+            "role": admin.role if admin else None,
+        }
 
     @api_router.get("/auth/login-url")
     async def auth_login_url():

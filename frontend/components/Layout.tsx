@@ -17,6 +17,7 @@ import {
   defaultAuthStatus,
   type AuthStatus,
   fetchAuthStatus,
+  fetchAdminStatus,
   beginOAuthLogin,
   requestLogout,
 } from '../lib/auth';
@@ -51,6 +52,7 @@ function isAuthStatusEqual(a: AuthStatus, b: AuthStatus): boolean {
 export default function Layout({ children }: LayoutProps) {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState(defaultAuthStatus);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
@@ -64,15 +66,28 @@ export default function Layout({ children }: LayoutProps) {
     authRefreshInFlightRef.current = true;
 
     void fetchAuthStatus()
-      .then((nextStatus) => {
+      .then(async (nextStatus) => {
         setAuthStatus((prevStatus) =>
           isAuthStatusEqual(prevStatus, nextStatus) ? prevStatus : nextStatus
         );
+
+        if (nextStatus.enabled && nextStatus.loggedIn) {
+          try {
+            const adminStatus = await fetchAdminStatus();
+            setIsAdmin(adminStatus.enabled && adminStatus.loggedIn && adminStatus.isAdmin);
+          } catch {
+            setIsAdmin(false);
+          }
+          return;
+        }
+
+        setIsAdmin(false);
       })
       .catch(() => {
         setAuthStatus((prevStatus) =>
           isAuthStatusEqual(prevStatus, defaultAuthStatus) ? prevStatus : defaultAuthStatus
         );
+        setIsAdmin(false);
       })
       .finally(() => {
         authRefreshInFlightRef.current = false;
@@ -98,6 +113,7 @@ export default function Layout({ children }: LayoutProps) {
 
   const logout = useCallback(async () => {
     await requestLogout();
+    setIsAdmin(false);
     refreshAuth();
   }, [refreshAuth]);
 
@@ -209,7 +225,7 @@ export default function Layout({ children }: LayoutProps) {
             aria-hidden={!mobileMenuOpen}
           >
             {navItems.map((item) => {
-              if (item.adminOnly && !authStatus.loggedIn) return null;
+              if (item.adminOnly && !isAdmin) return null;
               const isExact = item.href === '/';
               const active = isExact
                 ? router.pathname === '/'
@@ -253,7 +269,7 @@ export default function Layout({ children }: LayoutProps) {
           </div>
           <nav className="flex flex-col overflow-visible py-4 px-3 gap-1 flex-1">
             {navItems.map((item) => {
-              if (item.adminOnly && !authStatus.loggedIn) return null;
+              if (item.adminOnly && !isAdmin) return null;
               const isExact = item.href === '/';
               const active = isExact
                 ? router.pathname === '/'
