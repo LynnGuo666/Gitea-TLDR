@@ -278,26 +278,48 @@ class DBService:
     async def list_review_sessions(
         self,
         repository_id: Optional[int] = None,
+        repository_ids: Optional[List[int]] = None,
         owner: Optional[str] = None,
         repo_name: Optional[str] = None,
+        success: Optional[bool] = None,
         limit: int = 50,
         offset: int = 0,
     ) -> List[ReviewSession]:
         """获取审查会话列表"""
         stmt = select(ReviewSession).options(selectinload(ReviewSession.repository))
 
-        if repository_id:
+        if repository_ids:
+            stmt = stmt.where(ReviewSession.repository_id.in_(repository_ids))
+        elif repository_id:
             stmt = stmt.where(ReviewSession.repository_id == repository_id)
         elif owner and repo_name:
             stmt = stmt.join(Repository).where(
                 Repository.owner == owner, Repository.repo_name == repo_name
             )
 
+        if success is not None:
+            stmt = stmt.where(ReviewSession.overall_success == success)
+
         stmt = stmt.order_by(ReviewSession.started_at.desc())
         stmt = stmt.limit(limit).offset(offset)
 
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def list_review_sessions_by_repo_ids(
+        self,
+        repository_ids: List[int],
+        success: Optional[bool] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[ReviewSession]:
+        """获取指定仓库集合的审查会话列表"""
+        return await self.list_review_sessions(
+            repository_ids=repository_ids,
+            success=success,
+            limit=limit,
+            offset=offset,
+        )
 
     # ==================== InlineComment 操作 ====================
 
