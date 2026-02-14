@@ -71,6 +71,19 @@ function formatTime(iso: string | null): string {
   return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
+function renderFocusChips(focusAreas: string[] | null | undefined) {
+  if (!focusAreas || focusAreas.length === 0) return <span className="text-default-400">—</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {focusAreas.map((focus) => (
+        <Chip key={focus} size="sm" variant="flat" className="h-5 text-[10px]">
+          {focus}
+        </Chip>
+      ))}
+    </div>
+  );
+}
+
 export default function ReviewsPage() {
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -156,14 +169,14 @@ export default function ReviewsPage() {
 
     return (
       <div className="p-4 bg-content2/50 rounded-lg flex flex-col gap-4 text-sm">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-3 bg-content1 rounded-md border border-default-200">
-          <div>
-            <span className="text-default-500 block text-xs mb-1">分支</span>
-            <Code size="sm">{detail.base_branch} ← {detail.head_branch}</Code>
-          </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-3 bg-content1 rounded-md border border-default-200">
           <div>
             <span className="text-default-500 block text-xs mb-1">Commit</span>
             <Code size="sm">{detail.head_sha?.substring(0, 7) || '—'}</Code>
+          </div>
+          <div>
+            <span className="text-default-500 block text-xs mb-1">调用模型</span>
+            <Code size="sm">{detail.model_name || detail.provider_name || '—'}</Code>
           </div>
           <div>
             <span className="text-default-500 block text-xs mb-1">变更大小</span>
@@ -175,6 +188,11 @@ export default function ReviewsPage() {
             <span className="text-default-500 block text-xs mb-1">评论数</span>
             <span className="font-mono text-default-700">{detail.inline_comments_count}</span>
           </div>
+        </div>
+
+        <div>
+          <span className="text-default-500 block text-xs mb-2">审查方向</span>
+          {renderFocusChips(detail.focus_areas)}
         </div>
 
         {detail.error_message && (
@@ -323,7 +341,10 @@ export default function ReviewsPage() {
                         </Chip>
                       </TableCell>
                       <TableCell>
-                        <span className="text-small text-default-600">{review.provider_name || '—'}</span>
+                        <div className="flex flex-col">
+                          <span className="text-small text-default-700">{review.provider_name || '—'}</span>
+                          <span className="text-tiny text-default-500">{review.model_name || '—'}</span>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 text-default-500">

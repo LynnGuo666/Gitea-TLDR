@@ -183,6 +183,8 @@ class DBService:
         pr_number: int,
         trigger_type: str,
         provider_name: Optional[str] = None,
+        model_name: Optional[str] = None,
+        config_source: Optional[str] = None,
         pr_title: Optional[str] = None,
         pr_author: Optional[str] = None,
         head_branch: Optional[str] = None,
@@ -197,6 +199,8 @@ class DBService:
             pr_number=pr_number,
             trigger_type=trigger_type,
             provider_name=provider_name,
+            model_name=model_name,
+            config_source=config_source,
             pr_title=pr_title,
             pr_author=pr_author,
             head_branch=head_branch,
@@ -221,6 +225,8 @@ class DBService:
         self,
         session_id: int,
         provider_name: Optional[str] = None,
+        model_name: Optional[str] = None,
+        config_source: Optional[str] = None,
         analysis_mode: Optional[str] = None,
         diff_size_bytes: Optional[int] = None,
         overall_severity: Optional[str] = None,
@@ -240,6 +246,10 @@ class DBService:
 
         if provider_name is not None:
             review_session.provider_name = provider_name
+        if model_name is not None:
+            review_session.model_name = model_name
+        if config_source is not None:
+            review_session.config_source = config_source
         if analysis_mode is not None:
             review_session.analysis_mode = analysis_mode
         if diff_size_bytes is not None:

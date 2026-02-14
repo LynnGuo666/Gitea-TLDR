@@ -264,13 +264,14 @@ JSON结构示例：
 
         命令格式::
 
-            codex exec - \\
+            codex exec \\
                 --sandbox read-only \\
                 --skip-git-repo-check \\
                 --color never \\
                 [--cd REPO_PATH] \\
                 [--output-schema SCHEMA_FILE] \\
-                [--output-last-message OUTPUT_FILE]
+                [--output-last-message OUTPUT_FILE] \\
+                -
 
         使用 --output-last-message 获取最终消息，减少 stdout 中日志/噪声对解析的影响。
         """
@@ -298,7 +299,6 @@ JSON结构示例：
             cmd: List[str] = [
                 self.cli_path,
                 "exec",
-                "-",
                 "--sandbox",
                 "read-only",
                 "--skip-git-repo-check",
@@ -313,6 +313,8 @@ JSON结构示例：
             if cwd:
                 cmd.extend(["--cd", cwd])
 
+            cmd.append("-")
+
             if self.debug:
                 # 不打印 prompt（可能很长），只打印命令结构
                 safe_cmd = [c if c != prompt else "<PROMPT>" for c in cmd]
@@ -324,6 +326,7 @@ JSON结构示例：
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
+                cwd=cwd,
             )
 
             stdout, stderr = await process.communicate(input=prompt.encode("utf-8"))

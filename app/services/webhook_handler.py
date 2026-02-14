@@ -257,6 +257,8 @@ class WebhookHandler:
             anthropic_base_url = None
             anthropic_auth_token = None
             provider_name = self.review_engine.default_provider_name
+            model_name = provider_name
+            config_source = "global_default"
 
             # 创建数据库记录
             if self.database:
@@ -271,6 +273,11 @@ class WebhookHandler:
                         anthropic_base_url = model_config.provider_api_base_url
                         anthropic_auth_token = model_config.provider_auth_token
                         provider_name = model_config.model_name or provider_name
+                        model_name = provider_name
+                        if model_config.repository_id == repository_id:
+                            config_source = "repo_config"
+                        else:
+                            config_source = "global_default"
 
                         if focus_areas is None:
                             focus_areas = model_config.get_focus()
@@ -292,6 +299,8 @@ class WebhookHandler:
                         pr_number=pr_number,
                         trigger_type=trigger_type,
                         provider_name=provider_name,
+                        model_name=model_name,
+                        config_source=config_source,
                         pr_title=pr_title,
                         pr_author=pr_author,
                         head_branch=head_branch,
@@ -432,6 +441,8 @@ class WebhookHandler:
                         await db_service.update_review_session(
                             review_session_id,
                             provider_name=provider_name,
+                            model_name=model_name,
+                            config_source=config_source,
                             analysis_mode=analysis_mode,
                             diff_size_bytes=diff_size,
                             overall_success=False,
@@ -508,6 +519,8 @@ class WebhookHandler:
                     await db_service.update_review_session(
                         review_session_id,
                         provider_name=analysis_result.provider_name or provider_name,
+                        model_name=analysis_result.provider_name or model_name,
+                        config_source=config_source,
                         analysis_mode=analysis_mode,
                         diff_size_bytes=diff_size,
                         overall_severity=analysis_result.overall_severity,
