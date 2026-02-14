@@ -4,6 +4,17 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.18.1] - 2026-02-14
+
+### 修复 (Fixed)
+
+- **Codex CLI 输入方式稳定性**: `codex exec` 改为通过 stdin 传递 prompt，避免超长命令参数和转义边界问题
+
+### 优化 (Improved)
+
+- **Codex CLI 输出读取稳定性**: 增加 `--output-last-message` 作为最终消息来源，减少 stdout 日志噪声对结果解析的干扰
+- **版本一致性**: 同步更新后端与前端版本号到 `1.18.1`
+
 ## [1.18.0] - 2026-02-14
 
 ### 新增功能 (Added)

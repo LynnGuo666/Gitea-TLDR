@@ -2,12 +2,20 @@
 版本信息模块
 """
 
-__version__ = "1.18.0"
+__version__ = "1.18.1"
 __release_date__ = "2026-02-14"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.18.1": {
+        "date": "2026-02-14",
+        "changes": [
+            "修复：Codex CLI 改为通过 stdin 传递 prompt，避免超长参数与转义问题",
+            "优化：Codex CLI 使用 --output-last-message 读取最终输出，降低 stdout 噪声干扰",
+            "同步：统一更新前后端版本号到 1.18.1",
+        ],
+    },
     "1.18.0": {
         "date": "2026-02-14",
         "changes": [

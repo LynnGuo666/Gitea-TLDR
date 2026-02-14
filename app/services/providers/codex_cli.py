@@ -91,8 +91,8 @@ class CodexProvider(ReviewProvider):
     ) -> str:
         """构建审查 prompt，将 diff 直接嵌入文本中。
 
-        与 ClaudeCodeProvider 不同，Codex exec 不支持将 diff 通过 stdin 传入，
-        因此把 diff 直接嵌入 prompt 文本。
+        Codex exec 支持通过 stdin 读取 prompt；这里统一构建完整文本 prompt，
+        在执行阶段通过 stdin 传入，避免超长命令参数与转义问题。
         """
         focus_map = {
             "quality": "代码质量和最佳实践",
@@ -264,17 +264,18 @@ JSON结构示例：
 
         命令格式::
 
-            codex exec "PROMPT" \\
+            codex exec - \\
                 --sandbox read-only \\
                 --skip-git-repo-check \\
                 --color never \\
                 [--cd REPO_PATH] \\
-                [--output-schema SCHEMA_FILE]
+                [--output-schema SCHEMA_FILE] \\
+                [--output-last-message OUTPUT_FILE]
 
-        不使用 --json 标志，直接捕获 stdout 中的最终消息（纯文本模式）。
-        这与 ClaudeCodeProvider 的 stdout 解析逻辑保持一致。
+        使用 --output-last-message 获取最终消息，减少 stdout 中日志/噪声对解析的影响。
         """
         schema_file = None
+        output_file = None
         try:
             # 写入 output schema 到临时文件
             schema_file = tempfile.NamedTemporaryFile(
@@ -286,10 +287,18 @@ JSON结构示例：
             json.dump(_REVIEW_OUTPUT_SCHEMA, schema_file)
             schema_file.close()
 
+            output_file = tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".txt",
+                prefix="codex_review_output_",
+                delete=False,
+            )
+            output_file.close()
+
             cmd: List[str] = [
                 self.cli_path,
                 "exec",
-                prompt,
+                "-",
                 "--sandbox",
                 "read-only",
                 "--skip-git-repo-check",
@@ -297,6 +306,8 @@ JSON结构示例：
                 "never",
                 "--output-schema",
                 schema_file.name,
+                "--output-last-message",
+                output_file.name,
             ]
 
             if cwd:
@@ -309,13 +320,13 @@ JSON结构示例：
 
             process = await asyncio.create_subprocess_exec(
                 *cmd,
-                stdin=asyncio.subprocess.DEVNULL,
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
             )
 
-            stdout, stderr = await process.communicate()
+            stdout, stderr = await process.communicate(input=prompt.encode("utf-8"))
 
             if process.returncode != 0:
                 stderr_text = stderr.decode(errors="ignore").strip()
@@ -332,7 +343,15 @@ JSON结构示例：
                 )
                 return None
 
-            result = stdout.decode()
+            result = ""
+            if output_file:
+                try:
+                    result = Path(output_file.name).read_text(encoding="utf-8")
+                except OSError:
+                    result = ""
+
+            if not result:
+                result = stdout.decode(errors="ignore")
 
             if self.debug:
                 logger.debug(f"[{self.PROVIDER_NAME} Response]\n{result}")
@@ -349,10 +368,15 @@ JSON结构示例：
             return parsed_result
 
         finally:
-            # 清理临时 schema 文件
+            # 清理临时文件
             if schema_file:
                 try:
                     os.unlink(schema_file.name)
+                except OSError:
+                    pass
+            if output_file:
+                try:
+                    os.unlink(output_file.name)
                 except OSError:
                     pass
 

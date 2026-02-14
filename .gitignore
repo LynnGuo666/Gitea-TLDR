@@ -75,3 +75,4 @@ out/
 agents/
 .ai/
 .claude/
+/frontend/tsconfig.tsbuildinfo
