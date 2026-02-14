@@ -2,7 +2,13 @@
 OpenAI Codex CLI Provider 实现
 
 通过 `codex exec` 非交互模式调用 Codex CLI 进行代码审查。
-文档：https://developers.openai.com/codex/noninteractive
+每次调用动态生成隔离的 ``CODEX_HOME`` 目录与 ``config.toml``，
+避免与用户全局配置冲突，并确保 provider / wire_api / model 等参数
+完全受控。
+
+文档：
+- https://developers.openai.com/codex/noninteractive
+- https://developers.openai.com/codex/config-advanced
 """
 
 import asyncio
@@ -10,6 +16,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -49,12 +56,19 @@ _REVIEW_OUTPUT_SCHEMA: Dict[str, Any] = {
     "additionalProperties": False,
 }
 
+_PROVIDER_SECTION_NAME = "gitea_review"
+_DEFAULT_WIRE_API = "responses"
+
 
 class CodexProvider(ReviewProvider):
     """基于 OpenAI Codex CLI 的审查 Provider
 
     使用 ``codex exec`` 非交互模式分析 PR diff。
     默认运行于 read-only sandbox 以确保安全。
+
+    每次调用会生成临时 ``CODEX_HOME`` 目录，写入 ``config.toml``
+    以指定 model / provider / wire_api 等参数，从而与用户全局
+    配置完全隔离。
     """
 
     PROVIDER_NAME = "codex_cli"
@@ -78,10 +92,6 @@ class CodexProvider(ReviewProvider):
     def display_name(self) -> str:
         return self.DISPLAY_NAME
 
-    # ------------------------------------------------------------------
-    # Prompt 构建
-    # ------------------------------------------------------------------
-
     def _build_review_prompt(
         self,
         diff_content: str,
@@ -89,11 +99,6 @@ class CodexProvider(ReviewProvider):
         pr_info: dict,
         custom_prompt: Optional[str] = None,
     ) -> str:
-        """构建审查 prompt，将 diff 直接嵌入文本中。
-
-        Codex exec 支持通过 stdin 读取 prompt；这里统一构建完整文本 prompt，
-        在执行阶段通过 stdin 传入，避免超长命令参数与转义问题。
-        """
         focus_map = {
             "quality": "代码质量和最佳实践",
             "security": "安全漏洞（SQL注入、XSS、命令注入等）",
@@ -103,7 +108,6 @@ class CodexProvider(ReviewProvider):
 
         focus_text = "、".join([focus_map.get(f, f) for f in focus_areas])
 
-        # 截断超长 diff
         truncated = diff_content[: self.MAX_DIFF_CHARS]
         if len(diff_content) > self.MAX_DIFF_CHARS:
             truncated += "\n\n... (diff 内容过长，已截断)"
@@ -158,30 +162,80 @@ JSON结构示例：
         return prompt
 
     # ------------------------------------------------------------------
-    # 环境变量构建
+    # CODEX_HOME / config.toml 生成
     # ------------------------------------------------------------------
 
-    def _build_env(
+    def _build_codex_home(
         self,
         provider_api_base_url: Optional[str],
         provider_auth_token: Optional[str],
-    ) -> dict:
-        """构建子进程环境变量。
+        model_name: Optional[str] = None,
+        wire_api: Optional[str] = None,
+    ) -> str:
+        """生成临时 ``CODEX_HOME`` 目录并写入 ``config.toml``。
 
-        映射关系：
-        - provider_api_base_url  → OPENAI_BASE_URL
-        - provider_auth_token    → CODEX_API_KEY
+        Returns:
+            临时目录的绝对路径，调用方负责在 finally 中清理。
         """
-        custom_env = os.environ.copy()
+        codex_home = tempfile.mkdtemp(prefix="codex_home_")
+        resolved_model = model_name or self.DEFAULT_MODEL
+        resolved_wire_api = wire_api or _DEFAULT_WIRE_API
+
+        lines = [
+            f'model = "{resolved_model}"',
+            f'model_provider = "{_PROVIDER_SECTION_NAME}"',
+            'approval_policy = "never"',
+            "",
+            f"[model_providers.{_PROVIDER_SECTION_NAME}]",
+            f'name = "Gitea PR Review"',
+        ]
+
         if provider_api_base_url:
-            custom_env["OPENAI_BASE_URL"] = provider_api_base_url
-            if self.debug:
-                logger.debug(f"[Custom OPENAI_BASE_URL] {provider_api_base_url}")
+            lines.append(f'base_url = "{provider_api_base_url}"')
+
+        lines.append(f'wire_api = "{resolved_wire_api}"')
+        lines.append('env_key = "CODEX_API_KEY"')
+
+        config_content = "\n".join(lines) + "\n"
+        config_path = Path(codex_home) / "config.toml"
+        config_path.write_text(config_content, encoding="utf-8")
+
+        if self.debug:
+            logger.debug(
+                f"[{self.PROVIDER_NAME}] Generated CODEX_HOME={codex_home}\n"
+                f"{config_content}"
+            )
+
+        return codex_home
+
+    def _build_env(
+        self,
+        codex_home: str,
+        provider_auth_token: Optional[str],
+    ) -> dict:
+        """构建最小化子进程环境变量。
+
+        只传递 ``CODEX_HOME``、``CODEX_API_KEY``、``PATH``、``HOME``，
+        避免宿主 env 中的 ``OPENAI_*`` 等变量干扰 Codex CLI 行为。
+        """
+        minimal_env: Dict[str, str] = {
+            "CODEX_HOME": codex_home,
+            "PATH": os.environ.get("PATH", "/usr/bin:/usr/local/bin"),
+            "HOME": os.environ.get("HOME", "/tmp"),
+        }
         if provider_auth_token:
-            custom_env["CODEX_API_KEY"] = provider_auth_token
-            if self.debug:
-                logger.debug("[Custom CODEX_API_KEY] (set)")
-        return custom_env
+            minimal_env["CODEX_API_KEY"] = provider_auth_token
+        elif os.environ.get("OPENAI_API_KEY"):
+            minimal_env["CODEX_API_KEY"] = os.environ["OPENAI_API_KEY"]
+
+        if self.debug:
+            safe_keys = {
+                k: ("***" if "KEY" in k or "TOKEN" in k else v)
+                for k, v in minimal_env.items()
+            }
+            logger.debug(f"[{self.PROVIDER_NAME}] Subprocess env: {safe_keys}")
+
+        return minimal_env
 
     # ------------------------------------------------------------------
     # 核心分析方法
@@ -196,9 +250,11 @@ JSON结构示例：
         provider_api_base_url: Optional[str] = None,
         provider_auth_token: Optional[str] = None,
         custom_prompt: Optional[str] = None,
+        model_name: Optional[str] = None,
+        wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
-        """使用完整代码库上下文分析 PR（Codex 会读取 repo_path 目录）"""
         self._clear_last_error()
+        codex_home: Optional[str] = None
         try:
             prompt = self._build_review_prompt(
                 diff_content, focus_areas, pr_info, custom_prompt
@@ -210,14 +266,22 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
-            custom_env = self._build_env(provider_api_base_url, provider_auth_token)
+            codex_home = self._build_codex_home(
+                provider_api_base_url,
+                provider_auth_token,
+                model_name=model_name,
+                wire_api=wire_api,
+            )
+            env = self._build_env(codex_home, provider_auth_token)
 
-            return await self._run_codex_exec(prompt, custom_env, cwd=str(repo_path))
+            return await self._run_codex_exec(prompt, env, cwd=str(repo_path))
 
         except Exception as e:
             logger.error(f"{self.DISPLAY_NAME} 分析异常: {e}", exc_info=True)
             self._set_last_error(f"{self.DISPLAY_NAME} 分析异常: {e}")
             return None
+        finally:
+            self._cleanup_codex_home(codex_home)
 
     async def analyze_pr_simple(
         self,
@@ -227,9 +291,11 @@ JSON结构示例：
         provider_api_base_url: Optional[str] = None,
         provider_auth_token: Optional[str] = None,
         custom_prompt: Optional[str] = None,
+        model_name: Optional[str] = None,
+        wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
-        """简单模式：仅基于 diff 分析（不指定工作目录）"""
         self._clear_last_error()
+        codex_home: Optional[str] = None
         try:
             prompt = self._build_review_prompt(
                 diff_content, focus_areas, pr_info, custom_prompt
@@ -241,14 +307,30 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt - Simple Mode]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
-            custom_env = self._build_env(provider_api_base_url, provider_auth_token)
+            codex_home = self._build_codex_home(
+                provider_api_base_url,
+                provider_auth_token,
+                model_name=model_name,
+                wire_api=wire_api,
+            )
+            env = self._build_env(codex_home, provider_auth_token)
 
-            return await self._run_codex_exec(prompt, custom_env, cwd=None)
+            return await self._run_codex_exec(prompt, env, cwd=None)
 
         except Exception as e:
             logger.error(f"{self.DISPLAY_NAME} 分析异常: {e}", exc_info=True)
             self._set_last_error(f"{self.DISPLAY_NAME} 分析异常: {e}")
             return None
+        finally:
+            self._cleanup_codex_home(codex_home)
+
+    @staticmethod
+    def _cleanup_codex_home(codex_home: Optional[str]) -> None:
+        if codex_home:
+            try:
+                shutil.rmtree(codex_home, ignore_errors=True)
+            except OSError:
+                pass
 
     # ------------------------------------------------------------------
     # Codex exec 子进程调用

@@ -47,6 +47,8 @@ class ReviewEngine:
         provider_auth_token: Optional[str] = None,
         provider_name: Optional[str] = None,
         custom_prompt: Optional[str] = None,
+        model_name: Optional[str] = None,
+        wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         provider = self._resolve_provider(provider_name)
         self.last_error = None
@@ -58,6 +60,8 @@ class ReviewEngine:
             provider_api_base_url=provider_api_base_url,
             provider_auth_token=provider_auth_token,
             custom_prompt=custom_prompt,
+            model_name=model_name,
+            wire_api=wire_api,
         )
         if result is None:
             self.last_error = provider.last_error
@@ -72,6 +76,8 @@ class ReviewEngine:
         provider_auth_token: Optional[str] = None,
         provider_name: Optional[str] = None,
         custom_prompt: Optional[str] = None,
+        model_name: Optional[str] = None,
+        wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         provider = self._resolve_provider(provider_name)
         self.last_error = None
@@ -82,6 +88,8 @@ class ReviewEngine:
             provider_api_base_url=provider_api_base_url,
             provider_auth_token=provider_auth_token,
             custom_prompt=custom_prompt,
+            model_name=model_name,
+            wire_api=wire_api,
         )
         if result is None:
             self.last_error = provider.last_error

@@ -98,6 +98,8 @@ JSON结构示例：
         provider_api_base_url: Optional[str] = None,
         provider_auth_token: Optional[str] = None,
         custom_prompt: Optional[str] = None,
+        model_name: Optional[str] = None,
+        wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         self._clear_last_error()
         try:
@@ -172,6 +174,8 @@ JSON结构示例：
         provider_api_base_url: Optional[str] = None,
         provider_auth_token: Optional[str] = None,
         custom_prompt: Optional[str] = None,
+        model_name: Optional[str] = None,
+        wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         self._clear_last_error()
         try:

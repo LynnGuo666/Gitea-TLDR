@@ -256,6 +256,7 @@ class WebhookHandler:
             # 查询仓库的 Anthropic 配置
             anthropic_base_url = None
             anthropic_auth_token = None
+            wire_api = None
             provider_name = self.review_engine.default_provider_name
             model_name = provider_name
             config_source = "global_default"
@@ -272,6 +273,7 @@ class WebhookHandler:
                     if model_config:
                         anthropic_base_url = model_config.provider_api_base_url
                         anthropic_auth_token = model_config.provider_auth_token
+                        wire_api = model_config.wire_api
                         provider_name = model_config.model_name or provider_name
                         model_name = provider_name
                         if model_config.repository_id == repository_id:
@@ -396,6 +398,7 @@ class WebhookHandler:
                     provider_api_base_url=anthropic_base_url,
                     provider_auth_token=anthropic_auth_token,
                     provider_name=provider_name,
+                    wire_api=wire_api,
                 )
             else:
                 # 使用完整代码库分析
@@ -408,6 +411,7 @@ class WebhookHandler:
                     provider_api_base_url=anthropic_base_url,
                     provider_auth_token=anthropic_auth_token,
                     provider_name=provider_name,
+                    wire_api=wire_api,
                 )
 
                 # 清理仓库

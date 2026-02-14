@@ -142,23 +142,9 @@ class ReviewProvider(ABC):
         provider_api_base_url: Optional[str] = None,
         provider_auth_token: Optional[str] = None,
         custom_prompt: Optional[str] = None,
-    ) -> Optional[ReviewResult]:
-        """
-        使用完整代码库上下文分析 PR
-
-        Args:
-            repo_path: 仓库本地路径
-            diff_content: PR 的 diff 内容
-            focus_areas: 审查重点领域
-            pr_info: PR 信息
-            provider_api_base_url: 自定义 API Base URL
-            provider_auth_token: 自定义 Auth Token
-            custom_prompt: 自定义审查要求（追加到默认 prompt 末尾）
-
-        Returns:
-            ReviewResult 或 None（失败时）
-        """
-        ...
+        model_name: Optional[str] = None,
+        wire_api: Optional[str] = None,
+    ) -> Optional[ReviewResult]: ...
 
     @abstractmethod
     async def analyze_pr_simple(
@@ -169,19 +155,6 @@ class ReviewProvider(ABC):
         provider_api_base_url: Optional[str] = None,
         provider_auth_token: Optional[str] = None,
         custom_prompt: Optional[str] = None,
-    ) -> Optional[ReviewResult]:
-        """
-        简单模式：不依赖完整代码库，仅分析 diff
-
-        Args:
-            diff_content: PR 的 diff 内容
-            focus_areas: 审查重点领域
-            pr_info: PR 信息
-            provider_api_base_url: 自定义 API Base URL
-            provider_auth_token: 自定义 Auth Token
-            custom_prompt: 自定义审查要求（追加到默认 prompt 末尾）
-
-        Returns:
-            ReviewResult 或 None（失败时）
-        """
-        ...
+        model_name: Optional[str] = None,
+        wire_api: Optional[str] = None,
+    ) -> Optional[ReviewResult]: ...

@@ -46,6 +46,12 @@ class ModelConfig(Base, TimestampMixin):
     provider_auth_token: Mapped[Optional[str]] = mapped_column(
         String(500), nullable=True, comment="Provider Auth Token"
     )
+    wire_api: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+        default="responses",
+        comment="Codex wire API type: responses | chat-completions",
+    )
 
     # 关系
     repository: Mapped[Optional["Repository"]] = relationship(

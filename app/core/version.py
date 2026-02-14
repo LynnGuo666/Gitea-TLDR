@@ -2,12 +2,20 @@
 版本信息模块
 """
 
-__version__ = "1.18.3"
-__release_date__ = "2026-02-14"
+__version__ = "1.18.4"
+__release_date__ = "2026-02-15"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.18.4": {
+        "date": "2026-02-15",
+        "changes": [
+            "重构：Codex Provider 改为运行时生成隔离 CODEX_HOME/config.toml，并通过 codex exec 调用，避免宿主环境变量干扰",
+            "新增：ModelConfig 增加 wire_api 配置（responses/chat-completions），并在 webhook -> review_engine -> provider 全链路透传",
+            "同步：统一更新前后端版本号到 1.18.4",
+        ],
+    },
     "1.18.3": {
         "date": "2026-02-14",
         "changes": [

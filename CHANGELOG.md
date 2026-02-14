@@ -4,6 +4,21 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.18.4] - 2026-02-15
+
+### 新增功能 (Added)
+
+- **Codex wire_api 配置透传**: `model_configs` 新增 `wire_api` 字段，支持按配置在 `responses` 与 `chat-completions` 间切换，并贯穿 webhook 到 provider 调用链路
+
+### 重构 (Refactored)
+
+- **Codex CLI 调用模型**: `CodexProvider` 改为每次调用动态生成隔离的 `CODEX_HOME/config.toml`，通过 `model_provider + model + wire_api + env_key` 驱动 `codex exec`
+- **环境隔离**: 子进程环境由全量继承改为最小化传递（`CODEX_HOME`/`CODEX_API_KEY`/`PATH`/`HOME`），避免宿主 `OPENAI_*` 配置污染
+
+### 优化 (Improved)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.18.4`
+
 ## [1.18.3] - 2026-02-14
 
 ### 新增功能 (Added)
