@@ -2,13 +2,13 @@
 数据库操作服务
 """
 
-import json
 import logging
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models import (
     InlineComment,
@@ -225,6 +225,9 @@ class DBService:
         inline_comments_count: Optional[int] = None,
         overall_success: Optional[bool] = None,
         error_message: Optional[str] = None,
+        provider_name: Optional[str] = None,
+        model_name: Optional[str] = None,
+        config_source: Optional[str] = None,
         completed: bool = False,
     ) -> Optional[ReviewSession]:
         """更新审查会话"""
@@ -249,6 +252,12 @@ class DBService:
             review_session.overall_success = overall_success
         if error_message is not None:
             review_session.error_message = error_message
+        if provider_name is not None:
+            review_session.provider_name = provider_name
+        if model_name is not None:
+            review_session.model_name = model_name
+        if config_source is not None:
+            review_session.config_source = config_source
 
         if completed:
             completed_at = datetime.utcnow()
@@ -262,7 +271,11 @@ class DBService:
 
     async def get_review_session(self, session_id: int) -> Optional[ReviewSession]:
         """获取审查会话"""
-        stmt = select(ReviewSession).where(ReviewSession.id == session_id)
+        stmt = (
+            select(ReviewSession)
+            .where(ReviewSession.id == session_id)
+            .options(selectinload(ReviewSession.repository))
+        )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -271,11 +284,12 @@ class DBService:
         repository_id: Optional[int] = None,
         owner: Optional[str] = None,
         repo_name: Optional[str] = None,
+        success: Optional[bool] = None,
         limit: int = 50,
         offset: int = 0,
     ) -> List[ReviewSession]:
         """获取审查会话列表"""
-        stmt = select(ReviewSession)
+        stmt = select(ReviewSession).options(selectinload(ReviewSession.repository))
 
         if repository_id:
             stmt = stmt.where(ReviewSession.repository_id == repository_id)
@@ -284,6 +298,33 @@ class DBService:
                 Repository.owner == owner, Repository.repo_name == repo_name
             )
 
+        if success is not None:
+            stmt = stmt.where(ReviewSession.overall_success == success)
+
+        stmt = stmt.order_by(ReviewSession.started_at.desc())
+        stmt = stmt.limit(limit).offset(offset)
+
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def list_review_sessions_by_repo_ids(
+        self,
+        repository_ids: List[int],
+        success: Optional[bool] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[ReviewSession]:
+        """获取指定仓库列表的审查会话"""
+        from sqlalchemy.orm import selectinload
+
+        stmt = select(ReviewSession).where(
+            ReviewSession.repository_id.in_(repository_ids)
+        )
+
+        if success is not None:
+            stmt = stmt.where(ReviewSession.overall_success == success)
+
+        stmt = stmt.options(selectinload(ReviewSession.repository))
         stmt = stmt.order_by(ReviewSession.started_at.desc())
         stmt = stmt.limit(limit).offset(offset)
 

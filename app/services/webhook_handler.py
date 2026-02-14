@@ -37,7 +37,9 @@ class WebhookHandler:
         self.database = database
         self.command_parser = CommandParser(bot_username)
 
-    def parse_review_features(self, features_header: Optional[str]) -> List[str]:
+    def parse_review_features(
+        self, features_header: Optional[str]
+    ) -> Optional[List[str]]:
         """
         解析审查功能标头
 
@@ -48,13 +50,13 @@ class WebhookHandler:
             功能列表
         """
         if not features_header:
-            return ["comment"]  # 默认只发评论
+            return None
 
         features = [f.strip().lower() for f in features_header.split(",")]
         valid_features = ["comment", "review", "status"]
         return [f for f in features if f in valid_features]
 
-    def parse_review_focus(self, focus_header: Optional[str]) -> List[str]:
+    def parse_review_focus(self, focus_header: Optional[str]) -> Optional[List[str]]:
         """
         解析审查重点标头
 
@@ -65,14 +67,17 @@ class WebhookHandler:
             审查重点列表
         """
         if not focus_header:
-            return settings.default_review_focus
+            return None
 
         focus_areas = [f.strip().lower() for f in focus_header.split(",")]
         valid_areas = ["quality", "security", "performance", "logic"]
         return [f for f in focus_areas if f in valid_areas]
 
     async def handle_pull_request(
-        self, payload: Dict[str, Any], features: List[str], focus_areas: List[str]
+        self,
+        payload: Dict[str, Any],
+        features: Optional[List[str]],
+        focus_areas: Optional[List[str]],
     ) -> bool:
         """
         处理Pull Request事件
@@ -123,7 +128,10 @@ class WebhookHandler:
             return False
 
     async def process_webhook_async(
-        self, payload: Dict[str, Any], features: List[str], focus_areas: List[str]
+        self,
+        payload: Dict[str, Any],
+        features: Optional[List[str]],
+        focus_areas: Optional[List[str]],
     ):
         """
         异步处理webhook（后台任务）
@@ -215,8 +223,8 @@ class WebhookHandler:
         repo_name: str,
         pr_number: int,
         pr_data: Dict[str, Any],
-        features: List[str],
-        focus_areas: List[str],
+        features: Optional[List[str]],
+        focus_areas: Optional[List[str]],
         trigger_type: str = "auto",
     ) -> bool:
         """
@@ -256,6 +264,12 @@ class WebhookHandler:
             # 查询仓库的 Anthropic 配置
             anthropic_base_url = None
             anthropic_auth_token = None
+            config_source = "global_default"
+            provider_name = None
+            custom_prompt = None
+
+            if focus_areas is not None or features is not None:
+                config_source = "header"
 
             # 创建数据库记录
             if self.database:
@@ -269,10 +283,26 @@ class WebhookHandler:
                     if model_config:
                         anthropic_base_url = model_config.provider_api_base_url
                         anthropic_auth_token = model_config.provider_auth_token
+                        provider_name = model_config.model_name
+                        custom_prompt = model_config.custom_prompt
                         if anthropic_base_url or anthropic_auth_token:
                             logger.info(
                                 f"使用仓库 {owner}/{repo_name} 的自定义 Anthropic 配置"
                             )
+
+                        if focus_areas is None:
+                            db_focus = model_config.get_focus()
+                            if db_focus:
+                                focus_areas = db_focus
+                                if config_source != "header":
+                                    config_source = "repo_config"
+
+                        if features is None:
+                            db_features = model_config.get_features()
+                            if db_features:
+                                features = db_features
+                                if config_source != "header":
+                                    config_source = "repo_config"
 
                     review_session = await db_service.create_review_session(
                         repository_id=repository_id,
@@ -287,6 +317,13 @@ class WebhookHandler:
                         focus_areas=focus_areas,
                     )
                     review_session_id = review_session.id
+
+            if focus_areas is None:
+                focus_areas = settings.default_review_focus
+            if features is None:
+                features = ["comment"]
+
+            logger.info(f"审查配置来源: {config_source}")
 
             # 创建初始评论（如果启用了comment功能）
             comment_id = None
@@ -367,6 +404,8 @@ class WebhookHandler:
                     pr_data,
                     provider_api_base_url=anthropic_base_url,
                     provider_auth_token=anthropic_auth_token,
+                    provider_name=provider_name,
+                    custom_prompt=custom_prompt,
                 )
             else:
                 # 使用完整代码库分析
@@ -378,6 +417,8 @@ class WebhookHandler:
                     pr_data,
                     provider_api_base_url=anthropic_base_url,
                     provider_auth_token=anthropic_auth_token,
+                    provider_name=provider_name,
+                    custom_prompt=custom_prompt,
                 )
 
                 # 清理仓库
@@ -479,9 +520,21 @@ class WebhookHandler:
             if self.database and review_session_id:
                 async with self.database.session() as session:
                     db_service = DBService(session)
+                    audit_kwargs: Dict[str, Any] = {
+                        "provider_name": analysis_result.provider_name or None,
+                        "model_name": (
+                            analysis_result.usage_metadata.get("model")
+                            if analysis_result.usage_metadata
+                            else None
+                        ),
+                        "config_source": config_source
+                        if "config_source" in dir()
+                        else None,
+                    }
 
                     # 更新审查会话
-                    await db_service.update_review_session(
+                    update_review_session = getattr(db_service, "update_review_session")
+                    await update_review_session(
                         review_session_id,
                         analysis_mode=analysis_mode,
                         diff_size_bytes=diff_size,
@@ -490,6 +543,7 @@ class WebhookHandler:
                         inline_comments_count=len(analysis_result.inline_comments),
                         overall_success=success,
                         completed=True,
+                        **audit_kwargs,
                     )
 
                     # 保存行级评论

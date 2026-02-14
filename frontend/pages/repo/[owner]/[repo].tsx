@@ -96,6 +96,7 @@ export default function RepoConfigPage() {
     'quality',
     'security',
     'performance',
+    'logic',
   ]);
   // Claude 配置状态
   const [providerConfig, setProviderConfig] = useState<RepoProviderConfig | null>(null);
@@ -112,6 +113,8 @@ export default function RepoConfigPage() {
   // Pull Requests
   const [pulls, setPulls] = useState<PullRequest[]>([]);
   const [pullsLoading, setPullsLoading] = useState(true);
+  const [focusLoading, setFocusLoading] = useState(true);
+  const [focusSaving, setFocusSaving] = useState(false);
 
   const { status: authStatus, beginLogin } = useContext(AuthContext);
   const requiresLogin = authStatus.enabled && !authStatus.loggedIn;
@@ -189,6 +192,24 @@ export default function RepoConfigPage() {
     }
   }, [owner, repo, requiresLogin]);
 
+  const fetchReviewSettings = useCallback(async () => {
+    if (!owner || !repo || requiresLogin) return;
+    setFocusLoading(true);
+    try {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/review-settings`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.default_focus?.length) {
+          setReviewFocus(data.default_focus);
+        }
+      }
+    } catch {
+      // Keep defaults on error
+    } finally {
+      setFocusLoading(false);
+    }
+  }, [owner, repo, requiresLogin]);
+
   const canEditRepo = webhookStatus?.can_setup_webhook ?? true;
 
   useEffect(() => {
@@ -196,6 +217,7 @@ export default function RepoConfigPage() {
       fetchWebhookStatus();
       fetchProviderConfig();
       fetchPulls();
+      fetchReviewSettings();
       apiFetch('/api/providers').then(async (res) => {
         if (res.ok) {
           const data = await res.json();
@@ -206,14 +228,28 @@ export default function RepoConfigPage() {
       setStatusLoading(false);
       setProviderConfigLoading(false);
       setPullsLoading(false);
+      setFocusLoading(false);
     }
-  }, [owner, repo, requiresLogin, fetchWebhookStatus, fetchProviderConfig, fetchPulls]);
+  }, [
+    owner,
+    repo,
+    requiresLogin,
+    fetchWebhookStatus,
+    fetchProviderConfig,
+    fetchPulls,
+    fetchReviewSettings,
+  ]);
 
   const refreshAll = async () => {
     if (requiresLogin) return;
     setRefreshingAll(true);
     try {
-      await Promise.all([fetchWebhookStatus(), fetchProviderConfig(), fetchPulls()]);
+      await Promise.all([
+        fetchWebhookStatus(),
+        fetchProviderConfig(),
+        fetchPulls(),
+        fetchReviewSettings(),
+      ]);
     } finally {
       setRefreshingAll(false);
     }
@@ -225,10 +261,35 @@ export default function RepoConfigPage() {
     );
   };
 
-  const toggleFocus = (key: string) => {
-    setReviewFocus((prev) =>
-      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
-    );
+  const toggleFocus = async (key: string) => {
+    if (focusSaving) return;
+    const next = reviewFocus.includes(key)
+      ? reviewFocus.filter((item) => item !== key)
+      : [...reviewFocus, key];
+
+    // Don't allow empty - must have at least one
+    if (next.length === 0) return;
+
+    setReviewFocus(next);
+    setFocusSaving(true);
+    try {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/review-settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ default_focus: next }),
+      });
+      if (res.ok) {
+        addToast({ title: '审查方向已保存', color: 'success' });
+      } else {
+        addToast({ title: '保存失败', color: 'danger' });
+        setReviewFocus(reviewFocus); // Revert on failure
+      }
+    } catch {
+      addToast({ title: '无法连接后端', color: 'danger' });
+      setReviewFocus(reviewFocus); // Revert on failure
+    } finally {
+      setFocusSaving(false);
+    }
   };
 
   const enableWebhook = async () => {
@@ -496,28 +557,42 @@ export default function RepoConfigPage() {
 
         {activeTab === 'focus' && (
           <section className="py-5">
-            <div className="mb-4 flex justify-end">
-              <Chip size="sm" variant="flat">{reviewFocus.length} 个已启用</Chip>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {reviewCatalog.map((item) => {
-                const active = reviewFocus.includes(item.key);
-                return (
-                  <button
-                    key={item.key}
-                    className={`text-left p-4 rounded-xl transition-all cursor-pointer ${
-                      active
-                        ? 'bg-primary-50 ring-1 ring-primary'
-                        : 'bg-default-100 hover:bg-default-200'
-                    }`}
-                    onClick={() => toggleFocus(item.key)}
-                  >
-                    <strong className="text-sm text-foreground">{item.label}</strong>
-                    <p className="m-0 text-xs text-default-500 mt-1">{item.detail}</p>
-                  </button>
-                );
-              })}
-            </div>
+            {focusLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Skeleton width="100%" height={80} className="rounded-xl" />
+                <Skeleton width="100%" height={80} className="rounded-xl" />
+                <Skeleton width="100%" height={80} className="rounded-xl" />
+                <Skeleton width="100%" height={80} className="rounded-xl" />
+              </div>
+            ) : (
+              <>
+                <div className="mb-4 flex justify-end">
+                  <Chip size="sm" variant="flat">
+                    {reviewFocus.length} 个已启用
+                  </Chip>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {reviewCatalog.map((item) => {
+                    const active = reviewFocus.includes(item.key);
+                    return (
+                      <button
+                        key={item.key}
+                        disabled={focusSaving}
+                        className={`text-left p-4 rounded-xl transition-all cursor-pointer ${
+                          active
+                            ? 'bg-primary-50 ring-1 ring-primary'
+                            : 'bg-default-100 hover:bg-default-200'
+                        } ${focusSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        onClick={() => toggleFocus(item.key)}
+                      >
+                        <strong className="text-sm text-foreground">{item.label}</strong>
+                        <p className="m-0 text-xs text-default-500 mt-1">{item.detail}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </section>
         )}
 

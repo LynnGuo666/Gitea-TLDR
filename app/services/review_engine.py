@@ -45,6 +45,7 @@ class ReviewEngine:
         provider_api_base_url: Optional[str] = None,
         provider_auth_token: Optional[str] = None,
         provider_name: Optional[str] = None,
+        custom_prompt: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         provider = self._resolve_provider(provider_name)
         return await provider.analyze_pr(
@@ -54,6 +55,7 @@ class ReviewEngine:
             pr_info,
             provider_api_base_url=provider_api_base_url,
             provider_auth_token=provider_auth_token,
+            custom_prompt=custom_prompt,
         )
 
     async def analyze_pr_simple(
@@ -64,6 +66,7 @@ class ReviewEngine:
         provider_api_base_url: Optional[str] = None,
         provider_auth_token: Optional[str] = None,
         provider_name: Optional[str] = None,
+        custom_prompt: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         provider = self._resolve_provider(provider_name)
         return await provider.analyze_pr_simple(
@@ -72,6 +75,7 @@ class ReviewEngine:
             pr_info,
             provider_api_base_url=provider_api_base_url,
             provider_auth_token=provider_auth_token,
+            custom_prompt=custom_prompt,
         )
 
     def _resolve_provider(self, name: Optional[str] = None) -> ReviewProvider:
