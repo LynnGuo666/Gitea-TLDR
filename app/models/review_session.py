@@ -41,6 +41,12 @@ class ReviewSession(Base):
     provider_name: Mapped[Optional[str]] = mapped_column(
         String(100), nullable=True, comment="审查引擎名称，如 claude_code / codex_cli"
     )
+    model_name: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True, comment="实际使用的模型标识"
+    )
+    config_source: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True, comment="header / repo_config / global_default"
+    )
     enabled_features: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True, comment="JSON数组"
     )

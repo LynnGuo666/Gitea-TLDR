@@ -4,6 +4,18 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.18.2] - 2026-02-14
+
+### 修复 (Fixed)
+
+- **Alembic 多头冲突**: 移除重复迁移分支，恢复 `alembic upgrade head` 的单链路执行
+- **我的审查接口崩溃**: 补齐 `ReviewSession` 的 `model_name`、`config_source` 字段映射，修复 `/api/my/reviews` 的属性访问异常
+- **审查列表查询兼容性**: `DBService` 增加按仓库 ID 集合查询的方法，修复 `list_my_reviews` 调用缺失方法报错
+
+### 优化 (Improved)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.18.2`
+
 ## [1.18.1] - 2026-02-14
 
 ### 修复 (Fixed)

@@ -2,12 +2,21 @@
 版本信息模块
 """
 
-__version__ = "1.18.1"
+__version__ = "1.18.2"
 __release_date__ = "2026-02-14"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.18.2": {
+        "date": "2026-02-14",
+        "changes": [
+            "修复：移除重复 Alembic 迁移头，恢复 upgrade head 单链路执行",
+            "修复：补齐 ReviewSession 的 model_name/config_source 字段，避免 /api/my/reviews 属性错误",
+            "修复：DBService 增加按仓库集合查询审查会话方法，修复 list_my_reviews 调用异常",
+            "同步：统一更新前后端版本号到 1.18.2",
+        ],
+    },
     "1.18.1": {
         "date": "2026-02-14",
         "changes": [
