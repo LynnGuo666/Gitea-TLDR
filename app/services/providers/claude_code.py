@@ -111,7 +111,7 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
-            custom_env = self._build_env(api_url, api_key)
+            custom_env = self._build_env(api_url, api_key, model)
 
             process = await asyncio.create_subprocess_exec(
                 self.cli_path,
@@ -158,6 +158,8 @@ JSON结构示例：
                 self._set_last_error(f"{self.DISPLAY_NAME} 返回结果为空")
                 return None
 
+            self._set_model_metadata(parsed_result, model)
+
             logger.info(f"{self.DISPLAY_NAME} 分析完成")
             return parsed_result
 
@@ -187,7 +189,7 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt - Simple Mode]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
-            custom_env = self._build_env(api_url, api_key)
+            custom_env = self._build_env(api_url, api_key, model)
 
             process = await asyncio.create_subprocess_exec(
                 self.cli_path,
@@ -236,6 +238,8 @@ JSON结构示例：
                 self._set_last_error(f"{self.DISPLAY_NAME} 返回结果为空（简单模式）")
                 return None
 
+            self._set_model_metadata(parsed_result, model)
+
             logger.info(f"{self.DISPLAY_NAME} 分析完成（简单模式）")
             return parsed_result
 
@@ -248,6 +252,7 @@ JSON结构示例：
         self,
         api_url: Optional[str],
         api_key: Optional[str],
+        model: Optional[str],
     ) -> dict:
         custom_env = os.environ.copy()
         if api_url:
@@ -258,7 +263,16 @@ JSON结构示例：
             custom_env["ANTHROPIC_AUTH_TOKEN"] = api_key
             if self.debug:
                 logger.debug("[Custom ANTHROPIC_AUTH_TOKEN] (set)")
+        if model and model.strip():
+            custom_env["ANTHROPIC_MODEL"] = model.strip()
+            if self.debug:
+                logger.debug(f"[Custom ANTHROPIC_MODEL] {model.strip()}")
         return custom_env
+
+    @staticmethod
+    def _set_model_metadata(result: ReviewResult, model: Optional[str]) -> None:
+        if model and model.strip():
+            result.usage_metadata["model"] = model.strip()
 
     def _parse_output(self, output: str) -> Optional[ReviewResult]:
         sanitized = (output or "").strip()
