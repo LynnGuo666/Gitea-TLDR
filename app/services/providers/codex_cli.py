@@ -61,7 +61,7 @@ class CodexProvider(ReviewProvider):
     DISPLAY_NAME = "Codex CLI"
 
     # Codex exec 默认使用的模型
-    DEFAULT_MODEL = "o3"
+    DEFAULT_MODEL = "gpt-5.2-codex"
 
     # diff 内容嵌入 prompt 时的最大字符数（防止超长 prompt）
     MAX_DIFF_CHARS = 200_000
@@ -191,6 +191,7 @@ JSON结构示例：
         provider_auth_token: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         """使用完整代码库上下文分析 PR（Codex 会读取 repo_path 目录）"""
+        self._clear_last_error()
         try:
             prompt = self._build_review_prompt(diff_content, focus_areas, pr_info)
 
@@ -206,6 +207,7 @@ JSON结构示例：
 
         except Exception as e:
             logger.error(f"{self.DISPLAY_NAME} 分析异常: {e}", exc_info=True)
+            self._set_last_error(f"{self.DISPLAY_NAME} 分析异常: {e}")
             return None
 
     async def analyze_pr_simple(
@@ -217,6 +219,7 @@ JSON结构示例：
         provider_auth_token: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         """简单模式：仅基于 diff 分析（不指定工作目录）"""
+        self._clear_last_error()
         try:
             prompt = self._build_review_prompt(diff_content, focus_areas, pr_info)
 
@@ -232,6 +235,7 @@ JSON结构示例：
 
         except Exception as e:
             logger.error(f"{self.DISPLAY_NAME} 分析异常: {e}", exc_info=True)
+            self._set_last_error(f"{self.DISPLAY_NAME} 分析异常: {e}")
             return None
 
     # ------------------------------------------------------------------
@@ -302,11 +306,18 @@ JSON结构示例：
             stdout, stderr = await process.communicate()
 
             if process.returncode != 0:
+                stderr_text = stderr.decode(errors="ignore").strip()
+                stdout_text = stdout.decode(errors="ignore").strip()
                 logger.error(
                     f"{self.DISPLAY_NAME} 执行失败 (返回码: {process.returncode})"
                 )
-                logger.error(f"Stdout: {stdout.decode()}")
-                logger.error(f"Stderr: {stderr.decode()}")
+                logger.error(f"Stdout: {stdout_text}")
+                logger.error(f"Stderr: {stderr_text}")
+                self._set_last_error(
+                    stderr_text
+                    or stdout_text
+                    or f"{self.DISPLAY_NAME} 执行失败，返回码 {process.returncode}"
+                )
                 return None
 
             result = stdout.decode()
@@ -319,6 +330,7 @@ JSON结构示例：
             parsed_result = self._parse_output(result)
             if not parsed_result:
                 logger.error(f"{self.DISPLAY_NAME} 返回结果为空")
+                self._set_last_error(f"{self.DISPLAY_NAME} 返回结果为空")
                 return None
 
             logger.info(f"{self.DISPLAY_NAME} 分析完成")

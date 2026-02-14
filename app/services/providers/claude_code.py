@@ -94,6 +94,7 @@ JSON结构示例：
         provider_api_base_url: Optional[str] = None,
         provider_auth_token: Optional[str] = None,
     ) -> Optional[ReviewResult]:
+        self._clear_last_error()
         try:
             prompt = self._build_review_prompt(focus_areas, pr_info)
 
@@ -123,11 +124,18 @@ JSON结构示例：
             )
 
             if process.returncode != 0:
+                stderr_text = stderr.decode(errors="ignore").strip()
+                stdout_text = stdout.decode(errors="ignore").strip()
                 logger.error(
                     f"{self.DISPLAY_NAME} 执行失败 (返回码: {process.returncode})"
                 )
-                logger.error(f"Stdout: {stdout.decode()}")
-                logger.error(f"Stderr: {stderr.decode()}")
+                logger.error(f"Stdout: {stdout_text}")
+                logger.error(f"Stderr: {stderr_text}")
+                self._set_last_error(
+                    stderr_text
+                    or stdout_text
+                    or f"{self.DISPLAY_NAME} 执行失败，返回码 {process.returncode}"
+                )
                 return None
 
             result = stdout.decode()
@@ -140,6 +148,7 @@ JSON结构示例：
             parsed_result = self._parse_output(result)
             if not parsed_result:
                 logger.error(f"{self.DISPLAY_NAME} 返回结果为空")
+                self._set_last_error(f"{self.DISPLAY_NAME} 返回结果为空")
                 return None
 
             logger.info(f"{self.DISPLAY_NAME} 分析完成")
@@ -147,6 +156,7 @@ JSON结构示例：
 
         except Exception as e:
             logger.error(f"{self.DISPLAY_NAME} 分析异常: {e}", exc_info=True)
+            self._set_last_error(f"{self.DISPLAY_NAME} 分析异常: {e}")
             return None
 
     async def analyze_pr_simple(
@@ -157,6 +167,7 @@ JSON结构示例：
         provider_api_base_url: Optional[str] = None,
         provider_auth_token: Optional[str] = None,
     ) -> Optional[ReviewResult]:
+        self._clear_last_error()
         try:
             prompt = self._build_review_prompt(focus_areas, pr_info)
 
@@ -185,11 +196,18 @@ JSON结构示例：
             )
 
             if process.returncode != 0:
+                stderr_text = stderr.decode(errors="ignore").strip()
+                stdout_text = stdout.decode(errors="ignore").strip()
                 logger.error(
                     f"{self.DISPLAY_NAME} 执行失败 (返回码: {process.returncode})"
                 )
-                logger.error(f"Stdout: {stdout.decode()}")
-                logger.error(f"Stderr: {stderr.decode()}")
+                logger.error(f"Stdout: {stdout_text}")
+                logger.error(f"Stderr: {stderr_text}")
+                self._set_last_error(
+                    stderr_text
+                    or stdout_text
+                    or f"{self.DISPLAY_NAME} 执行失败，返回码 {process.returncode}"
+                )
                 return None
 
             result = stdout.decode()
@@ -205,6 +223,7 @@ JSON结构示例：
             parsed_result = self._parse_output(result)
             if not parsed_result:
                 logger.error(f"{self.DISPLAY_NAME} 返回结果为空（简单模式）")
+                self._set_last_error(f"{self.DISPLAY_NAME} 返回结果为空（简单模式）")
                 return None
 
             logger.info(f"{self.DISPLAY_NAME} 分析完成（简单模式）")
@@ -212,6 +231,7 @@ JSON结构示例：
 
         except Exception as e:
             logger.error(f"{self.DISPLAY_NAME} 分析异常: {e}", exc_info=True)
+            self._set_last_error(f"{self.DISPLAY_NAME} 分析异常: {e}")
             return None
 
     def _build_env(

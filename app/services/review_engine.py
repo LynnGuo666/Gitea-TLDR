@@ -31,6 +31,7 @@ class ReviewEngine:
         self._default_provider = self.registry.create(
             default_provider, cli_path=cli_path, debug=debug
         )
+        self.last_error: Optional[str] = None
 
     @property
     def provider(self) -> ReviewProvider:
@@ -47,7 +48,8 @@ class ReviewEngine:
         provider_name: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         provider = self._resolve_provider(provider_name)
-        return await provider.analyze_pr(
+        self.last_error = None
+        result = await provider.analyze_pr(
             repo_path,
             diff_content,
             focus_areas,
@@ -55,6 +57,9 @@ class ReviewEngine:
             provider_api_base_url=provider_api_base_url,
             provider_auth_token=provider_auth_token,
         )
+        if result is None:
+            self.last_error = provider.last_error
+        return result
 
     async def analyze_pr_simple(
         self,
@@ -66,13 +71,17 @@ class ReviewEngine:
         provider_name: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         provider = self._resolve_provider(provider_name)
-        return await provider.analyze_pr_simple(
+        self.last_error = None
+        result = await provider.analyze_pr_simple(
             diff_content,
             focus_areas,
             pr_info,
             provider_api_base_url=provider_api_base_url,
             provider_auth_token=provider_auth_token,
         )
+        if result is None:
+            self.last_error = provider.last_error
+        return result
 
     def _resolve_provider(self, name: Optional[str] = None) -> ReviewProvider:
         if name and name != self.default_provider_name:

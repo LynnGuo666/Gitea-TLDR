@@ -2,12 +2,21 @@
 版本信息模块
 """
 
-__version__ = "1.17.0"
+__version__ = "1.18.0"
 __release_date__ = "2026-02-14"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.18.0": {
+        "date": "2026-02-14",
+        "changes": [
+            "新增：审查失败时记录并展示具体失败原因，包含 provider stderr/stdout 与异常摘要",
+            "优化：审查历史列表展示审查方向与失败原因列，详情保留 Commit 并移除分支 main <- feature 展示",
+            "新增：审查会话记录 provider_name，引擎信息贯穿后端 API 与管理页审查历史",
+            "修复：审查会话创建时先解析并落库 focus/features，避免审查方向丢失",
+        ],
+    },
     "1.17.0": {
         "date": "2026-02-14",
         "changes": [

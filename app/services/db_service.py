@@ -2,13 +2,13 @@
 数据库操作服务
 """
 
-import json
 import logging
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models import (
     InlineComment,
@@ -94,7 +94,7 @@ class DBService:
 
         # 获取全局默认配置
         stmt = select(ModelConfig).where(
-            ModelConfig.repository_id.is_(None), ModelConfig.is_default == True
+            ModelConfig.repository_id.is_(None), ModelConfig.is_default.is_(True)
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
@@ -110,7 +110,7 @@ class DBService:
     async def get_global_model_config(self) -> Optional[ModelConfig]:
         """获取全局默认模型配置"""
         stmt = select(ModelConfig).where(
-            ModelConfig.repository_id.is_(None), ModelConfig.is_default == True
+            ModelConfig.repository_id.is_(None), ModelConfig.is_default.is_(True)
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
@@ -182,6 +182,7 @@ class DBService:
         repository_id: int,
         pr_number: int,
         trigger_type: str,
+        provider_name: Optional[str] = None,
         pr_title: Optional[str] = None,
         pr_author: Optional[str] = None,
         head_branch: Optional[str] = None,
@@ -195,6 +196,7 @@ class DBService:
             repository_id=repository_id,
             pr_number=pr_number,
             trigger_type=trigger_type,
+            provider_name=provider_name,
             pr_title=pr_title,
             pr_author=pr_author,
             head_branch=head_branch,
@@ -218,6 +220,7 @@ class DBService:
     async def update_review_session(
         self,
         session_id: int,
+        provider_name: Optional[str] = None,
         analysis_mode: Optional[str] = None,
         diff_size_bytes: Optional[int] = None,
         overall_severity: Optional[str] = None,
@@ -235,6 +238,8 @@ class DBService:
         if not review_session:
             return None
 
+        if provider_name is not None:
+            review_session.provider_name = provider_name
         if analysis_mode is not None:
             review_session.analysis_mode = analysis_mode
         if diff_size_bytes is not None:
@@ -262,7 +267,11 @@ class DBService:
 
     async def get_review_session(self, session_id: int) -> Optional[ReviewSession]:
         """获取审查会话"""
-        stmt = select(ReviewSession).where(ReviewSession.id == session_id)
+        stmt = (
+            select(ReviewSession)
+            .options(selectinload(ReviewSession.repository))
+            .where(ReviewSession.id == session_id)
+        )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -275,7 +284,7 @@ class DBService:
         offset: int = 0,
     ) -> List[ReviewSession]:
         """获取审查会话列表"""
-        stmt = select(ReviewSession)
+        stmt = select(ReviewSession).options(selectinload(ReviewSession.repository))
 
         if repository_id:
             stmt = stmt.where(ReviewSession.repository_id == repository_id)

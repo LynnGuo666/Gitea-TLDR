@@ -5,6 +5,7 @@
 analyze_pr / analyze_pr_simple 两个抽象方法。
 """
 
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -109,6 +110,27 @@ class ReviewProvider(ABC):
     def display_name(self) -> str:
         """人类可读名称，如 'Claude Code'"""
         ...
+
+    @property
+    def last_error(self) -> Optional[str]:
+        return getattr(self, "_last_error", None)
+
+    def _clear_last_error(self) -> None:
+        setattr(self, "_last_error", None)
+
+    def _set_last_error(self, message: Optional[str]) -> None:
+        text = (message or "").strip()
+        if not text:
+            self._clear_last_error()
+            return
+        text = re.sub(
+            r"(?i)(token|key|secret|authorization)\s*[:=]\s*([^\s,;]+)",
+            r"\1=[REDACTED]",
+            text,
+        )
+        if len(text) > 500:
+            text = text[:500] + "..."
+        setattr(self, "_last_error", text)
 
     @abstractmethod
     async def analyze_pr(

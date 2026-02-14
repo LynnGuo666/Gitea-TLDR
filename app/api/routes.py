@@ -9,8 +9,8 @@ import hashlib
 import json
 import logging
 import secrets
-from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import List, Optional
 from fastapi import (
     APIRouter,
     Request,
@@ -595,13 +595,20 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                     {
                         "id": s.id,
                         "repository_id": s.repository_id,
+                        "repo_full_name": f"{s.repository.owner}/{s.repository.repo_name}"
+                        if s.repository
+                        else None,
                         "pr_number": s.pr_number,
                         "pr_title": s.pr_title,
                         "pr_author": s.pr_author,
                         "trigger_type": s.trigger_type,
+                        "provider_name": s.provider_name,
+                        "enabled_features": s.get_features(),
+                        "focus_areas": s.get_focus(),
                         "analysis_mode": s.analysis_mode,
                         "overall_severity": s.overall_severity,
                         "overall_success": s.overall_success,
+                        "error_message": s.error_message,
                         "inline_comments_count": s.inline_comments_count,
                         "started_at": s.started_at.isoformat()
                         if s.started_at
@@ -646,6 +653,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "base_branch": review_session.base_branch,
                 "head_sha": review_session.head_sha,
                 "trigger_type": review_session.trigger_type,
+                "provider_name": review_session.provider_name,
                 "enabled_features": review_session.get_features(),
                 "focus_areas": review_session.get_focus(),
                 "analysis_mode": review_session.analysis_mode,

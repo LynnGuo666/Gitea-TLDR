@@ -215,8 +215,8 @@ class WebhookHandler:
         repo_name: str,
         pr_number: int,
         pr_data: Dict[str, Any],
-        features: List[str],
-        focus_areas: List[str],
+        features: Optional[List[str]],
+        focus_areas: Optional[List[str]],
         trigger_type: str = "auto",
     ) -> bool:
         """
@@ -256,6 +256,7 @@ class WebhookHandler:
             # 查询仓库的 Anthropic 配置
             anthropic_base_url = None
             anthropic_auth_token = None
+            provider_name = self.review_engine.default_provider_name
 
             # 创建数据库记录
             if self.database:
@@ -269,15 +270,28 @@ class WebhookHandler:
                     if model_config:
                         anthropic_base_url = model_config.provider_api_base_url
                         anthropic_auth_token = model_config.provider_auth_token
+                        provider_name = model_config.model_name or provider_name
+
+                        if focus_areas is None:
+                            focus_areas = model_config.get_focus()
+                        if features is None:
+                            features = model_config.get_features()
+
                         if anthropic_base_url or anthropic_auth_token:
                             logger.info(
                                 f"使用仓库 {owner}/{repo_name} 的自定义 Anthropic 配置"
                             )
 
+                    if focus_areas is None:
+                        focus_areas = settings.default_review_focus
+                    if features is None:
+                        features = ["comment"]
+
                     review_session = await db_service.create_review_session(
                         repository_id=repository_id,
                         pr_number=pr_number,
                         trigger_type=trigger_type,
+                        provider_name=provider_name,
                         pr_title=pr_title,
                         pr_author=pr_author,
                         head_branch=head_branch,
@@ -287,6 +301,11 @@ class WebhookHandler:
                         focus_areas=focus_areas,
                     )
                     review_session_id = review_session.id
+
+            if focus_areas is None:
+                focus_areas = settings.default_review_focus
+            if features is None:
+                features = ["comment"]
 
             # 创建初始评论（如果启用了comment功能）
             comment_id = None
@@ -367,6 +386,7 @@ class WebhookHandler:
                     pr_data,
                     provider_api_base_url=anthropic_base_url,
                     provider_auth_token=anthropic_auth_token,
+                    provider_name=provider_name,
                 )
             else:
                 # 使用完整代码库分析
@@ -378,27 +398,30 @@ class WebhookHandler:
                     pr_data,
                     provider_api_base_url=anthropic_base_url,
                     provider_auth_token=anthropic_auth_token,
+                    provider_name=provider_name,
                 )
 
                 # 清理仓库
                 self.repo_manager.cleanup_repository(owner, repo_name, pr_number)
 
             if analysis_result is None:
-                logger.error("Claude分析失败")
+                analysis_error = self.review_engine.last_error or "审查分析过程出错"
+                logger.error(f"审查分析失败: {analysis_error}")
                 # 更新评论为错误状态
                 if comment_id:
-                    error_comment = "## 自动代码审查\n\n审查失败：Claude分析过程出错"
+                    error_comment = f"## 自动代码审查\n\n审查失败：{analysis_error}"
                     await self.gitea_client.update_issue_comment(
                         owner, repo_name, comment_id, error_comment
                     )
                     gitea_api_calls += 1
                 if "status" in features:
+                    status_desc = analysis_error.replace("\n", " ").strip()[:120]
                     await self.gitea_client.create_commit_status(
                         owner,
                         repo_name,
                         head_sha,
                         "error",
-                        description="代码审查失败",
+                        description=status_desc or "代码审查失败",
                     )
                     gitea_api_calls += 1
 
@@ -408,10 +431,11 @@ class WebhookHandler:
                         db_service = DBService(session)
                         await db_service.update_review_session(
                             review_session_id,
+                            provider_name=provider_name,
                             analysis_mode=analysis_mode,
                             diff_size_bytes=diff_size,
                             overall_success=False,
-                            error_message="Claude分析失败",
+                            error_message=analysis_error,
                             completed=True,
                         )
                 return False
@@ -483,6 +507,7 @@ class WebhookHandler:
                     # 更新审查会话
                     await db_service.update_review_session(
                         review_session_id,
+                        provider_name=analysis_result.provider_name or provider_name,
                         analysis_mode=analysis_mode,
                         diff_size_bytes=diff_size,
                         overall_severity=analysis_result.overall_severity,
