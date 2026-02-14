@@ -2,12 +2,21 @@
 版本信息模块
 """
 
-__version__ = "1.17.0"
+__version__ = "1.18.0"
 __release_date__ = "2026-02-14"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.18.0": {
+        "date": "2026-02-14",
+        "changes": [
+            "新增：审查会话审计字段（provider_name、model_name、config_source）并贯穿审查 API 返回",
+            "新增：个人审查历史接口 /api/my/reviews，按用户可访问仓库范围返回记录",
+            "优化：仓库级 GUI 审查方向配置真正生效，补齐 webhook/命令/仓库配置/全局默认回退链路",
+            "新增：管理后台审查历史页与个人审查记录页，支持筛选、展开查看摘要与行级评论",
+        ],
+    },
     "1.17.0": {
         "date": "2026-02-14",
         "changes": [
