@@ -572,7 +572,7 @@ export default function RepoConfigPage() {
                         </>
                       ) : (
                         <p className="m-0 text-sm text-warning-600">
-                          尚未配置全局 AI 审查设置，请先在「用户中心」中配置
+                          尚未配置全局 AI 审查设置，请先在「个人设置」中配置
                         </p>
                       )}
                     </div>
@@ -633,7 +633,7 @@ export default function RepoConfigPage() {
                     </>
                   )}
                   <div className="mt-3 text-default-400 text-xs">
-                    全局配置在“用户中心”维护，仓库仅在需要时单独覆盖
+                    全局配置在“个人设置”维护，仓库仅在需要时单独覆盖
                   </div>
                 </>
               )}
