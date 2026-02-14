@@ -30,7 +30,7 @@ from app.core.database import Database
 from app.services import (
     GiteaClient,
     RepoManager,
-    ClaudeAnalyzer,
+    ReviewEngine,
     WebhookHandler,
     RepoRegistry,
     AuthManager,
@@ -69,16 +69,23 @@ def build_context(database: Database | None = None) -> AppContext:
     """初始化所有服务组件并封装为应用上下文。"""
     gitea_client = GiteaClient(settings.gitea_url, settings.gitea_token, settings.debug)
     repo_manager = RepoManager(settings.work_dir)
-    claude_analyzer = ClaudeAnalyzer(settings.claude_code_path, settings.debug)
+    review_engine = ReviewEngine(
+        default_provider=settings.default_provider,
+        cli_path=settings.claude_code_path,
+        debug=settings.debug,
+        provider_cli_paths={
+            "claude_code": settings.claude_code_path,
+            "codex_cli": settings.codex_cli_path,
+        },
+    )
 
     # 初始化仓库注册表（支持数据库存储）
     repo_registry = RepoRegistry(settings.work_dir, database=database)
 
-    # 初始化 Webhook 处理器（支持数据库记录）
     webhook_handler = WebhookHandler(
         gitea_client,
         repo_manager,
-        claude_analyzer,
+        review_engine,
         database=database,
         bot_username=settings.bot_username,
     )
@@ -88,7 +95,7 @@ def build_context(database: Database | None = None) -> AppContext:
     return AppContext(
         gitea_client=gitea_client,
         repo_manager=repo_manager,
-        claude_analyzer=claude_analyzer,
+        review_engine=review_engine,
         webhook_handler=webhook_handler,
         repo_registry=repo_registry,
         auth_manager=auth_manager,
@@ -110,7 +117,10 @@ def create_app() -> FastAPI:
         logger.info("Gitea PR Reviewer 启动")
         logger.info(f"Gitea URL: {settings.gitea_url}")
         logger.info(f"工作目录: {settings.work_dir}")
-        logger.info(f"Claude Code路径: {settings.claude_code_path}")
+        logger.info(
+            f"审查引擎 ({settings.default_provider}) CLI路径: {settings.claude_code_path}"
+        )
+        logger.info(f"可用引擎: {context.review_engine.registry.list_providers()}")
         logger.info(f"Debug模式: {'开启' if settings.debug else '关闭'}")
 
         # 初始化数据库
@@ -154,7 +164,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Gitea PR Reviewer",
-        description="基于Claude Code的Gitea Pull Request自动审查工具",
+        description="基于多引擎的Gitea Pull Request自动审查工具",
         version=__version__,
         lifespan=lifespan,
     )

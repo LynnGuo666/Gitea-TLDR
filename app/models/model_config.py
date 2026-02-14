@@ -1,6 +1,7 @@
 """
 AI模型配置
 """
+
 from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
@@ -14,52 +15,47 @@ if TYPE_CHECKING:
 
 class ModelConfig(Base, TimestampMixin):
     """AI模型配置表"""
+
     __tablename__ = "model_configs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     repository_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("repositories.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True
+        ForeignKey("repositories.id", ondelete="CASCADE"), nullable=True, index=True
     )
     config_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    model_name: Mapped[str] = mapped_column(String(100), default="claude", nullable=False)
+    model_name: Mapped[str] = mapped_column(
+        String(100), default="claude_code", nullable=False
+    )
     max_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     temperature: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     custom_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     default_features: Mapped[Optional[str]] = mapped_column(
-        Text,
-        nullable=True,
-        comment="JSON数组: ['comment', 'review', 'status']"
+        Text, nullable=True, comment="JSON数组: ['comment', 'review', 'status']"
     )
     default_focus: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
-        comment="JSON数组: ['quality', 'security', 'performance', 'logic']"
+        comment="JSON数组: ['quality', 'security', 'performance', 'logic']",
     )
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    # Anthropic API 配置（仓库级别）
-    anthropic_base_url: Mapped[Optional[str]] = mapped_column(
-        String(500),
-        nullable=True,
-        comment="Anthropic API Base URL"
+    # Provider API 配置（仓库级别）
+    provider_api_base_url: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True, comment="Provider API Base URL"
     )
-    anthropic_auth_token: Mapped[Optional[str]] = mapped_column(
-        String(500),
-        nullable=True,
-        comment="Anthropic Auth Token"
+    provider_auth_token: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True, comment="Provider Auth Token"
     )
 
     # 关系
     repository: Mapped[Optional["Repository"]] = relationship(
-        "Repository",
-        back_populates="model_config"
+        "Repository", back_populates="model_config"
     )
 
     def get_features(self) -> List[str]:
         """获取功能列表"""
         import json
+
         if not self.default_features:
             return ["comment"]
         try:
@@ -70,6 +66,7 @@ class ModelConfig(Base, TimestampMixin):
     def get_focus(self) -> List[str]:
         """获取审查重点列表"""
         import json
+
         if not self.default_focus:
             return ["quality", "security", "performance", "logic"]
         try:
@@ -80,9 +77,11 @@ class ModelConfig(Base, TimestampMixin):
     def set_features(self, features: List[str]) -> None:
         """设置功能列表"""
         import json
+
         self.default_features = json.dumps(features)
 
     def set_focus(self, focus: List[str]) -> None:
         """设置审查重点列表"""
         import json
+
         self.default_focus = json.dumps(focus)

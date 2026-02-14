@@ -26,6 +26,7 @@ type UsageStat = {
   estimated_output_tokens: number;
   gitea_api_calls: number;
   claude_api_calls: number;
+  provider_api_calls: number;
   clone_operations: number;
 };
 
@@ -34,6 +35,7 @@ type UsageSummary = {
   total_output_tokens: number;
   total_gitea_calls: number;
   total_claude_calls: number;
+  total_provider_calls: number;
   total_clone_operations: number;
   review_count: number;
 };
@@ -86,7 +88,7 @@ export default function UsagePage() {
   }, [stats]);
 
   const totalRequests = useMemo(() => {
-    return stats?.summary?.total_claude_calls || 0;
+    return stats?.summary?.total_provider_calls ?? stats?.summary?.total_claude_calls ?? 0;
   }, [stats]);
 
   const usdCost = useMemo(() => {
@@ -107,7 +109,7 @@ export default function UsagePage() {
       }
       groups[dateKey].inputTokens += stat.estimated_input_tokens;
       groups[dateKey].outputTokens += stat.estimated_output_tokens;
-      groups[dateKey].requests += stat.claude_api_calls;
+      groups[dateKey].requests += stat.provider_api_calls ?? stat.claude_api_calls;
     }
 
     return Object.values(groups).sort((a, b) => b.date.localeCompare(a.date));

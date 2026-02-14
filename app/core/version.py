@@ -2,12 +2,51 @@
 版本信息模块
 """
 
-__version__ = "1.13.1"
-__release_date__ = "2026-02-13"
+__version__ = "1.17.0"
+__release_date__ = "2026-02-14"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.17.0": {
+        "date": "2026-02-14",
+        "changes": [
+            "调整：全局 AI 审查配置从用户中心拆分到独立的个人设置页面",
+            "优化：新增侧边栏“个人设置”入口，并同步仓库页文案引用",
+            "修复：移除 model_configs.anthropic_auth_token 旧字段映射，避免 SQLite 列不存在错误",
+        ],
+    },
+    "1.16.0": {
+        "date": "2026-02-14",
+        "changes": [
+            "新增：前端引擎下拉选择器，全局设置和仓库配置页均可选择审查引擎",
+            "调整：全局 AI 审查配置从用户中心拆分到独立的个人设置页面",
+            "新增：GET /api/providers 端点，返回已注册的审查引擎列表",
+            "新增：provider_name 字段贯穿后端 API 与前端状态",
+            "优化：Base URL / API Key 占位符随引擎选择动态切换",
+            "优化：Docker 镜像同时预装 Claude Code CLI 和 Codex CLI",
+        ],
+    },
+    "1.15.0": {
+        "date": "2026-02-14",
+        "changes": [
+            "新增：CodexProvider（OpenAI Codex CLI）审查引擎实现",
+            "新增：CODEX_CLI_PATH / CODEX_API_KEY 配置项",
+            "优化：ReviewEngine 支持多 CLI 路径动态选择",
+        ],
+    },
+    "1.14.0": {
+        "date": "2026-02-14",
+        "changes": [
+            "重构：引入 Provider/Adapter 模式，支持多审查引擎（Claude Code、Codex 等）",
+            "新增：ReviewProvider 抽象基类、ClaudeCodeProvider 实现、ProviderRegistry 注册表",
+            "新增：ReviewEngine 统一入口，根据配置路由到对应 Provider",
+            "新增：API 端点 /api/config/provider-global 与 /api/repos/{owner}/{repo}/provider-config",
+            "重构：数据库字段重命名 anthropic_* → provider_*，claude_api_calls → provider_api_calls",
+            "优化：保留旧 API 端点与字段别名，确保向后兼容",
+            "优化：前端 AI 审查配置 Tab 更新为 Provider 抽象命名",
+        ],
+    },
     "1.13.1": {
         "date": "2026-02-13",
         "changes": [
@@ -185,7 +224,7 @@ def get_version_banner() -> str:
 ║                                                              ║
 ║             Gitea PR Reviewer v{__version__}                    ║
 ║                                                              ║
-║  基于Claude Code的Gitea Pull Request自动审查工具             ║
+║  基于多引擎的Gitea Pull Request自动审查工具             ║
 ║  Release Date: {__release_date__}                            ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝

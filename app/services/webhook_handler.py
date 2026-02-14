@@ -1,17 +1,17 @@
 """
 Webhook处理模块
 """
-import asyncio
+
 import logging
 from typing import Any, Dict, List, Optional
 
 from app.core import settings
 from app.core.database import Database
-from app.services.claude_analyzer import (
-    ClaudeAnalyzer,
-    ClaudeReviewResult,
-    InlineCommentSuggestion,
+from app.services.providers.base import (
+    InlineComment,
+    ReviewResult,
 )
+from app.services.review_engine import ReviewEngine
 from app.services.command_parser import CommandParser
 from app.services.db_service import DBService
 from app.services.gitea_client import GiteaClient
@@ -27,23 +27,13 @@ class WebhookHandler:
         self,
         gitea_client: GiteaClient,
         repo_manager: RepoManager,
-        claude_analyzer: ClaudeAnalyzer,
+        review_engine: ReviewEngine,
         database: Optional[Database] = None,
         bot_username: Optional[str] = None,
     ):
-        """
-        初始化Webhook处理器
-
-        Args:
-            gitea_client: Gitea客户端
-            repo_manager: 仓库管理器
-            claude_analyzer: Claude分析器
-            database: 数据库管理器（可选）
-            bot_username: Bot用户名
-        """
         self.gitea_client = gitea_client
         self.repo_manager = repo_manager
-        self.claude_analyzer = claude_analyzer
+        self.review_engine = review_engine
         self.database = database
         self.command_parser = CommandParser(bot_username)
 
@@ -148,9 +138,7 @@ class WebhookHandler:
         except Exception as e:
             logger.error(f"异步处理webhook异常: {e}", exc_info=True)
 
-    async def handle_issue_comment(
-        self, payload: Dict[str, Any]
-    ) -> bool:
+    async def handle_issue_comment(self, payload: Dict[str, Any]) -> bool:
         """
         处理Issue评论事件（用于手动触发审查）
 
@@ -199,7 +187,9 @@ class WebhookHandler:
             )
 
             # 获取完整的PR信息
-            pr_data = await self.gitea_client.get_pull_request(owner, repo_name, pr_number)
+            pr_data = await self.gitea_client.get_pull_request(
+                owner, repo_name, pr_number
+            )
             if not pr_data:
                 logger.error("无法获取PR详情")
                 return False
@@ -274,13 +264,15 @@ class WebhookHandler:
                     repo = await db_service.get_or_create_repository(owner, repo_name)
                     repository_id = repo.id
 
-                    # 查询仓库的 ModelConfig 获取 Anthropic 配置
+                    # 查询仓库的 ModelConfig 获取 Provider 配置
                     model_config = await db_service.get_model_config(repository_id)
                     if model_config:
-                        anthropic_base_url = model_config.anthropic_base_url
-                        anthropic_auth_token = model_config.anthropic_auth_token
+                        anthropic_base_url = model_config.provider_api_base_url
+                        anthropic_auth_token = model_config.provider_auth_token
                         if anthropic_base_url or anthropic_auth_token:
-                            logger.info(f"使用仓库 {owner}/{repo_name} 的自定义 Anthropic 配置")
+                            logger.info(
+                                f"使用仓库 {owner}/{repo_name} 的自定义 Anthropic 配置"
+                            )
 
                     review_session = await db_service.create_review_session(
                         repository_id=repository_id,
@@ -369,18 +361,23 @@ class WebhookHandler:
                 # 降级到简单模式
                 logger.info("降级到简单模式（仅分析diff）")
                 analysis_mode = "simple"
-                analysis_result = await self.claude_analyzer.analyze_pr_simple(
-                    diff_content, focus_areas, pr_data,
-                    anthropic_base_url=anthropic_base_url,
-                    anthropic_auth_token=anthropic_auth_token,
+                analysis_result = await self.review_engine.analyze_pr_simple(
+                    diff_content,
+                    focus_areas,
+                    pr_data,
+                    provider_api_base_url=anthropic_base_url,
+                    provider_auth_token=anthropic_auth_token,
                 )
             else:
                 # 使用完整代码库分析
                 analysis_mode = "full"
-                analysis_result = await self.claude_analyzer.analyze_pr(
-                    repo_path, diff_content, focus_areas, pr_data,
-                    anthropic_base_url=anthropic_base_url,
-                    anthropic_auth_token=anthropic_auth_token,
+                analysis_result = await self.review_engine.analyze_pr(
+                    repo_path,
+                    diff_content,
+                    focus_areas,
+                    pr_data,
+                    provider_api_base_url=anthropic_base_url,
+                    provider_auth_token=anthropic_auth_token,
                 )
 
                 # 清理仓库
@@ -437,7 +434,7 @@ class WebhookHandler:
                     new_comment_id = await self.gitea_client.create_issue_comment(
                         owner, repo_name, pr_number, comment_body
                     )
-                    success &= (new_comment_id is not None)
+                    success &= new_comment_id is not None
                 gitea_api_calls += 1
 
             # 创建Review
@@ -456,12 +453,13 @@ class WebhookHandler:
                 success &= review_success
 
                 # 如果review创建成功且配置了bot_username且启用了auto_request_reviewer，则自动请求审查者
-                if review_success and settings.auto_request_reviewer and settings.bot_username:
+                if (
+                    review_success
+                    and settings.auto_request_reviewer
+                    and settings.bot_username
+                ):
                     await self.gitea_client.request_reviewer(
-                        owner,
-                        repo_name,
-                        pr_number,
-                        [settings.bot_username]
+                        owner, repo_name, pr_number, [settings.bot_username]
                     )
                     gitea_api_calls += 1
 
@@ -521,7 +519,7 @@ class WebhookHandler:
                             estimated_input_tokens=estimated_input,
                             estimated_output_tokens=estimated_output,
                             gitea_api_calls=gitea_api_calls,
-                            claude_api_calls=1,
+                            provider_api_calls=1,
                             clone_operations=clone_operations,
                         )
 
@@ -560,9 +558,9 @@ class WebhookHandler:
             logger.error(f"异步处理评论异常: {e}", exc_info=True)
 
     def _build_review_comments(
-        self, analysis_result: ClaudeReviewResult
+        self, analysis_result: ReviewResult
     ) -> List[Dict[str, Any]]:
-        """将Claude的行级建议转换成Gitea评论"""
+        """将行级建议转换成Gitea评论"""
         comments: List[Dict[str, Any]] = []
         for inline in analysis_result.inline_comments:
             payload = self._inline_to_review_comment(inline)
@@ -571,7 +569,7 @@ class WebhookHandler:
         return comments
 
     def _inline_to_review_comment(
-        self, inline: InlineCommentSuggestion
+        self, inline: InlineComment
     ) -> Optional[Dict[str, Any]]:
         """转换单条行级建议"""
         path = (inline.path or "").strip()
