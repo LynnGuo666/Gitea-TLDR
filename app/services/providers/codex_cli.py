@@ -75,7 +75,7 @@ class CodexProvider(ReviewProvider):
     DISPLAY_NAME = "Codex CLI"
 
     # Codex exec 默认使用的模型
-    DEFAULT_MODEL = "gpt-5.2-codex"
+    DEFAULT_MODEL = "gpt-5.3-codex"
 
     # diff 内容嵌入 prompt 时的最大字符数（防止超长 prompt）
     MAX_DIFF_CHARS = 200_000
@@ -266,15 +266,21 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
+            resolved_model = model or self.DEFAULT_MODEL
             codex_home = self._build_codex_home(
                 api_url,
                 api_key,
-                model=model,
+                model=resolved_model,
                 wire_api=wire_api,
             )
             env = self._build_env(codex_home, api_key)
 
-            return await self._run_codex_exec(prompt, env, cwd=str(repo_path))
+            return await self._run_codex_exec(
+                prompt,
+                env,
+                cwd=str(repo_path),
+                model_name=resolved_model,
+            )
 
         except Exception as e:
             logger.error(f"{self.DISPLAY_NAME} 分析异常: {e}", exc_info=True)
@@ -307,15 +313,21 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt - Simple Mode]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
+            resolved_model = model or self.DEFAULT_MODEL
             codex_home = self._build_codex_home(
                 api_url,
                 api_key,
-                model=model,
+                model=resolved_model,
                 wire_api=wire_api,
             )
             env = self._build_env(codex_home, api_key)
 
-            return await self._run_codex_exec(prompt, env, cwd=None)
+            return await self._run_codex_exec(
+                prompt,
+                env,
+                cwd=None,
+                model_name=resolved_model,
+            )
 
         except Exception as e:
             logger.error(f"{self.DISPLAY_NAME} 分析异常: {e}", exc_info=True)
@@ -341,6 +353,7 @@ JSON结构示例：
         prompt: str,
         env: dict,
         cwd: Optional[str] = None,
+        model_name: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         """调用 ``codex exec`` 并解析结果。
 
@@ -448,6 +461,9 @@ JSON结构示例：
                 logger.error(f"{self.DISPLAY_NAME} 返回结果为空")
                 self._set_last_error(f"{self.DISPLAY_NAME} 返回结果为空")
                 return None
+
+            if model_name:
+                parsed_result.usage_metadata["model"] = model_name
 
             logger.info(f"{self.DISPLAY_NAME} 分析完成")
             return parsed_result

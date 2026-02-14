@@ -36,6 +36,7 @@ type ReviewItem = {
   pr_author: string | null;
   trigger_type: string;
   engine: string | null;
+  model: string | null;
   enabled_features: string[];
   focus_areas: string[];
   analysis_mode: string | null;
@@ -50,6 +51,8 @@ type ReviewItem = {
 
 type ReviewDetail = {
   id: number;
+  engine: string | null;
+  model: string | null;
   head_sha: string | null;
   enabled_features: string[];
   focus_areas: string[];
@@ -217,6 +220,14 @@ export default function AdminReviewsPage() {
             <code className="text-xs">{detail.head_sha?.slice(0, 7) || '—'}</code>
           </div>
           <div>
+            <span className="text-default-500 mr-2">审查引擎</span>
+            <span>{detail.engine || '—'}</span>
+          </div>
+          <div>
+            <span className="text-default-500 mr-2">模型 ID</span>
+            <span>{detail.model || '—'}</span>
+          </div>
+          <div>
             <span className="text-default-500 mr-2">审查模式</span>
             <span>{detail.analysis_mode || '—'}</span>
           </div>
@@ -366,9 +377,14 @@ export default function AdminReviewsPage() {
                         </Chip>
                       </TableCell>
                       <TableCell>
-                        <Chip size="sm" variant="flat">
-                          {review.engine || 'claude_code'}
-                        </Chip>
+                        <div className="flex flex-col">
+                          <Chip size="sm" variant="flat" className="w-fit">
+                            {review.engine || 'claude_code'}
+                          </Chip>
+                          <span className="text-[11px] text-default-500 mt-1">
+                            {review.model || '—'}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell>{renderFocusChips(review.focus_areas)}</TableCell>
                       <TableCell>{formatDuration(review.duration_seconds)}</TableCell>

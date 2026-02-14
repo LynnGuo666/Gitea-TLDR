@@ -2,12 +2,22 @@
 版本信息模块
 """
 
-__version__ = "1.19.0"
+__version__ = "1.19.1"
 __release_date__ = "2026-02-15"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.19.1": {
+        "date": "2026-02-15",
+        "changes": [
+            "修复：审查会话 model 字段不再写入 provider 名，统一记录真实模型标识",
+            "修复：Codex 默认模型升级为 gpt-5.3-codex，并透传到 usage_metadata 用于落库",
+            "修复：Provider/Model 配置 API 统一支持并返回 engine + model，消除字段语义混淆",
+            "优化：前端个人设置与仓库设置新增可选 Model ID 输入，审查记录页统一区分引擎与模型展示",
+            "同步：统一更新前后端版本号到 1.19.1",
+        ],
+    },
     "1.19.0": {
         "date": "2026-02-15",
         "changes": [

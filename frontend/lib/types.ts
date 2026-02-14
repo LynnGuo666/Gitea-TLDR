@@ -19,12 +19,14 @@ export type RepoProviderConfig = {
   configured: boolean;
   api_url?: string | null;
   engine?: string | null;
+  model?: string | null;
   has_api_key: boolean;
   inherit_global: boolean;
   has_global_config: boolean;
   global_api_url?: string | null;
   global_has_api_key: boolean;
   global_engine?: string | null;
+  global_model?: string | null;
 };
 export type RepoClaudeConfig = RepoProviderConfig;
 
@@ -32,6 +34,7 @@ export type GlobalProviderConfig = {
   configured: boolean;
   api_url?: string | null;
   engine?: string | null;
+  model?: string | null;
   has_api_key: boolean;
 };
 export type GlobalClaudeConfig = GlobalProviderConfig;

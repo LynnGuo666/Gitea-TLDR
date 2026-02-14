@@ -15,6 +15,7 @@ export default function PreferencesPage() {
   const [globalProviderSaving, setGlobalProviderSaving] = useState(false);
   const [globalBaseUrl, setGlobalBaseUrl] = useState('');
   const [globalAuthToken, setGlobalAuthToken] = useState('');
+  const [globalModel, setGlobalModel] = useState('');
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [selectedProvider, setSelectedProvider] = useState('claude_code');
 
@@ -35,6 +36,7 @@ export default function PreferencesPage() {
       const data: GlobalProviderConfig = await res.json();
       setGlobalProvider(data);
       setGlobalBaseUrl(data.api_url || '');
+      setGlobalModel(data.model || '');
       if (data.engine) {
         setSelectedProvider(data.engine);
       }
@@ -77,6 +79,7 @@ export default function PreferencesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           engine: selectedProvider,
+          model: globalModel || null,
           api_url: globalBaseUrl || null,
           api_key: globalAuthToken || null,
         }),
@@ -97,6 +100,7 @@ export default function PreferencesPage() {
         configured: !!(data.api_url || data.has_api_key),
         api_url: data.api_url,
         engine: data.engine,
+        model: data.model,
         has_api_key: data.has_api_key,
       });
     } catch {
@@ -118,6 +122,11 @@ export default function PreferencesPage() {
   };
 
   const currentPlaceholders = providerPlaceholders[selectedProvider] || providerPlaceholders.claude_code;
+  const modelPlaceholders: Record<string, string> = {
+    claude_code: '例如: claude-3-7-sonnet-20250219',
+    codex_cli: '例如: gpt-5.3-codex',
+  };
+  const currentModelPlaceholder = modelPlaceholders[selectedProvider] || '例如: gpt-5.3-codex';
 
   return (
     <>
@@ -169,6 +178,13 @@ export default function PreferencesPage() {
                     value={globalBaseUrl}
                     onValueChange={setGlobalBaseUrl}
                     placeholder={currentPlaceholders.baseUrl}
+                    variant="bordered"
+                  />
+                  <Input
+                    label="Model ID（可选）"
+                    value={globalModel}
+                    onValueChange={setGlobalModel}
+                    placeholder={currentModelPlaceholder}
                     variant="bordered"
                   />
                   <Input

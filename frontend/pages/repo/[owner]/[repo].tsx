@@ -102,6 +102,7 @@ export default function RepoConfigPage() {
   const [providerConfig, setProviderConfig] = useState<RepoProviderConfig | null>(null);
   const [providerBaseUrl, setProviderBaseUrl] = useState('');
   const [providerAuthToken, setProviderAuthToken] = useState('');
+  const [providerModel, setProviderModel] = useState('');
   const [providerConfigLoading, setProviderConfigLoading] = useState(true);
   const [providerSaving, setProviderSaving] = useState(false);
   const [inheritGlobal, setInheritGlobal] = useState(true);
@@ -158,6 +159,7 @@ export default function RepoConfigPage() {
         } else {
           setProviderBaseUrl('');
         }
+        setProviderModel(data.model || '');
         if (data.engine) {
           setSelectedProvider(data.engine);
         }
@@ -362,6 +364,7 @@ export default function RepoConfigPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           engine: selectedProvider,
+          model: providerModel || null,
           api_url: providerBaseUrl || null,
           api_key: providerAuthToken || null,
           inherit_global: false,
@@ -374,11 +377,15 @@ export default function RepoConfigPage() {
         setProviderConfig((prev) => ({
           configured: true,
           api_url: data.api_url,
+          engine: data.engine,
+          model: data.model,
           has_api_key: data.has_api_key,
           inherit_global: false,
           has_global_config: prev?.has_global_config ?? false,
           global_api_url: prev?.global_api_url ?? null,
           global_has_api_key: prev?.global_has_api_key ?? false,
+          global_engine: prev?.global_engine ?? null,
+          global_model: prev?.global_model ?? null,
         }));
         setProviderAuthToken('');
       } else {
@@ -411,6 +418,7 @@ export default function RepoConfigPage() {
         });
         if (nextValue) {
           setProviderBaseUrl(data.api_url || '');
+          setProviderModel(data.model || '');
           setProviderAuthToken('');
         }
         await fetchProviderConfig();
@@ -442,6 +450,11 @@ export default function RepoConfigPage() {
   };
 
   const currentPlaceholders = providerPlaceholders[selectedProvider] || providerPlaceholders.claude_code;
+  const modelPlaceholders: Record<string, string> = {
+    claude_code: '例如: claude-3-7-sonnet-20250219',
+    codex_cli: '例如: gpt-5.3-codex',
+  };
+  const currentModelPlaceholder = modelPlaceholders[selectedProvider] || '例如: gpt-5.3-codex';
   const providerLabel = (name: string) => providers.find((p) => p.name === name)?.label || name;
 
   return (
@@ -638,6 +651,9 @@ export default function RepoConfigPage() {
                             审查引擎: {providerLabel(providerConfig.global_engine || 'claude_code')}
                           </p>
                           <p className="m-0 mt-1 text-sm text-default-700">
+                            模型 ID: {providerConfig.global_model || '未设置'}
+                          </p>
+                          <p className="m-0 mt-1 text-sm text-default-700">
                             Base URL: {providerConfig.global_api_url || '默认官方地址'}
                           </p>
                           <p className="m-0 mt-1 text-sm text-default-700">
@@ -676,6 +692,14 @@ export default function RepoConfigPage() {
                           value={providerBaseUrl}
                           onValueChange={setProviderBaseUrl}
                           placeholder={currentPlaceholders.baseUrl}
+                          isDisabled={!canEditRepo}
+                          variant="bordered"
+                        />
+                        <Input
+                          label="Model ID（可选）"
+                          value={providerModel}
+                          onValueChange={setProviderModel}
+                          placeholder={currentModelPlaceholder}
                           isDisabled={!canEditRepo}
                           variant="bordered"
                         />

@@ -4,6 +4,20 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.19.1] - 2026-02-15
+
+### 修复 (Fixed)
+
+- **模型字段语义修复**: 修复审查会话落库链路中 `model` 被错误写成 provider 名（`codex_cli` / `claude_code`）的问题，统一记录真实模型标识
+- **Codex 默认模型更新**: `CodexProvider` 默认模型升级为 `gpt-5.3-codex`，并将最终解析模型写入 `usage_metadata` 供审查记录持久化
+- **API 字段一致性**: Provider 配置与 Model 配置相关接口统一返回并支持保存 `engine` + `model`，避免 `model` 字段误映射为 `engine`
+
+### 优化 (Improved)
+
+- **前端配置体验**: 个人设置与仓库设置新增可选 `Model ID` 输入，支持按 provider 显式配置目标模型
+- **审查记录展示一致性**: 审查列表/详情页面统一区分展示引擎与模型，避免在“模型”位置回退显示 provider 名
+- **版本一致性**: 同步更新后端与前端版本号到 `1.19.1`
+
 ## [1.19.0] - 2026-02-15
 
 ### 重构 (Refactored)

@@ -176,7 +176,7 @@ export default function ReviewsPage() {
           </div>
           <div>
             <span className="text-default-500 block text-xs mb-1">调用模型</span>
-            <Code size="sm">{detail.model || detail.engine || '—'}</Code>
+            <Code size="sm">{detail.model || '—'}</Code>
           </div>
           <div>
             <span className="text-default-500 block text-xs mb-1">变更大小</span>

@@ -55,7 +55,8 @@ class ModelConfigRequest(BaseModel):
     repository_id: Optional[int] = Field(
         None, description="关联仓库ID（为空则为全局配置）"
     )
-    engine: str = Field("claude_code", description="模型名称")
+    engine: str = Field("claude_code", description="审查引擎名称")
+    model: Optional[str] = Field(None, description="实际LLM模型标识")
     max_tokens: Optional[int] = Field(None, description="最大token数")
     temperature: Optional[float] = Field(None, description="温度参数")
     custom_prompt: Optional[str] = Field(None, description="自定义prompt模板")
@@ -74,6 +75,7 @@ class ProviderConfigRequest(BaseModel):
         alias="provider_name",
         description="审查引擎名称，如 claude_code / codex_cli",
     )
+    model: Optional[str] = Field(None, description="实际LLM模型标识")
     api_url: Optional[str] = Field(
         None,
         validation_alias=AliasChoices("anthropic_base_url", "provider_api_base_url"),
@@ -193,6 +195,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 return {
                     "configured": False,
                     "engine": settings.default_provider,
+                    "model": None,
                     "api_url": None,
                     "has_api_key": False,
                 }
@@ -200,6 +203,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             return {
                 "configured": bool(global_config.api_url or global_config.api_key),
                 "engine": global_config.engine or settings.default_provider,
+                "model": global_config.model,
                 "api_url": global_config.api_url,
                 "has_api_key": bool(global_config.api_key),
             }
@@ -233,6 +237,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 global_config.api_key = payload.api_key or None
             if payload.engine is not None:
                 global_config.engine = payload.engine
+            if payload.model is not None:
+                global_config.model = payload.model or None
 
             await session.flush()
 
@@ -240,6 +246,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "success": True,
                 "message": "全局 AI 审查配置已保存",
                 "engine": global_config.engine,
+                "model": global_config.model,
                 "api_url": global_config.api_url,
                 "has_api_key": bool(global_config.api_key),
             }
@@ -610,7 +617,6 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                         "enabled_features": s.get_features(),
                         "focus_areas": s.get_focus(),
                         "analysis_mode": s.analysis_mode,
-                        "engine": s.engine,
                         "model": s.model,
                         "config_source": s.config_source,
                         "overall_severity": s.overall_severity,
@@ -666,7 +672,6 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "base_branch": review_session.base_branch,
                 "head_sha": review_session.head_sha,
                 "trigger_type": review_session.trigger_type,
-                "engine": review_session.engine,
                 "enabled_features": review_session.get_features(),
                 "focus_areas": review_session.get_focus(),
                 "analysis_mode": review_session.analysis_mode,
@@ -870,7 +875,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                         "id": c.id,
                         "repository_id": c.repository_id,
                         "config_name": c.config_name,
-                        "model": c.engine,
+                        "engine": c.engine,
+                        "model": c.model,
                         "max_tokens": c.max_tokens,
                         "temperature": c.temperature,
                         "custom_prompt": c.custom_prompt,
@@ -905,11 +911,16 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 is_default=payload.is_default,
             )
 
+            if payload.model is not None:
+                config.model = payload.model or None
+                await session.flush()
+
             return {
                 "id": config.id,
                 "repository_id": config.repository_id,
                 "config_name": config.config_name,
-                "model": config.engine,
+                "engine": config.engine,
+                "model": config.model,
                 "is_default": config.is_default,
                 "message": "配置已保存",
             }
@@ -962,6 +973,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                         if effective_config
                         else settings.default_provider
                     ),
+                    "model": (effective_config.model if effective_config else None),
                     "api_url": (effective_config.api_url if effective_config else None),
                     "has_api_key": bool(
                         effective_config.api_key if effective_config else False
@@ -977,6 +989,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                         if global_config
                         else settings.default_provider
                     ),
+                    "global_model": (global_config.model if global_config else None),
                 }
 
             repo_config = await db_service.get_repo_specific_model_config(repo_obj.id)
@@ -997,6 +1010,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                     if effective_config
                     else settings.default_provider
                 ),
+                "model": (effective_config.model if effective_config else None),
                 "api_url": (effective_config.api_url if effective_config else None),
                 "has_api_key": bool(
                     effective_config.api_key if effective_config else False
@@ -1008,6 +1022,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "global_engine": (
                     global_config.engine if global_config else settings.default_provider
                 ),
+                "global_model": (global_config.model if global_config else None),
             }
 
     @api_router.put("/repos/{owner}/{repo}/claude-config")
@@ -1062,6 +1077,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 model_config.api_key = payload.api_key or None
             if payload.engine is not None:
                 model_config.engine = payload.engine
+            if payload.model is not None:
+                model_config.model = payload.model or None
 
             await session.flush()
 
@@ -1070,6 +1087,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "inherit_global": False,
                 "message": "AI 审查配置已保存",
                 "engine": model_config.engine,
+                "model": model_config.model,
                 "api_url": model_config.api_url,
                 "has_api_key": bool(model_config.api_key),
             }

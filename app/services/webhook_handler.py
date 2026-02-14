@@ -258,7 +258,7 @@ class WebhookHandler:
             api_key = None
             wire_api = None
             engine = self.review_engine.default_provider_name
-            model = engine
+            model = None
             config_source = "global_default"
 
             # 创建数据库记录
@@ -275,7 +275,7 @@ class WebhookHandler:
                         api_key = model_config.api_key
                         wire_api = model_config.wire_api
                         engine = model_config.engine or engine
-                        model = engine
+                        model = model_config.model or model
                         if model_config.repository_id == repository_id:
                             config_source = "repo_config"
                         else:
@@ -525,7 +525,7 @@ class WebhookHandler:
                     await db_service.update_review_session(
                         review_session_id,
                         engine=analysis_result.provider_name or engine,
-                        model=analysis_result.provider_name or model,
+                        model=(analysis_result.usage_metadata.get("model") or model),
                         config_source=config_source,
                         analysis_mode=analysis_mode,
                         diff_size_bytes=diff_size,
