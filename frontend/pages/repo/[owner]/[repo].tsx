@@ -49,6 +49,24 @@ const reviewCatalog = [
   },
 ];
 
+const featureCatalog = [
+  {
+    key: 'comment',
+    label: '评论功能',
+    detail: '发布一条 PR 总结评论',
+  },
+  {
+    key: 'review',
+    label: '审查功能',
+    detail: '创建 PR Review 并附带行内评论',
+  },
+  {
+    key: 'status',
+    label: '状态功能',
+    detail: '写入 commit 状态（success / failure）',
+  },
+];
+
 type WebhookStatus = {
   configured: boolean;
   active: boolean;
@@ -98,6 +116,7 @@ export default function RepoConfigPage() {
     'performance',
     'logic',
   ]);
+  const [reviewFeatures, setReviewFeatures] = useState<string[]>(['comment']);
   // Claude 配置状态
   const [providerConfig, setProviderConfig] = useState<RepoProviderConfig | null>(null);
   const [providerBaseUrl, setProviderBaseUrl] = useState('');
@@ -204,6 +223,9 @@ export default function RepoConfigPage() {
         if (data.default_focus?.length) {
           setReviewFocus(data.default_focus);
         }
+        if (data.default_features?.length) {
+          setReviewFeatures(data.default_features);
+        }
       }
     } catch {
       // Keep defaults on error
@@ -289,6 +311,36 @@ export default function RepoConfigPage() {
     } catch {
       addToast({ title: '无法连接后端', color: 'danger' });
       setReviewFocus(reviewFocus); // Revert on failure
+    } finally {
+      setFocusSaving(false);
+    }
+  };
+
+  const toggleFeature = async (key: string) => {
+    if (focusSaving) return;
+    const next = reviewFeatures.includes(key)
+      ? reviewFeatures.filter((item) => item !== key)
+      : [...reviewFeatures, key];
+
+    if (next.length === 0) return;
+
+    setReviewFeatures(next);
+    setFocusSaving(true);
+    try {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/review-settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ default_features: next }),
+      });
+      if (res.ok) {
+        addToast({ title: '审查功能已保存', color: 'success' });
+      } else {
+        addToast({ title: '保存失败', color: 'danger' });
+        setReviewFeatures(reviewFeatures);
+      }
+    } catch {
+      addToast({ title: '无法连接后端', color: 'danger' });
+      setReviewFeatures(reviewFeatures);
     } finally {
       setFocusSaving(false);
     }
@@ -578,11 +630,34 @@ export default function RepoConfigPage() {
               </div>
             ) : (
               <>
-                <div className="mb-4 flex justify-end">
-                  <Chip size="sm" variant="flat">
-                    {reviewFocus.length} 个已启用
-                  </Chip>
+                <div className="mb-4 flex justify-end gap-2">
+                  <Chip size="sm" variant="flat">功能 {reviewFeatures.length} 个</Chip>
+                  <Chip size="sm" variant="flat">重点 {reviewFocus.length} 个</Chip>
                 </div>
+
+                <p className="m-0 mb-2 text-sm text-default-600">审查功能</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                  {featureCatalog.map((item) => {
+                    const active = reviewFeatures.includes(item.key);
+                    return (
+                      <button
+                        key={item.key}
+                        disabled={focusSaving}
+                        className={`text-left p-4 rounded-xl transition-all cursor-pointer ${
+                          active
+                            ? 'bg-primary-50 ring-1 ring-primary'
+                            : 'bg-default-100 hover:bg-default-200'
+                        } ${focusSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        onClick={() => toggleFeature(item.key)}
+                      >
+                        <strong className="text-sm text-foreground">{item.label}</strong>
+                        <p className="m-0 text-xs text-default-500 mt-1">{item.detail}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <p className="m-0 mb-2 text-sm text-default-600">审查重点</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {reviewCatalog.map((item) => {
                     const active = reviewFocus.includes(item.key);
