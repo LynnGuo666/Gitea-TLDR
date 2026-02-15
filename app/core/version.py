@@ -2,12 +2,19 @@
 版本信息模块
 """
 
-__version__ = "1.19.4"
+__version__ = "1.19.5"
 __release_date__ = "2026-02-15"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.19.5": {
+        "date": "2026-02-15",
+        "changes": [
+            "修复：PR webhook 在未提供 X-Review-Features/X-Review-Focus 时，改为回退仓库 default_features/default_review_focus 配置，避免前端开关不生效",
+            "维护：同步更新前后端版本号到 1.19.5",
+        ],
+    },
     "1.19.4": {
         "date": "2026-02-15",
         "changes": [

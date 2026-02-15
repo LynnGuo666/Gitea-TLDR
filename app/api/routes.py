@@ -1349,11 +1349,16 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
             # 处理Pull Request事件
             if x_gitea_event == "pull_request":
-                # 解析功能和重点
-                features = context.webhook_handler.parse_review_features(
-                    x_review_features
+                features = (
+                    context.webhook_handler.parse_review_features(x_review_features)
+                    if x_review_features
+                    else None
                 )
-                focus_areas = context.webhook_handler.parse_review_focus(x_review_focus)
+                focus_areas = (
+                    context.webhook_handler.parse_review_focus(x_review_focus)
+                    if x_review_focus
+                    else None
+                )
 
                 logger.info(f"收到PR webhook，功能: {features}, 重点: {focus_areas}")
 

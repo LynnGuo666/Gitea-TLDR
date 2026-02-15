@@ -4,6 +4,16 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.19.5] - 2026-02-15
+
+### 修复 (Fixed)
+
+- **仓库功能配置不生效**: 修复 PR webhook 在缺少 `X-Review-Features/X-Review-Focus` 时总是回退默认值的问题，改为优先使用仓库 `default_features/default_review_focus` 配置
+
+### 优化 (Improved)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.19.5`
+
 ## [1.19.4] - 2026-02-15
 
 ### 新增功能 (Added)

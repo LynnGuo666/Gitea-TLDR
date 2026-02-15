@@ -72,15 +72,18 @@ class WebhookHandler:
         return [f for f in focus_areas if f in valid_areas]
 
     async def handle_pull_request(
-        self, payload: Dict[str, Any], features: List[str], focus_areas: List[str]
+        self,
+        payload: Dict[str, Any],
+        features: Optional[List[str]],
+        focus_areas: Optional[List[str]],
     ) -> bool:
         """
         处理Pull Request事件
 
         Args:
             payload: Webhook payload
-            features: 启用的功能列表
-            focus_areas: 审查重点列表
+            features: 启用的功能列表（None 表示按仓库配置回退）
+            focus_areas: 审查重点列表（None 表示按仓库配置回退）
 
         Returns:
             是否处理成功
@@ -123,15 +126,18 @@ class WebhookHandler:
             return False
 
     async def process_webhook_async(
-        self, payload: Dict[str, Any], features: List[str], focus_areas: List[str]
+        self,
+        payload: Dict[str, Any],
+        features: Optional[List[str]],
+        focus_areas: Optional[List[str]],
     ):
         """
         异步处理webhook（后台任务）
 
         Args:
             payload: Webhook payload
-            features: 启用的功能列表
-            focus_areas: 审查重点列表
+            features: 启用的功能列表（None 表示按仓库配置回退）
+            focus_areas: 审查重点列表（None 表示按仓库配置回退）
         """
         try:
             await self.handle_pull_request(payload, features, focus_areas)
