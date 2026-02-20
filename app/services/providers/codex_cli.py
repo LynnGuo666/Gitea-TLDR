@@ -615,6 +615,17 @@ JSON结构示例：
         if not combined:
             return ""
 
+        combined = re.sub(r"\x1b\[[0-9;]*m", "", combined)
+
+        for pattern in [
+            r"ERROR:\s*unexpected status[^\n]*",
+            r"unexpected status\s+\d{3}[^\n]*",
+            r"Error:\s*[^\n]*",
+        ]:
+            match = re.search(pattern, combined, flags=re.IGNORECASE)
+            if match:
+                return match.group(0).strip()
+
         lines = [line.strip() for line in combined.splitlines() if line.strip()]
         for line in reversed(lines):
             if line.startswith("ERROR:"):
@@ -633,6 +644,10 @@ JSON结构示例：
             for line in lines
             if "Warning: no last agent message" not in line
             and not line.startswith("Reconnecting...")
+            and "OpenAI Codex" not in line
+            and "research preview" not in line
+            and line != "--------"
+            and "mcp startup: no servers" not in line
         ]
         if filtered:
             return filtered[-1]

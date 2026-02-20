@@ -133,14 +133,16 @@ JSON结构示例：
             if process.returncode != 0:
                 stderr_text = stderr.decode(errors="ignore").strip()
                 stdout_text = stdout.decode(errors="ignore").strip()
+                actionable_error = self._extract_actionable_error(
+                    stderr_text, stdout_text
+                )
                 logger.error(
                     f"{self.DISPLAY_NAME} 执行失败 (返回码: {process.returncode})"
                 )
                 logger.error(f"Stdout: {stdout_text}")
                 logger.error(f"Stderr: {stderr_text}")
                 self._set_last_error(
-                    stderr_text
-                    or stdout_text
+                    actionable_error
                     or f"{self.DISPLAY_NAME} 执行失败，返回码 {process.returncode}"
                 )
                 return None
@@ -210,14 +212,16 @@ JSON结构示例：
             if process.returncode != 0:
                 stderr_text = stderr.decode(errors="ignore").strip()
                 stdout_text = stdout.decode(errors="ignore").strip()
+                actionable_error = self._extract_actionable_error(
+                    stderr_text, stdout_text
+                )
                 logger.error(
                     f"{self.DISPLAY_NAME} 执行失败 (返回码: {process.returncode})"
                 )
                 logger.error(f"Stdout: {stdout_text}")
                 logger.error(f"Stderr: {stderr_text}")
                 self._set_last_error(
-                    stderr_text
-                    or stdout_text
+                    actionable_error
                     or f"{self.DISPLAY_NAME} 执行失败，返回码 {process.returncode}"
                 )
                 return None
@@ -374,6 +378,31 @@ JSON结构示例：
                 logger.debug("JSON解析失败（brace scan）", exc_info=True)
 
         return None
+
+    @staticmethod
+    def _extract_actionable_error(stderr_text: str, stdout_text: str) -> str:
+        combined = "\n".join(
+            part for part in [stderr_text.strip(), stdout_text.strip()] if part.strip()
+        )
+        if not combined:
+            return ""
+
+        combined = re.sub(r"\x1b\[[0-9;]*m", "", combined)
+
+        for pattern in [
+            r"ERROR:\s*[^\n]*",
+            r"unexpected status\s+\d{3}[^\n]*",
+            r"Error:\s*[^\n]*",
+        ]:
+            match = re.search(pattern, combined, flags=re.IGNORECASE)
+            if match:
+                return match.group(0).strip()
+
+        lines = [line.strip() for line in combined.splitlines() if line.strip()]
+        filtered = [line for line in lines if not line.startswith("Reconnecting...")]
+        if filtered:
+            return filtered[-1]
+        return lines[-1]
 
     @staticmethod
     def _coerce_int(value: Any) -> Optional[int]:
