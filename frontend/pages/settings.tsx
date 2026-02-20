@@ -2,7 +2,7 @@ import Head from 'next/head';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useCallback, useContext, useEffect, useState } from 'react';
-import { Button, Chip } from '@heroui/react';
+import { Button } from '@heroui/react';
 import { Settings2, User } from 'lucide-react';
 import { AuthContext } from '../lib/auth';
 import { apiFetch } from '../lib/api';
@@ -79,7 +79,7 @@ export default function SettingsPage() {
         <div className="pb-4">
           <PageHeader
             title="用户中心"
-            subtitle="查看账号、使用统计和服务状态"
+            subtitle="查看账号与使用统计"
             actions={
               <Link href="/preferences" className="no-underline">
                 <Button size="sm" variant="bordered" startContent={<Settings2 size={16} />}>
@@ -154,32 +154,6 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <section className="py-5 border-t border-divider/60">
-          <SectionHeader title="服务状态" />
-          <div className="mt-4 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <span className="text-default-500 text-sm">Bot 用户名</span>
-              <span className="text-sm font-medium">
-                {config?.bot_username || <span className="text-default-400">未配置</span>}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-default-500 text-sm">Debug 模式</span>
-              <Chip size="sm" color={config?.debug ? 'success' : 'default'} variant="flat">
-                {config?.debug ? '开启' : '关闭'}
-              </Chip>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-default-500 text-sm">OAuth 登录</span>
-              <Chip size="sm" color={config?.oauth_enabled ? 'success' : 'default'} variant="flat">
-                {config?.oauth_enabled ? '已启用' : '未启用'}
-              </Chip>
-            </div>
-          </div>
-          <p className="text-default-400 text-xs mt-4 m-0">
-            全局 AI 审查配置已迁移到「个人设置」页面，仓库可继续按需单独覆盖
-          </p>
-        </section>
       </div>
     </>
   );

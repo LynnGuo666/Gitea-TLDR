@@ -1,12 +1,13 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useContext, useEffect, useState } from 'react';
-import { Button } from '@heroui/react';
+import { Button, Chip } from '@heroui/react';
 import { BarChart3, FolderGit2, Coins, Activity, RefreshCw, Settings, BookOpen, Webhook, Users } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
 import SectionHeader from '../../components/SectionHeader';
 import { AuthContext } from '../../lib/auth';
 import { apiFetch } from '../../lib/api';
+import { PublicConfig } from '../../lib/types';
 
 type DashboardStats = {
   database_available?: boolean;
@@ -40,21 +41,32 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [databaseAvailable, setDatabaseAvailable] = useState(true);
+  const [config, setConfig] = useState<PublicConfig | null>(null);
 
   const fetchStats = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch('/api/admin/dashboard/stats');
-      if (res.status === 401 || res.status === 403) {
+      const [statsRes, configRes] = await Promise.all([
+        apiFetch('/api/admin/dashboard/stats'),
+        apiFetch('/api/config/public'),
+      ]);
+
+      if (statsRes.status === 401 || statsRes.status === 403) {
         setStats(null);
         setError('当前账号没有管理后台权限');
         return;
       }
-      if (!res.ok) {
+      if (!statsRes.ok) {
         throw new Error('获取统计数据失败');
       }
-      const data = await res.json();
+
+      if (configRes.ok) {
+        const configData = await configRes.json();
+        setConfig(configData);
+      }
+
+      const data = await statsRes.json();
       setStats(data);
       setDatabaseAvailable(data?.database_available ?? true);
     } catch (err) {
@@ -176,6 +188,30 @@ export default function AdminDashboard() {
                 <div className="text-2xl font-bold text-foreground">{stats.repositories.total}</div>
                 <div className="flex gap-3 mt-2 text-xs text-default-400">
                   <span>活跃: {stats.repositories.active}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-default-200 p-4 sm:p-5">
+              <SectionHeader title="服务状态" className="mb-4" />
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-default-500 text-sm">Bot 用户名</span>
+                  <span className="text-sm font-medium">
+                    {config?.bot_username || <span className="text-default-400">未配置</span>}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-default-500 text-sm">Debug 模式</span>
+                  <Chip size="sm" color={config?.debug ? 'success' : 'default'} variant="flat">
+                    {config?.debug ? '开启' : '关闭'}
+                  </Chip>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-default-500 text-sm">OAuth 登录</span>
+                  <Chip size="sm" color={config?.oauth_enabled ? 'success' : 'default'} variant="flat">
+                    {config?.oauth_enabled ? '已启用' : '未启用'}
+                  </Chip>
                 </div>
               </div>
             </div>
