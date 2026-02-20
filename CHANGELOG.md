@@ -10,6 +10,18 @@
 
 - **版本一致性**: 同步更新后端与前端版本号到 `1.19.6`
 
+## [1.19.7] - 2026-02-21
+
+### 修复 (Fixed)
+
+- **Codex 执行目录解析失败**: 统一规范工作目录和仓库路径为绝对路径，修复 `WORK_DIR=./review-workspace` 场景下 `Error: No such file or directory (os error 2)`
+- **Codex 双重切目录冲突**: `codex exec` 调用移除子进程 `cwd` 与 `--cd` 叠加导致的目录定位异常
+- **CODEX_HOME 临时目录限制**: 优化 `CODEX_HOME` 生成父目录选择，避免 helper binaries 在 `/tmp` 下被拒绝创建
+
+### 优化 (Improved)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.19.7`
+
 ## [1.19.5] - 2026-02-15
 
 ### 修复 (Fixed)

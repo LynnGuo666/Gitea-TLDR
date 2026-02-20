@@ -217,7 +217,11 @@ JSON结构示例：
             parent = Path(configured_parent).expanduser()
         elif os.environ.get("WORK_DIR"):
             work_dir = Path(os.environ["WORK_DIR"]).expanduser()
-            parent = work_dir if work_dir.is_absolute() else (Path.cwd() / work_dir)
+            if work_dir.is_absolute():
+                parent = work_dir
+            else:
+                project_root = Path(__file__).resolve().parents[3]
+                parent = project_root / work_dir
         else:
             parent = Path.home() / ".cache" / "gitea-pr-reviewer"
         parent = parent.resolve()
@@ -437,7 +441,6 @@ JSON结构示例：
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
-                cwd=cwd,
             )
 
             stdout, stderr = await process.communicate(input=prompt.encode("utf-8"))

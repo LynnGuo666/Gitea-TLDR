@@ -113,6 +113,14 @@ class Settings(BaseSettings):
             return [scope.strip() for scope in value.split(",") if scope.strip()]
         return value
 
+    @field_validator("work_dir", mode="after")
+    @classmethod
+    def _normalize_work_dir(cls, value: str) -> str:
+        path = Path(value).expanduser()
+        if not path.is_absolute():
+            path = (BASE_DIR / path).resolve()
+        return str(path)
+
     # 可选：允许从不同环境文件加载
     @classmethod
     def from_env(cls, env_file: Optional[str] = None) -> "Settings":

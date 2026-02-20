@@ -2,12 +2,21 @@
 版本信息模块
 """
 
-__version__ = "1.19.6"
+__version__ = "1.19.7"
 __release_date__ = "2026-02-21"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.19.7": {
+        "date": "2026-02-21",
+        "changes": [
+            "修复：工作目录与仓库路径统一规范为绝对路径，避免相对路径导致 Codex 执行目录解析失败（os error 2）",
+            "修复：Codex Provider 调用去除重复 cwd 切换，避免与 --cd 叠加造成目录定位异常",
+            "优化：CODEX_HOME 生成路径优先使用非 /tmp 目录，避免 helper binaries 在临时目录下被拒绝创建",
+            "维护：同步更新前后端版本号到 1.19.7",
+        ],
+    },
     "1.19.6": {
         "date": "2026-02-21",
         "changes": [

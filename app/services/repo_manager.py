@@ -1,6 +1,7 @@
 """
 代码库管理模块
 """
+
 import os
 import shutil
 import asyncio
@@ -21,7 +22,7 @@ class RepoManager:
         Args:
             work_dir: 工作目录路径
         """
-        self.work_dir = Path(work_dir)
+        self.work_dir = Path(work_dir).expanduser().resolve()
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
     def get_repo_path(self, owner: str, repo: str, pr_number: int) -> Path:

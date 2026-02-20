@@ -37,7 +37,7 @@ class RepoRegistry:
             database: 数据库管理器（可选，如果提供则使用数据库存储）
             filename: JSON文件名（降级模式使用）
         """
-        self.base_path = Path(work_dir)
+        self.base_path = Path(work_dir).expanduser().resolve()
         self.base_path.mkdir(parents=True, exist_ok=True)
         self.registry_file = self.base_path / filename
         self.database = database
