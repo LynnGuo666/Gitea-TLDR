@@ -2,6 +2,7 @@
 管理后台 API 路由
 """
 
+import json
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -43,6 +44,7 @@ class AdminUserResponse(BaseModel):
     username: str
     email: Optional[str]
     role: str
+    permissions: Optional[Dict[str, List[str]]]
     is_active: bool
     created_at: str
     last_login_at: Optional[str]
@@ -117,6 +119,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
                     username=u.username,
                     email=u.email,
                     role=u.role,
+                    permissions=json.loads(u.permissions) if u.permissions else None,
                     is_active=u.is_active,
                     created_at=u.created_at.isoformat(),
                     last_login_at=(
@@ -159,6 +162,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
                 username=user.username,
                 email=user.email,
                 role=user.role,
+                permissions=json.loads(user.permissions) if user.permissions else None,
                 is_active=user.is_active,
                 created_at=user.created_at.isoformat(),
                 last_login_at=None,
@@ -198,6 +202,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
                 username=user.username,
                 email=user.email,
                 role=user.role,
+                permissions=json.loads(user.permissions) if user.permissions else None,
                 is_active=user.is_active,
                 created_at=user.created_at.isoformat(),
                 last_login_at=(
@@ -250,8 +255,6 @@ def create_admin_router(context: AppContext) -> APIRouter:
             service = AdminService(session)
             settings = await service.get_all_settings(category=category)
 
-            import json
-
             return [
                 {
                     "key": s.key,
@@ -284,8 +287,6 @@ def create_admin_router(context: AppContext) -> APIRouter:
                 description=payload.description,
             )
             await session.commit()
-
-            import json
 
             return {
                 "key": setting.key,

@@ -2,7 +2,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useContext, useEffect, useState } from 'react';
 import { Button } from '@heroui/react';
-import { BarChart3, FolderGit2, Coins, Activity, RefreshCw, Settings, BookOpen, Webhook } from 'lucide-react';
+import { BarChart3, FolderGit2, Coins, Activity, RefreshCw, Settings, BookOpen, Webhook, Users } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
 import SectionHeader from '../../components/SectionHeader';
 import { AuthContext } from '../../lib/auth';
@@ -188,6 +188,7 @@ export default function AdminDashboard() {
                   { href: '/admin/repos', icon: FolderGit2, title: '仓库管理', desc: '批量操作仓库' },
                   { href: '/admin/reviews', icon: BookOpen, title: '审查历史', desc: '查看所有审查记录' },
                   { href: '/admin/webhooks', icon: Webhook, title: 'Webhook 日志', desc: '查看请求日志' },
+                  { href: '/admin/users', icon: Users, title: '用户管理', desc: '管理管理员账户与权限' },
                 ].map(({ href, icon: Icon, title, desc }) => (
                   <button
                     key={href}
