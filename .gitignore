@@ -56,6 +56,7 @@ Thumbs.db
 
 # Temporary files
 /tmp/
+review-workspace/
 *.tmp
 *.temp
 

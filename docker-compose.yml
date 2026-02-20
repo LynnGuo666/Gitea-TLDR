@@ -9,7 +9,7 @@ services:
       - "8000:8000"
     volumes:
       # 持久化工作目录（可选）
-      - pr-reviewer-data:/tmp/gitea-pr-reviewer
+      - pr-reviewer-data:/app/review-workspace
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

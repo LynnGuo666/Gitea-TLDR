@@ -6,7 +6,7 @@ echo "Gitea PR Reviewer - 启动脚本"
 echo "=========================================="
 
 # 等待工作目录就绪
-mkdir -p "${WORK_DIR:-/tmp/gitea-pr-reviewer}"
+mkdir -p "${WORK_DIR:-/app/review-workspace}"
 
 # 运行数据库迁移
 echo "正在运行数据库迁移..."

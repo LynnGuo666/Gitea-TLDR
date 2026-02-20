@@ -37,7 +37,9 @@ class Settings(BaseSettings):
     default_provider: str = Field("claude_code", description="默认审查引擎提供者")
 
     # 工作目录配置
-    work_dir: str = Field("/tmp/gitea-pr-reviewer", description="临时工作目录")
+    work_dir: str = Field(
+        str(BASE_DIR / "review-workspace"), description="工作目录（默认项目目录下）"
+    )
 
     # 数据库配置
     database_url: Optional[str] = Field(

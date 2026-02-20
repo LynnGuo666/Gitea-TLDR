@@ -92,8 +92,8 @@ WEBHOOK_SECRET=your_webhook_secret_here
 # Claude Code配置
 CLAUDE_CODE_PATH=claude
 
-# 工作目录配置
-WORK_DIR=/tmp/gitea-pr-reviewer
+# 工作目录配置（默认使用项目目录下的 review-workspace）
+# WORK_DIR=./review-workspace
 
 # 服务器配置
 HOST=0.0.0.0
