@@ -177,7 +177,9 @@ JSON结构示例：
         Returns:
             临时目录的绝对路径，调用方负责在 finally 中清理。
         """
-        codex_home = tempfile.mkdtemp(prefix="codex_home_")
+        codex_home = tempfile.mkdtemp(
+            prefix="codex_home_", dir=self._resolve_codex_home_parent()
+        )
         resolved_model = model or self.DEFAULT_MODEL
         resolved_wire_api = wire_api or _DEFAULT_WIRE_API
 
@@ -207,6 +209,20 @@ JSON结构示例：
             )
 
         return codex_home
+
+    @staticmethod
+    def _resolve_codex_home_parent() -> str:
+        configured_parent = os.environ.get("CODEX_HOME_PARENT")
+        if configured_parent and configured_parent.strip():
+            parent = Path(configured_parent).expanduser()
+        elif os.environ.get("WORK_DIR"):
+            work_dir = Path(os.environ["WORK_DIR"]).expanduser()
+            parent = work_dir if work_dir.is_absolute() else (Path.cwd() / work_dir)
+        else:
+            parent = Path.home() / ".cache" / "gitea-pr-reviewer"
+        parent = parent.resolve()
+        parent.mkdir(parents=True, exist_ok=True)
+        return str(parent)
 
     def _build_env(
         self,
