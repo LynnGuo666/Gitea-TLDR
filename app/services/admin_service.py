@@ -12,11 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     AdminSettings,
-    AdminUser,
     ApiKey,
     Repository,
     ReviewSession,
     UsageStat,
+    User,
     WebhookLog,
 )
 
@@ -33,18 +33,18 @@ class AdminService:
 
     async def list_admin_users(
         self, is_active: Optional[bool] = None
-    ) -> List[AdminUser]:
+    ) -> List[User]:
         """获取管理员列表"""
-        stmt = select(AdminUser)
+        stmt = select(User)
         if is_active is not None:
-            stmt = stmt.where(AdminUser.is_active == is_active)
-        stmt = stmt.order_by(AdminUser.created_at.desc())
+            stmt = stmt.where(User.is_active == is_active)
+        stmt = stmt.order_by(User.created_at.desc())
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_admin_user(self, username: str) -> Optional[AdminUser]:
+    async def get_admin_user(self, username: str) -> Optional[User]:
         """获取管理员用户"""
-        stmt = select(AdminUser).where(AdminUser.username == username)
+        stmt = select(User).where(User.username == username)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -54,9 +54,9 @@ class AdminService:
         email: Optional[str] = None,
         role: str = "admin",
         permissions: Optional[Dict[str, List[str]]] = None,
-    ) -> AdminUser:
+    ) -> User:
         """创建管理员用户"""
-        admin = AdminUser(
+        admin = User(
             username=username,
             email=email,
             role=role,
@@ -74,7 +74,7 @@ class AdminService:
         role: Optional[str] = None,
         permissions: Optional[Dict[str, List[str]]] = None,
         is_active: Optional[bool] = None,
-    ) -> Optional[AdminUser]:
+    ) -> Optional[User]:
         """更新管理员用户"""
         admin = await self.get_admin_user(username)
         if not admin:
@@ -94,7 +94,7 @@ class AdminService:
 
     async def delete_admin_user(self, username: str) -> bool:
         """删除管理员用户"""
-        stmt = delete(AdminUser).where(AdminUser.username == username)
+        stmt = delete(User).where(User.username == username)
         result = await self.session.execute(stmt)
         return result.rowcount > 0
 

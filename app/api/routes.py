@@ -32,7 +32,7 @@ from app.core import (
     get_all_changelogs,
 )
 from app.core.context import AppContext
-from app.models import AdminUser
+from app.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -294,8 +294,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             return {
                 "enabled": True,
                 "logged_in": True,
-                "is_admin": True,
-                "role": "super_admin",
+                "is_admin": False,
+                "role": None,
             }
 
         username = session.user.get("username")
@@ -308,9 +308,10 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             }
 
         async with database.session() as db_session:
-            stmt = select(AdminUser).where(
-                AdminUser.username == username,
-                AdminUser.is_active == True,
+            stmt = select(User).where(
+                User.username == username,
+                User.role.in_(["admin", "super_admin"]),
+                User.is_active.is_(True),
             )
             result = await db_session.execute(stmt)
             admin = result.scalar_one_or_none()
@@ -339,7 +340,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     async def auth_callback(code: str, state: str):
         """OAuth回调，设置登录会话后重定向到主页"""
         redirect = RedirectResponse(url="/", status_code=303)
-        return await context.auth_manager.handle_callback(code, state, redirect)
+        return await context.auth_manager.handle_callback(
+            code, state, redirect, database=context.database
+        )
 
     @api_router.get("/repos")
     async def list_repos(request: Request):

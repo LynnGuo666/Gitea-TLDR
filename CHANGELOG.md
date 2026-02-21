@@ -4,6 +4,25 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.21.0] - 2026-02-21
+
+### 重构 (Refactored)
+
+- **用户表统一**: 数据库表 `admin_users` 重命名为 `users`，所有登录用户（普通用户与管理员）共用同一张表，`role` 字段区分 `user` / `admin` / `super_admin`
+- **模型迁移**: ORM 模型 `AdminUser` 全面迁移为 `User`，保留 `AdminUser = User` 向后兼容别名
+
+### 新增功能 (Added)
+
+- **用户落库**: OAuth 登录回调自动 upsert `User` 记录并更新 `last_login_at`，所有授权用户均有 DB 记录，为后续按用户统计用量奠定基础
+
+### 修复 (Fixed)
+
+- **安全漏洞 (fail-open)**: `GET /api/auth/admin-status` 在数据库不可用时错误地返回 `is_admin: true, role: super_admin`，现修正为返回 `is_admin: false`
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.21.0`
+
 ## [1.20.1] - 2026-02-21
 
 ### 优化 (Improved)

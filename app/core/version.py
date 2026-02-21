@@ -2,12 +2,22 @@
 版本信息模块
 """
 
-__version__ = "1.20.1"
+__version__ = "1.21.0"
 __release_date__ = "2026-02-21"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.21.0": {
+        "date": "2026-02-21",
+        "changes": [
+            "重构：数据库表 admin_users 重命名为 users，统一所有登录用户（普通用户与管理员）的存储",
+            "重构：ORM 模型 AdminUser 全面迁移为 User，role 字段区分 user / admin / super_admin",
+            "新增：OAuth 登录回调落库，每次授权自动 upsert User 记录并更新 last_login_at",
+            "修复：admin-status 接口在数据库不可用时的 fail-open 安全漏洞，改为返回 is_admin: false",
+            "维护：同步更新前后端版本号到 1.21.0",
+        ],
+    },
     "1.20.1": {
         "date": "2026-02-21",
         "changes": [

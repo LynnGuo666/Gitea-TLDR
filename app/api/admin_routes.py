@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from app.core.admin_auth import admin_required
 from app.core.context import AppContext
-from app.models import AdminUser
+from app.models import User
 from app.services.admin_service import AdminService
 
 logger = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
 
     @router.get("/dashboard/stats", response_model=DashboardStats)
     async def get_dashboard_stats(
-        request: Request, admin: AdminUser = Depends(admin_required())
+        request: Request, admin: User = Depends(admin_required())
     ):
         """获取 Dashboard 统计数据"""
         database = getattr(request.state, "database", None)
@@ -105,7 +105,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
     async def list_admin_users(
         request: Request,
         is_active: Optional[bool] = None,
-        admin: AdminUser = Depends(admin_required("users", "read")),
+        admin: User = Depends(admin_required("users", "read")),
     ):
         database = getattr(request.state, "database", None)
         if not database:
@@ -133,7 +133,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
     async def create_admin_user(
         request: Request,
         payload: AdminUserCreate,
-        admin: AdminUser = Depends(admin_required("users", "write")),
+        admin: User = Depends(admin_required("users", "write")),
     ):
         """创建管理员用户"""
         database = getattr(request.state, "database", None)
@@ -173,7 +173,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
         request: Request,
         username: str,
         payload: AdminUserUpdate,
-        admin: AdminUser = Depends(admin_required("users", "write")),
+        admin: User = Depends(admin_required("users", "write")),
     ):
         """更新管理员用户"""
         database = getattr(request.state, "database", None)
@@ -214,7 +214,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
     async def delete_admin_user(
         request: Request,
         username: str,
-        admin: AdminUser = Depends(admin_required("users", "delete")),
+        admin: User = Depends(admin_required("users", "delete")),
     ):
         """删除管理员用户"""
         database = getattr(request.state, "database", None)
@@ -244,7 +244,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
     async def get_settings(
         request: Request,
         category: Optional[str] = None,
-        admin: AdminUser = Depends(admin_required("config", "read")),
+        admin: User = Depends(admin_required("config", "read")),
     ):
         """获取全局配置"""
         database = getattr(request.state, "database", None)
@@ -271,7 +271,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
         request: Request,
         key: str,
         payload: SettingUpdate,
-        admin: AdminUser = Depends(admin_required("config", "write")),
+        admin: User = Depends(admin_required("config", "write")),
     ):
         """更新全局配置"""
         database = getattr(request.state, "database", None)
@@ -300,7 +300,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
     async def delete_setting(
         request: Request,
         key: str,
-        admin: AdminUser = Depends(admin_required("config", "delete")),
+        admin: User = Depends(admin_required("config", "delete")),
     ):
         """删除全局配置"""
         database = getattr(request.state, "database", None)
@@ -325,7 +325,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
         status: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
-        admin: AdminUser = Depends(admin_required("webhooks", "read")),
+        admin: User = Depends(admin_required("webhooks", "read")),
     ):
         """获取 Webhook 日志列表"""
         database = getattr(request.state, "database", None)
@@ -360,7 +360,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
     async def get_webhook_log_detail(
         request: Request,
         log_id: int,
-        admin: AdminUser = Depends(admin_required("webhooks", "read")),
+        admin: User = Depends(admin_required("webhooks", "read")),
     ):
         """获取 Webhook 日志详情"""
         database = getattr(request.state, "database", None)
