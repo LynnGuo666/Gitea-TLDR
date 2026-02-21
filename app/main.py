@@ -114,7 +114,7 @@ def create_app() -> FastAPI:
         # 启动时输出版本信息
         print(get_version_banner())
         logger.info(get_version_info())
-        logger.info("Gitea PR Reviewer 启动")
+        logger.info("LCPU AI Reviewer 启动")
         logger.info(f"Gitea URL: {settings.gitea_url}")
         logger.info(f"工作目录: {settings.work_dir}")
         logger.info(
@@ -159,11 +159,11 @@ def create_app() -> FastAPI:
         try:
             yield
         finally:
-            logger.info("Gitea PR Reviewer 关闭")
+            logger.info("LCPU AI Reviewer 关闭")
             await close_database()
 
     app = FastAPI(
-        title="Gitea PR Reviewer",
+        title="LCPU AI Reviewer",
         description="基于多引擎的Gitea Pull Request自动审查工具",
         version=__version__,
         lifespan=lifespan,

@@ -246,7 +246,7 @@ export default function ReviewsPage() {
   return (
     <>
       <Head>
-        <title>审查记录 - Gitea PR Reviewer</title>
+        <title>审查记录 - LCPU AI Reviewer</title>
       </Head>
 
       <div className="max-w-[1100px] mx-auto flex flex-col gap-5">

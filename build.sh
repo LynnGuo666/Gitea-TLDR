@@ -4,7 +4,7 @@
 
 set -e
 
-echo "开始构建 Gitea PR Reviewer Docker 镜像..."
+echo "开始构建 LCPU AI Reviewer Docker 镜像..."
 
 # 获取版本号（如果有git tag）
 VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")

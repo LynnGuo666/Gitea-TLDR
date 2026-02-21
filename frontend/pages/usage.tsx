@@ -118,7 +118,7 @@ export default function UsagePage() {
   if (loading) {
     return (
       <>
-        <Head><title>用量 - Gitea PR Reviewer</title></Head>
+        <Head><title>用量 - LCPU AI Reviewer</title></Head>
         <div className="max-w-[1100px] mx-auto flex flex-col gap-5">
           <div className="h-8 w-32 rounded bg-default-200 animate-pulse" />
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -134,7 +134,7 @@ export default function UsagePage() {
 
   return (
     <>
-        <Head><title>用量 - Gitea PR Reviewer</title></Head>
+        <Head><title>用量 - LCPU AI Reviewer</title></Head>
         <div className="max-w-[1100px] mx-auto flex flex-col gap-5">
           <PageHeader
             title="用量统计"

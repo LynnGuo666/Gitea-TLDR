@@ -131,7 +131,7 @@ export default function PreferencesPage() {
   return (
     <>
       <Head>
-        <title>个人设置 - Gitea PR Reviewer</title>
+        <title>个人设置 - LCPU AI Reviewer</title>
       </Head>
       <div className="max-w-[1100px] mx-auto">
         <div className="pb-4">

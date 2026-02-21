@@ -367,7 +367,7 @@ def get_version_info() -> str:
     Returns:
         格式化的版本信息
     """
-    return f"Gitea PR Reviewer v{__version__} ({__release_date__})"
+    return f"LCPU AI Reviewer v{__version__} ({__release_date__})"
 
 
 def get_version_banner() -> str:
@@ -380,7 +380,7 @@ def get_version_banner() -> str:
     banner = f"""
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║             Gitea PR Reviewer v{__version__}                    ║
+║              LCPU AI Reviewer v{__version__}                    ║
 ║                                                              ║
 ║  基于多引擎的Gitea Pull Request自动审查工具             ║
 ║  Release Date: {__release_date__}                            ║

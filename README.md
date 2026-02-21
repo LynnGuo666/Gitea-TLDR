@@ -1,4 +1,4 @@
-# Gitea PR Reviewer
+# LCPU AI Reviewer
 
 基于Claude Code的Gitea Pull Request自动审查工具。当用户提交PR后，该工具会自动接收webhook通知，使用Claude Code分析代码变更，并将审查结果反馈到Gitea。
 
@@ -291,7 +291,7 @@ curl http://localhost:8000/
 ```json
 {
   "status": "ok",
-  "service": "Gitea PR Reviewer",
+  "service": "LCPU AI Reviewer",
   "version": "1.0.0"
 }
 ```
@@ -316,7 +316,7 @@ curl http://localhost:8000/version
 ```json
 {
   "version": "1.0.0",
-  "info": "Gitea PR Reviewer v1.0.0 (2025-11-28)",
+  "info": "LCPU AI Reviewer v1.0.0 (2025-11-28)",
   "changelog": "..."
 }
 ```
@@ -374,7 +374,7 @@ Gitea Webhook接收端点
 
 ```ini
 [Unit]
-Description=Gitea PR Reviewer
+Description=LCPU AI Reviewer
 After=network.target
 
 [Service]

@@ -1,6 +1,6 @@
 {
-  "name": "Gitea PR Reviewer",
-  "short_name": "PR Reviewer",
+  "name": "LCPU AI Reviewer",
+  "short_name": "LCPU AI",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
