@@ -5,7 +5,7 @@
 import json
 import logging
 from datetime import date, datetime, timedelta
-from typing import Any, cast, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.engine import CursorResult
@@ -70,26 +70,41 @@ class AdminService:
         self,
         username: str,
         email: Optional[str] = None,
+        email_set: bool = False,
         role: Optional[str] = None,
+        role_set: bool = False,
         permissions: Optional[Dict[str, List[str]]] = None,
+        permissions_set: bool = False,
         is_active: Optional[bool] = None,
+        is_active_set: bool = False,
     ) -> Optional[User]:
         """更新用户"""
         user = await self.get_user(username)
         if not user:
             return None
 
-        if email is not None:
+        if email_set:
             user.email = email
-        if role is not None:
+        if role_set:
             user.role = role
-        if permissions is not None:
-            user.permissions = json.dumps(permissions)
-        if is_active is not None:
+        if permissions_set:
+            user.permissions = json.dumps(permissions) if permissions is not None else None
+        if is_active_set:
             user.is_active = is_active
 
         await self.session.flush()
         return user
+
+    async def count_active_super_admins(self, exclude_username: Optional[str] = None) -> int:
+        """统计启用中的超级管理员数量"""
+        stmt = select(func.count(User.id)).where(
+            User.role == "super_admin",
+            User.is_active.is_(True),
+        )
+        if exclude_username:
+            stmt = stmt.where(User.username != exclude_username)
+        result = await self.session.execute(stmt)
+        return int(result.scalar() or 0)
 
     async def delete_user(self, username: str) -> bool:
         """删除用户"""

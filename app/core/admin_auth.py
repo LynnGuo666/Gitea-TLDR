@@ -48,12 +48,24 @@ async def ensure_initial_admin(
     if not initial_username:
         return
 
-    stmt = select(User).where(User.role == "super_admin").limit(1)
+    stmt = select(User).where(
+        User.role == "super_admin",
+        User.is_active.is_(True),
+    ).limit(1)
     result = await session.execute(stmt)
     existing = result.scalar_one_or_none()
 
     if not existing:
-        await create_user(session, username=initial_username, role="super_admin")
+        initial_user_stmt = select(User).where(User.username == initial_username).limit(1)
+        initial_user_result = await session.execute(initial_user_stmt)
+        initial_user = initial_user_result.scalar_one_or_none()
+
+        if initial_user:
+            initial_user.role = "super_admin"
+            initial_user.is_active = True
+            logger.info(f"提升初始用户为超级管理员: {initial_username}")
+        else:
+            await create_user(session, username=initial_username, role="super_admin")
         await session.commit()
         logger.info(f"初始化超级管理员: {initial_username}")
 

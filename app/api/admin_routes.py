@@ -4,7 +4,7 @@
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -25,7 +25,9 @@ class UserCreate(BaseModel):
 
     username: str = Field(..., description="用户名")
     email: Optional[str] = Field(None, description="邮箱")
-    role: str = Field("admin", description="角色: super_admin 或 admin")
+    role: Literal["user", "admin", "super_admin"] = Field(
+        "admin", description="角色: user / admin / super_admin"
+    )
     permissions: Optional[Dict[str, List[str]]] = Field(None, description="权限配置")
 
 
@@ -33,7 +35,9 @@ class UserUpdate(BaseModel):
     """更新用户请求"""
 
     email: Optional[str] = Field(None, description="邮箱")
-    role: Optional[str] = Field(None, description="角色")
+    role: Optional[Literal["user", "admin", "super_admin"]] = Field(
+        None, description="角色"
+    )
     permissions: Optional[Dict[str, List[str]]] = Field(None, description="权限配置")
     is_active: Optional[bool] = Field(None, description="是否启用")
 
@@ -143,6 +147,12 @@ def create_admin_router(context: AppContext) -> APIRouter:
         if admin.role != "super_admin":
             raise HTTPException(status_code=403, detail="需要超级管理员权限")
 
+        if payload.role != "admin" and payload.permissions is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="仅 admin 角色可配置 permissions",
+            )
+
         async with database.session() as session:
             service = AdminService(session)
 
@@ -154,7 +164,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
                 username=payload.username,
                 email=payload.email,
                 role=payload.role,
-                permissions=payload.permissions,
+                permissions=payload.permissions if payload.role == "admin" else None,
             )
             await session.commit()
 
@@ -183,14 +193,71 @@ def create_admin_router(context: AppContext) -> APIRouter:
         if admin.role != "super_admin" and admin.username != username:
             raise HTTPException(status_code=403, detail="只能修改自己的信息")
 
+        update_fields = payload.model_fields_set
+        if not update_fields:
+            raise HTTPException(status_code=400, detail="没有可更新字段")
+        if "role" in update_fields and payload.role is None:
+            raise HTTPException(status_code=400, detail="role 不能为空")
+        if "is_active" in update_fields and payload.is_active is None:
+            raise HTTPException(status_code=400, detail="is_active 不能为空")
+
+        if admin.role != "super_admin":
+            forbidden = {"role", "permissions", "is_active"} & update_fields
+            if forbidden:
+                raise HTTPException(
+                    status_code=403, detail="仅超级管理员可修改角色、权限和启用状态"
+                )
+
         async with database.session() as session:
             service = AdminService(session)
+
+            target_user = await service.get_user(username)
+            if not target_user:
+                raise HTTPException(status_code=404, detail="用户不存在")
+
+            permissions_value = payload.permissions
+            permissions_set = "permissions" in update_fields
+            next_role = payload.role if "role" in update_fields else target_user.role
+            if permissions_set and permissions_value is not None and next_role != "admin":
+                raise HTTPException(
+                    status_code=400,
+                    detail="仅 admin 角色可配置 permissions",
+                )
+            if "role" in update_fields and payload.role != "admin" and not permissions_set:
+                # 角色变更为非 admin 时，默认清空遗留的细粒度权限。
+                permissions_set = True
+                permissions_value = None
+
+            if admin.role == "super_admin":
+                next_is_active = (
+                    payload.is_active
+                    if "is_active" in update_fields
+                    else target_user.is_active
+                )
+                if (
+                    target_user.role == "super_admin"
+                    and target_user.is_active
+                    and (next_role != "super_admin" or not next_is_active)
+                ):
+                    remaining = await service.count_active_super_admins(
+                        exclude_username=target_user.username
+                    )
+                    if remaining < 1:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="至少需要保留一个启用中的超级管理员",
+                        )
+
             user = await service.update_user(
                 username=username,
                 email=payload.email,
+                email_set="email" in update_fields,
                 role=payload.role,
-                permissions=payload.permissions,
+                role_set="role" in update_fields,
+                permissions=permissions_value,
+                permissions_set=permissions_set,
                 is_active=payload.is_active,
+                is_active_set="is_active" in update_fields,
             )
             if not user:
                 raise HTTPException(status_code=404, detail="用户不存在")
@@ -228,6 +295,19 @@ def create_admin_router(context: AppContext) -> APIRouter:
 
         async with database.session() as session:
             service = AdminService(session)
+            target_user = await service.get_user(username)
+            if not target_user:
+                raise HTTPException(status_code=404, detail="用户不存在")
+
+            if target_user.role == "super_admin" and target_user.is_active:
+                remaining = await service.count_active_super_admins(
+                    exclude_username=target_user.username
+                )
+                if remaining < 1:
+                    raise HTTPException(
+                        status_code=400, detail="至少需要保留一个启用中的超级管理员"
+                    )
+
             deleted = await service.delete_user(username)
             if not deleted:
                 raise HTTPException(status_code=404, detail="用户不存在")

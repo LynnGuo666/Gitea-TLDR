@@ -1,6 +1,6 @@
 import Head from 'next/head';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import {
   Button,
   Checkbox,
@@ -27,7 +27,7 @@ import {
 import { ArrowLeft, RefreshCw, Plus } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
 import { apiFetch } from '../../lib/api';
-import { fetchAdminStatus } from '../../lib/auth';
+import { AuthContext, fetchAdminStatus } from '../../lib/auth';
 
 type UserRole = 'user' | 'admin' | 'super_admin';
 
@@ -74,6 +74,7 @@ function formatTime(iso: string | null): string {
 }
 
 export default function AdminUsersPage() {
+  const { status: authStatus } = useContext(AuthContext);
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -89,6 +90,7 @@ export default function AdminUsersPage() {
 
   const editModal = useDisclosure();
   const deleteModal = useDisclosure();
+  const currentUsername = authStatus.user?.username ?? null;
 
   const fetchUsers = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true);
@@ -99,7 +101,7 @@ export default function AdminUsersPage() {
       const res = await apiFetch('/api/admin/users');
       if (!res.ok) {
         if (res.status === 403) {
-          setError('当前账号没有用户管理权限（需要 super_admin）');
+          setError('当前账号没有用户读取权限（需要 users.read）');
           return;
         }
         if (res.status === 503) {
@@ -133,7 +135,14 @@ export default function AdminUsersPage() {
     editModal.onOpen();
   };
 
+  const canEditUser = (user: UserItem): boolean =>
+    isSuperAdmin || (currentUsername !== null && user.username === currentUsername);
+
   const openEdit = (user: UserItem) => {
+    if (!canEditUser(user)) {
+      setError('当前账号只能编辑自己的基础信息');
+      return;
+    }
     setEditingUser(user);
     setForm({
       username: user.username,
@@ -172,11 +181,15 @@ export default function AdminUsersPage() {
             role: form.role,
             permissions: form.role === 'admin' ? form.permissions : null,
           }
-        : {
+        : isSuperAdmin
+        ? {
             email: form.email || null,
             role: form.role,
             permissions: form.role === 'admin' ? form.permissions : null,
             is_active: form.is_active,
+          }
+        : {
+            email: form.email || null,
           };
 
       const url = isCreate
@@ -206,6 +219,10 @@ export default function AdminUsersPage() {
   };
 
   const toggleActive = async (user: UserItem) => {
+    if (!isSuperAdmin) {
+      setError('仅 super_admin 可修改账号启用状态');
+      return;
+    }
     try {
       const res = await apiFetch(`/api/admin/users/${encodeURIComponent(user.username)}`, {
         method: 'PUT',
@@ -277,7 +294,7 @@ export default function AdminUsersPage() {
 
         {!isSuperAdmin && !loading && (
           <div className="rounded-lg border border-warning-200 bg-warning-50 p-3 text-warning-700 text-sm">
-            当前账号角色不是 super_admin，部分操作（新建、删除、修改角色）不可用。
+            当前账号不是 super_admin，仅可编辑自己的基础信息（例如邮箱）。
           </div>
         )}
         {error && (
@@ -338,12 +355,13 @@ export default function AdminUsersPage() {
                           isSelected={user.is_active}
                           onValueChange={() => toggleActive(user)}
                           aria-label={user.is_active ? '已启用' : '已停用'}
+                          isDisabled={!isSuperAdmin}
                         />
                       </TableCell>
                       <TableCell>{formatTime(user.last_login_at)}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Button size="sm" variant="bordered" onPress={() => openEdit(user)}>
+                          <Button size="sm" variant="bordered" onPress={() => openEdit(user)} isDisabled={!canEditUser(user)}>
                             编辑
                           </Button>
                           {isSuperAdmin && (
@@ -388,6 +406,11 @@ export default function AdminUsersPage() {
               onValueChange={(v) => setForm((p) => ({ ...p, email: v }))}
               type="email"
             />
+            {!isSuperAdmin && editingUser && (
+              <div className="rounded-lg border border-warning-200 bg-warning-50 p-2 text-warning-700 text-xs">
+                当前账号仅可修改自己的邮箱；角色、权限与启用状态需 super_admin 操作。
+              </div>
+            )}
             <Select
               label="角色"
               selectedKeys={[form.role]}
@@ -412,6 +435,7 @@ export default function AdminUsersPage() {
                       orientation="horizontal"
                       value={form.permissions[key] ?? []}
                       onValueChange={(vals) => setPermActions(key, vals)}
+                      isDisabled={!isSuperAdmin}
                     >
                       {actions.map((action) => (
                         <Checkbox key={action} value={action}>
@@ -430,6 +454,7 @@ export default function AdminUsersPage() {
                   isSelected={form.is_active}
                   onValueChange={(v) => setForm((p) => ({ ...p, is_active: v }))}
                   size="sm"
+                  isDisabled={!isSuperAdmin}
                 />
                 <span className="text-sm text-default-600">账号启用</span>
               </div>
