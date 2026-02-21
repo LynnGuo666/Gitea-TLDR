@@ -9,6 +9,7 @@ import {
   DropdownMenu,
   DropdownItem,
   Avatar,
+  addToast,
 } from '@heroui/react';
 import { BarChart3, User, Sun, Moon, Shield, LogOut, LayoutGrid, Menu, X, Settings2, BookOpen } from 'lucide-react';
 import { VersionDisplay } from './VersionDisplay';
@@ -107,6 +108,14 @@ export default function Layout({ children }: LayoutProps) {
     if (isWindowFocused) refreshAuth();
   }, [isWindowFocused, refreshAuth]);
 
+  useEffect(() => {
+    addToast({
+      title: '当前为 Alpha 内测版本',
+      description: '功能仍在迭代中，界面与交互可能会调整。',
+      color: 'warning',
+    });
+  }, []);
+
   const beginLogin = useCallback(async () => {
     try { await beginOAuthLogin(); } catch (error) { console.error(error); }
   }, []);
@@ -141,7 +150,7 @@ export default function Layout({ children }: LayoutProps) {
         {/* ── 移动端：固定顶部栏 ── */}
         <header className="sm:hidden sticky top-0 z-50 sidebar-glass border-b border-divider/50 relative">
           <div className="flex items-center justify-between px-4 h-14">
-            <div className="flex items-center gap-2.5 font-semibold">
+            <div className="flex items-center font-semibold">
               <strong className="text-foreground text-base">LCPU</strong>
             </div>
             <div className="flex items-center gap-1">
@@ -252,7 +261,7 @@ export default function Layout({ children }: LayoutProps) {
         {/* ── 桌面端：左侧侧边栏 ── */}
         <aside className="hidden sm:flex w-60 sidebar-glass border-r border-divider/50 flex-col justify-between shrink-0 h-dvh sticky top-0 self-start">
           <div className="px-5 py-5 border-b border-divider flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5 font-semibold">
+            <div className="flex items-center font-semibold">
               <strong className="text-foreground">LCPU AI Reviewer</strong>
             </div>
             {mounted && (
