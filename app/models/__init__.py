@@ -7,9 +7,8 @@ from .repository import Repository
 from .review_session import ReviewSession
 from .usage_stat import UsageStat
 from .user import User
+from .user_session import UserSession
 from .webhook_log import WebhookLog
-
-AdminUser = User
 
 __all__ = [
     "Base",
@@ -20,7 +19,7 @@ __all__ = [
     "InlineComment",
     "UsageStat",
     "User",
-    "AdminUser",
+    "UserSession",
     "AdminSettings",
     "ApiKey",
     "KeyRotationStrategy",

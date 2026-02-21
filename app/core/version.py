@@ -2,12 +2,23 @@
 版本信息模块
 """
 
-__version__ = "1.21.0"
+__version__ = "1.21.1"
 __release_date__ = "2026-02-21"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.21.1": {
+        "date": "2026-02-21",
+        "changes": [
+            "重构：彻底移除 admin_user/AdminUser 命名，所有接口与变量统一使用 user/User",
+            "新增：用户会话落库（user_sessions 表），重启后会话不丢失，从内存自动降级回 DB 加载",
+            "新增：AuthManager 增加 get_session_async / logout_async，logout 同步清除 DB 会话记录",
+            "修复：admin_service.create_user 与 admin_auth.create_user 默认角色由 admin 改为 user，避免误提权",
+            "修复：前端用户管理页角色 Chip、Select 与删除确认文案补全 user（普通用户）选项与展示",
+            "维护：同步更新前后端版本号到 1.21.1",
+        ],
+    },
     "1.21.0": {
         "date": "2026-02-21",
         "changes": [

@@ -29,10 +29,12 @@ import PageHeader from '../../components/PageHeader';
 import { apiFetch } from '../../lib/api';
 import { fetchAdminStatus } from '../../lib/auth';
 
-type AdminUserItem = {
+type UserRole = 'user' | 'admin' | 'super_admin';
+
+type UserItem = {
   username: string;
   email: string | null;
-  role: 'super_admin' | 'admin';
+  role: UserRole;
   permissions: Record<string, string[]> | null;
   is_active: boolean;
   created_at: string;
@@ -42,7 +44,7 @@ type AdminUserItem = {
 type FormState = {
   username: string;
   email: string;
-  role: 'super_admin' | 'admin';
+  role: UserRole;
   permissions: Record<string, string[]>;
   is_active: boolean;
 };
@@ -72,7 +74,7 @@ function formatTime(iso: string | null): string {
 }
 
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<AdminUserItem[]>([]);
+  const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -81,8 +83,8 @@ export default function AdminUsersPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  const [editingUser, setEditingUser] = useState<AdminUserItem | null>(null);
-  const [deletingUser, setDeletingUser] = useState<AdminUserItem | null>(null);
+  const [editingUser, setEditingUser] = useState<UserItem | null>(null);
+  const [deletingUser, setDeletingUser] = useState<UserItem | null>(null);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
 
   const editModal = useDisclosure();
@@ -105,7 +107,7 @@ export default function AdminUsersPage() {
         }
         throw new Error('获取用户列表失败');
       }
-      const data = (await res.json()) as AdminUserItem[];
+      const data = (await res.json()) as UserItem[];
       setUsers(data);
     } catch (err) {
       setUsers([]);
@@ -131,7 +133,7 @@ export default function AdminUsersPage() {
     editModal.onOpen();
   };
 
-  const openEdit = (user: AdminUserItem) => {
+  const openEdit = (user: UserItem) => {
     setEditingUser(user);
     setForm({
       username: user.username,
@@ -145,7 +147,7 @@ export default function AdminUsersPage() {
     editModal.onOpen();
   };
 
-  const openDelete = (user: AdminUserItem) => {
+  const openDelete = (user: UserItem) => {
     setDeletingUser(user);
     deleteModal.onOpen();
   };
@@ -203,7 +205,7 @@ export default function AdminUsersPage() {
     }
   };
 
-  const toggleActive = async (user: AdminUserItem) => {
+  const toggleActive = async (user: UserItem) => {
     try {
       const res = await apiFetch(`/api/admin/users/${encodeURIComponent(user.username)}`, {
         method: 'PUT',
@@ -315,9 +317,19 @@ export default function AdminUsersPage() {
                         <Chip
                           size="sm"
                           variant="flat"
-                          color={user.role === 'super_admin' ? 'warning' : 'primary'}
+                          color={
+                            user.role === 'super_admin'
+                              ? 'warning'
+                              : user.role === 'admin'
+                              ? 'primary'
+                              : 'default'
+                          }
                         >
-                          {user.role === 'super_admin' ? '超级管理员' : '管理员'}
+                          {user.role === 'super_admin'
+                            ? '超级管理员'
+                            : user.role === 'admin'
+                            ? '管理员'
+                            : '普通用户'}
                         </Chip>
                       </TableCell>
                       <TableCell>
@@ -380,11 +392,12 @@ export default function AdminUsersPage() {
               label="角色"
               selectedKeys={[form.role]}
               onSelectionChange={(keys) => {
-                const role = Array.from(keys)[0] as 'super_admin' | 'admin';
+                const role = Array.from(keys)[0] as UserRole;
                 setForm((p) => ({ ...p, role }));
               }}
               isDisabled={!isSuperAdmin}
             >
+              <SelectItem key="user">普通用户</SelectItem>
               <SelectItem key="admin">管理员</SelectItem>
               <SelectItem key="super_admin">超级管理员</SelectItem>
             </Select>
@@ -439,7 +452,7 @@ export default function AdminUsersPage() {
           <ModalHeader>确认删除</ModalHeader>
           <ModalBody>
             <p className="text-sm">
-              确定要删除管理员 <strong>{deletingUser?.username}</strong> 吗？此操作不可撤销。
+              确定要删除用户 <strong>{deletingUser?.username}</strong> 吗？此操作不可撤销。
             </p>
           </ModalBody>
           <ModalFooter>

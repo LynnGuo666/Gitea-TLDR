@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 # ==================== Request/Response Models ====================
 
 
-class AdminUserCreate(BaseModel):
-    """创建管理员请求"""
+class UserCreate(BaseModel):
+    """创建用户请求"""
 
     username: str = Field(..., description="用户名")
     email: Optional[str] = Field(None, description="邮箱")
@@ -29,8 +29,8 @@ class AdminUserCreate(BaseModel):
     permissions: Optional[Dict[str, List[str]]] = Field(None, description="权限配置")
 
 
-class AdminUserUpdate(BaseModel):
-    """更新管理员请求"""
+class UserUpdate(BaseModel):
+    """更新用户请求"""
 
     email: Optional[str] = Field(None, description="邮箱")
     role: Optional[str] = Field(None, description="角色")
@@ -38,8 +38,8 @@ class AdminUserUpdate(BaseModel):
     is_active: Optional[bool] = Field(None, description="是否启用")
 
 
-class AdminUserResponse(BaseModel):
-    """管理员响应"""
+class UserResponse(BaseModel):
+    """用户响应"""
 
     username: str
     email: Optional[str]
@@ -101,8 +101,8 @@ def create_admin_router(context: AppContext) -> APIRouter:
 
     # ==================== 管理员用户管理 ====================
 
-    @router.get("/users", response_model=List[AdminUserResponse])
-    async def list_admin_users(
+    @router.get("/users", response_model=List[UserResponse])
+    async def list_users(
         request: Request,
         is_active: Optional[bool] = None,
         admin: User = Depends(admin_required("users", "read")),
@@ -113,9 +113,9 @@ def create_admin_router(context: AppContext) -> APIRouter:
 
         async with database.session() as session:
             service = AdminService(session)
-            users = await service.list_admin_users(is_active=is_active)
+            users = await service.list_users(is_active=is_active)
             return [
-                AdminUserResponse(
+                UserResponse(
                     username=u.username,
                     email=u.email,
                     role=u.role,
@@ -129,13 +129,13 @@ def create_admin_router(context: AppContext) -> APIRouter:
                 for u in users
             ]
 
-    @router.post("/users", response_model=AdminUserResponse)
-    async def create_admin_user(
+    @router.post("/users", response_model=UserResponse)
+    async def create_user(
         request: Request,
-        payload: AdminUserCreate,
+        payload: UserCreate,
         admin: User = Depends(admin_required("users", "write")),
     ):
-        """创建管理员用户"""
+        """创建用户"""
         database = getattr(request.state, "database", None)
         if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
@@ -146,11 +146,11 @@ def create_admin_router(context: AppContext) -> APIRouter:
         async with database.session() as session:
             service = AdminService(session)
 
-            existing = await service.get_admin_user(payload.username)
+            existing = await service.get_user(payload.username)
             if existing:
                 raise HTTPException(status_code=400, detail="用户名已存在")
 
-            user = await service.create_admin_user(
+            user = await service.create_user(
                 username=payload.username,
                 email=payload.email,
                 role=payload.role,
@@ -158,7 +158,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
             )
             await session.commit()
 
-            return AdminUserResponse(
+            return UserResponse(
                 username=user.username,
                 email=user.email,
                 role=user.role,
@@ -168,25 +168,24 @@ def create_admin_router(context: AppContext) -> APIRouter:
                 last_login_at=None,
             )
 
-    @router.put("/users/{username}", response_model=AdminUserResponse)
-    async def update_admin_user(
+    @router.put("/users/{username}", response_model=UserResponse)
+    async def update_user(
         request: Request,
         username: str,
-        payload: AdminUserUpdate,
+        payload: UserUpdate,
         admin: User = Depends(admin_required("users", "write")),
     ):
-        """更新管理员用户"""
+        """更新用户"""
         database = getattr(request.state, "database", None)
         if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
-        # 只有 super_admin 可以更新其他管理员
         if admin.role != "super_admin" and admin.username != username:
             raise HTTPException(status_code=403, detail="只能修改自己的信息")
 
         async with database.session() as session:
             service = AdminService(session)
-            user = await service.update_admin_user(
+            user = await service.update_user(
                 username=username,
                 email=payload.email,
                 role=payload.role,
@@ -198,7 +197,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
 
             await session.commit()
 
-            return AdminUserResponse(
+            return UserResponse(
                 username=user.username,
                 email=user.email,
                 role=user.role,
@@ -211,32 +210,30 @@ def create_admin_router(context: AppContext) -> APIRouter:
             )
 
     @router.delete("/users/{username}")
-    async def delete_admin_user(
+    async def delete_user(
         request: Request,
         username: str,
         admin: User = Depends(admin_required("users", "delete")),
     ):
-        """删除管理员用户"""
+        """删除用户"""
         database = getattr(request.state, "database", None)
         if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
-        # 只有 super_admin 可以删除管理员
         if admin.role != "super_admin":
             raise HTTPException(status_code=403, detail="需要超级管理员权限")
 
-        # 不能删除自己
         if admin.username == username:
             raise HTTPException(status_code=400, detail="不能删除自己")
 
         async with database.session() as session:
             service = AdminService(session)
-            deleted = await service.delete_admin_user(username)
+            deleted = await service.delete_user(username)
             if not deleted:
                 raise HTTPException(status_code=404, detail="用户不存在")
 
             await session.commit()
-            return {"success": True, "message": f"已删除管理员 {username}"}
+            return {"success": True, "message": f"已删除用户 {username}"}
 
     # ==================== 全局配置管理 ====================
 

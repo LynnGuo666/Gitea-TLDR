@@ -333,7 +333,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     @api_router.post("/auth/logout")
     async def auth_logout(request: Request, response: Response):
         """注销当前会话"""
-        context.auth_manager.logout(request, response)
+        await context.auth_manager.logout_async(
+            request, response, database=context.database
+        )
         return {"success": True}
 
     @api_router.get("/auth/callback")

@@ -5,9 +5,10 @@
 import json
 import logging
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, cast, Dict, List, Optional
 
 from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -29,12 +30,10 @@ class AdminService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    # ==================== AdminUser 操作 ====================
+    # ==================== User 操作 ====================
 
-    async def list_admin_users(
-        self, is_active: Optional[bool] = None
-    ) -> List[User]:
-        """获取管理员列表"""
+    async def list_users(self, is_active: Optional[bool] = None) -> List[User]:
+        """获取用户列表"""
         stmt = select(User)
         if is_active is not None:
             stmt = stmt.where(User.is_active == is_active)
@@ -42,32 +41,32 @@ class AdminService:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_admin_user(self, username: str) -> Optional[User]:
-        """获取管理员用户"""
+    async def get_user(self, username: str) -> Optional[User]:
+        """获取用户"""
         stmt = select(User).where(User.username == username)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def create_admin_user(
+    async def create_user(
         self,
         username: str,
         email: Optional[str] = None,
-        role: str = "admin",
+        role: str = "user",
         permissions: Optional[Dict[str, List[str]]] = None,
     ) -> User:
-        """创建管理员用户"""
-        admin = User(
+        """创建用户"""
+        user = User(
             username=username,
             email=email,
             role=role,
             permissions=json.dumps(permissions) if permissions else None,
             is_active=True,
         )
-        self.session.add(admin)
+        self.session.add(user)
         await self.session.flush()
-        return admin
+        return user
 
-    async def update_admin_user(
+    async def update_user(
         self,
         username: str,
         email: Optional[str] = None,
@@ -75,27 +74,27 @@ class AdminService:
         permissions: Optional[Dict[str, List[str]]] = None,
         is_active: Optional[bool] = None,
     ) -> Optional[User]:
-        """更新管理员用户"""
-        admin = await self.get_admin_user(username)
-        if not admin:
+        """更新用户"""
+        user = await self.get_user(username)
+        if not user:
             return None
 
         if email is not None:
-            admin.email = email
+            user.email = email
         if role is not None:
-            admin.role = role
+            user.role = role
         if permissions is not None:
-            admin.permissions = json.dumps(permissions)
+            user.permissions = json.dumps(permissions)
         if is_active is not None:
-            admin.is_active = is_active
+            user.is_active = is_active
 
         await self.session.flush()
-        return admin
+        return user
 
-    async def delete_admin_user(self, username: str) -> bool:
-        """删除管理员用户"""
+    async def delete_user(self, username: str) -> bool:
+        """删除用户"""
         stmt = delete(User).where(User.username == username)
-        result = await self.session.execute(stmt)
+        result = cast(CursorResult, await self.session.execute(stmt))
         return result.rowcount > 0
 
     # ==================== AdminSettings 操作 ====================
@@ -140,7 +139,7 @@ class AdminService:
     async def delete_setting(self, key: str) -> bool:
         """删除配置"""
         stmt = delete(AdminSettings).where(AdminSettings.key == key)
-        result = await self.session.execute(stmt)
+        result = cast(CursorResult, await self.session.execute(stmt))
         return result.rowcount > 0
 
     # ==================== Dashboard 统计 ====================
@@ -316,7 +315,7 @@ class AdminService:
         success_stmt = delete(WebhookLog).where(
             and_(WebhookLog.status == "success", WebhookLog.created_at < cutoff_date)
         )
-        success_result = await self.session.execute(success_stmt)
+        success_result = cast(CursorResult, await self.session.execute(success_stmt))
 
         # 删除失败的旧日志
         failed_stmt = delete(WebhookLog).where(
@@ -325,7 +324,7 @@ class AdminService:
                 WebhookLog.created_at < cutoff_date_failed,
             )
         )
-        failed_result = await self.session.execute(failed_stmt)
+        failed_result = cast(CursorResult, await self.session.execute(failed_stmt))
 
         total_deleted = success_result.rowcount + failed_result.rowcount
         if total_deleted > 0:

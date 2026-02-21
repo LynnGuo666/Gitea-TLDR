@@ -6,26 +6,29 @@
 import asyncio
 import sys
 from pathlib import Path
+from typing import Optional
 
 # 添加项目根目录到 Python 路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.core.config import settings
 from app.core.database import Database
-from app.core.admin_auth import create_admin_user
+from app.core.admin_auth import create_user
 
 
-async def add_admin(username: str, email: str = None, role: str = "super_admin"):
+async def add_admin(
+    username: str, email: Optional[str] = None, role: str = "super_admin"
+):
     """添加管理员用户"""
     database = Database(settings.effective_database_url)
     await database.init()
 
     async with database.session() as session:
         # 检查用户是否已存在
-        from app.models import AdminUser
+        from app.models import User
         from sqlalchemy import select
 
-        stmt = select(AdminUser).where(AdminUser.username == username)
+        stmt = select(User).where(User.username == username)
         result = await session.execute(stmt)
         existing = result.scalar_one_or_none()
 
@@ -37,7 +40,7 @@ async def add_admin(username: str, email: str = None, role: str = "super_admin")
             return
 
         # 创建新管理员
-        admin = await create_admin_user(
+        admin = await create_user(
             session=session, username=username, email=email, role=role
         )
         await session.commit()
@@ -56,10 +59,10 @@ async def list_admins():
     await database.init()
 
     async with database.session() as session:
-        from app.models import AdminUser
+        from app.models import User
         from sqlalchemy import select
 
-        stmt = select(AdminUser).order_by(AdminUser.created_at.desc())
+        stmt = select(User).order_by(User.created_at.desc())
         result = await session.execute(stmt)
         admins = result.scalars().all()
 

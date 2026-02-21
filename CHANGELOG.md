@@ -4,6 +4,26 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.21.1] - 2026-02-21
+
+### 重构 (Refactored)
+
+- **命名清理**: 彻底移除代码中所有 `admin_user` / `AdminUser` 命名，Pydantic 模型、路由处理器、服务函数统一使用 `user` / `User` 语义
+
+### 新增功能 (Added)
+
+- **会话持久化**: 新增 `user_sessions` 数据表，OAuth 登录产生的会话写入 DB，重启后可从 DB 恢复，不再依赖纯内存存储
+- **logout_async / get_session_async**: `AuthManager` 新增异步方法，logout 同步清除内存 + DB 会话，get_session 在内存未命中时自动回退 DB 查询
+
+### 修复 (Fixed)
+
+- **默认角色安全**: `admin_service.create_user` 与 `admin_auth.create_user` 默认 `role` 由 `"admin"` 改为 `"user"`，防止显式传参省略时意外提权
+- **用户管理 UI**: 前端 `/admin/users` 角色 Chip 补全普通用户样式，Select 补全"普通用户"选项，删除确认文案由"管理员"改为"用户"
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.21.1`
+
 ## [1.21.0] - 2026-02-21
 
 ### 重构 (Refactored)

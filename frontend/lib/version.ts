@@ -7,5 +7,5 @@
  * 3. 后端版本号在 app/core/version.py 中维护
  */
 
-export const FRONTEND_VERSION = '1.21.0';
+export const FRONTEND_VERSION = '1.21.1';
 export const FRONTEND_RELEASE_DATE = '2026-02-21';

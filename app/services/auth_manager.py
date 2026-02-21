@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 import time
@@ -166,6 +167,9 @@ class AuthManager:
         with self._lock:
             self._sessions[session_id] = session
 
+        if database:
+            await self._persist_session(session_id, session, database)
+
         self._attach_cookie(response, session_id, expires_in)
         return response
 
@@ -215,6 +219,106 @@ class AuthManager:
             key=settings.session_cookie_name,
             path="/",
         )
+
+    async def _persist_session(
+        self, session_id: str, session: SessionData, database: Any
+    ) -> None:
+        try:
+            from app.models import UserSession  # noqa: PLC0415
+
+            async with database.session() as db_session:
+                db_row = UserSession(
+                    session_id=session_id,
+                    user_id=session.user_id,
+                    access_token=session.access_token,
+                    refresh_token=session.refresh_token,
+                    scope=session.scope,
+                    expires_at=session.expires_at,
+                    user_info=json.dumps(session.user),
+                )
+                db_session.add(db_row)
+                await db_session.commit()
+        except Exception as exc:
+            logger.warning("会话落库失败，跳过: %s", exc)
+
+    async def _load_session_from_db(
+        self, session_id: str, database: Any
+    ) -> Optional[SessionData]:
+        try:
+            from sqlalchemy import select  # noqa: PLC0415
+            from app.models import UserSession  # noqa: PLC0415
+
+            async with database.session() as db_session:
+                stmt = select(UserSession).where(UserSession.session_id == session_id)
+                result = await db_session.execute(stmt)
+                row = result.scalar_one_or_none()
+
+            if row is None:
+                return None
+            if row.expires_at <= time.time():
+                await self._delete_session_from_db(session_id, database)
+                return None
+
+            user_data: Dict[str, Any] = (
+                json.loads(row.user_info) if row.user_info else {}
+            )
+            session = SessionData(
+                access_token=row.access_token,
+                refresh_token=row.refresh_token,
+                scope=row.scope,
+                expires_at=row.expires_at,
+                user=user_data,
+                user_id=row.user_id,
+            )
+            with self._lock:
+                self._sessions[session_id] = session
+            return session
+        except Exception as exc:
+            logger.warning("从数据库加载会话失败: %s", exc)
+            return None
+
+    async def _delete_session_from_db(self, session_id: str, database: Any) -> None:
+        try:
+            from sqlalchemy import delete  # noqa: PLC0415
+            from app.models import UserSession  # noqa: PLC0415
+
+            async with database.session() as db_session:
+                stmt = delete(UserSession).where(UserSession.session_id == session_id)
+                await db_session.execute(stmt)
+                await db_session.commit()
+        except Exception as exc:
+            logger.warning("删除数据库会话失败: %s", exc)
+
+    async def get_session_async(
+        self, request: Request, database: Optional[Any] = None
+    ) -> Optional[SessionData]:
+        if not self.enabled:
+            return None
+        session_id = request.cookies.get(settings.session_cookie_name)
+        if not session_id:
+            return None
+        with self._lock:
+            session = self._sessions.get(session_id)
+        if session:
+            if session.expires_at <= time.time():
+                self.delete_session(session_id)
+                if database:
+                    await self._delete_session_from_db(session_id, database)
+                return None
+            return session
+        if database:
+            return await self._load_session_from_db(session_id, database)
+        return None
+
+    async def logout_async(
+        self, request: Request, response: Response, database: Optional[Any] = None
+    ) -> None:
+        session_id = request.cookies.get(settings.session_cookie_name)
+        if session_id:
+            self.delete_session(session_id)
+            if database:
+                await self._delete_session_from_db(session_id, database)
+        response.delete_cookie(key=settings.session_cookie_name, path="/")
 
     def get_status_payload(self, request: Request) -> Dict[str, Any]:
         session = self.get_session(request)

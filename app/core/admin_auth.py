@@ -22,11 +22,11 @@ async def get_admin_user(session: AsyncSession, username: str) -> Optional[User]
     return result.scalar_one_or_none()
 
 
-async def create_admin_user(
+async def create_user(
     session: AsyncSession,
     username: str,
     email: Optional[str] = None,
-    role: str = "admin",
+    role: str = "user",
     permissions: Optional[str] = None,
 ) -> User:
     user = User(
@@ -38,7 +38,7 @@ async def create_admin_user(
     )
     session.add(user)
     await session.flush()
-    logger.info(f"创建管理员用户: {username} ({role})")
+    logger.info(f"创建用户: {username} ({role})")
     return user
 
 
@@ -53,7 +53,7 @@ async def ensure_initial_admin(
     existing = result.scalar_one_or_none()
 
     if not existing:
-        await create_admin_user(session, username=initial_username, role="super_admin")
+        await create_user(session, username=initial_username, role="super_admin")
         await session.commit()
         logger.info(f"初始化超级管理员: {initial_username}")
 
