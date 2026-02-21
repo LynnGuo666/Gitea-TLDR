@@ -881,10 +881,21 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
         async with database.session() as session:
             db_service = DBService(session)
+            usage_user_id: Optional[int] = None
+            session_data = context.auth_manager.get_session(request)
+            username = (
+                session_data.user.get("username")
+                if session_data and isinstance(session_data.user, dict)
+                else None
+            )
+            if username:
+                usage_user = await db_service.get_or_create_user_by_username(username)
+                usage_user_id = usage_user.id
 
             # 获取汇总
             summary = await db_service.get_usage_summary(
                 repository_id=repository_id,
+                user_id=usage_user_id,
                 start_date=start,
                 end_date=end,
             )
@@ -892,6 +903,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             # 获取详细记录
             stats = await db_service.get_usage_stats(
                 repository_id=repository_id,
+                user_id=usage_user_id,
                 start_date=start,
                 end_date=end,
             )

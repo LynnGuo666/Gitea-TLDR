@@ -13,6 +13,7 @@ from .base import Base
 if TYPE_CHECKING:
     from .repository import Repository
     from .review_session import ReviewSession
+    from .user import User
 
 
 class UsageStat(Base):
@@ -26,6 +27,9 @@ class UsageStat(Base):
     )
     review_session_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("review_sessions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     # 统计日期
@@ -54,3 +58,4 @@ class UsageStat(Base):
     review_session: Mapped[Optional["ReviewSession"]] = relationship(
         "ReviewSession", back_populates="usage_stat"
     )
+    user: Mapped[Optional["User"]] = relationship("User")

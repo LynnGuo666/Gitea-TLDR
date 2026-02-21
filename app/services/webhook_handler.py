@@ -105,6 +105,7 @@ class WebhookHandler:
             pr_title = pr_data.get("title")
             head_branch = pr_data.get("head", {}).get("ref")
             base_branch = pr_data.get("base", {}).get("ref")
+            actor_username = self._extract_actor_username(payload)
 
             logger.info(
                 f"处理PR: {owner}/{repo_name}#{pr_number} - {pr_title} "
@@ -119,6 +120,7 @@ class WebhookHandler:
                 features=features,
                 focus_areas=focus_areas,
                 trigger_type="auto",
+                actor_username=actor_username,
             )
 
         except Exception as e:
@@ -186,6 +188,12 @@ class WebhookHandler:
             owner = repo_data.get("owner", {}).get("login")
             repo_name = repo_data.get("name")
             pr_number = issue_data.get("number")
+            actor_username = (
+                comment_data.get("user", {}).get("login")
+                or comment_data.get("user", {}).get("username")
+                or payload.get("sender", {}).get("login")
+                or payload.get("sender", {}).get("username")
+            )
 
             logger.info(
                 f"手动触发PR审查: {owner}/{repo_name}#{pr_number} "
@@ -209,6 +217,7 @@ class WebhookHandler:
                 features=command.features,
                 focus_areas=command.focus_areas,
                 trigger_type="manual",
+                actor_username=actor_username,
             )
 
         except Exception as e:
@@ -224,6 +233,7 @@ class WebhookHandler:
         features: Optional[List[str]],
         focus_areas: Optional[List[str]],
         trigger_type: str = "auto",
+        actor_username: Optional[str] = None,
     ) -> bool:
         """
         执行PR审查（核心逻辑，被自动和手动触发共用）
@@ -246,6 +256,7 @@ class WebhookHandler:
         diff_size = 0
         gitea_api_calls = 0
         clone_operations = 0
+        actor_user_id = None
 
         try:
             pr_title = pr_data.get("title")
@@ -273,6 +284,11 @@ class WebhookHandler:
                     db_service = DBService(session)
                     repo = await db_service.get_or_create_repository(owner, repo_name)
                     repository_id = repo.id
+                    if actor_username:
+                        actor_user = await db_service.get_or_create_user_by_username(
+                            actor_username
+                        )
+                        actor_user_id = actor_user.id
 
                     # 查询仓库的 ModelConfig 获取 Provider 配置
                     model_config = await db_service.get_model_config(repository_id)
@@ -566,6 +582,7 @@ class WebhookHandler:
                         await db_service.record_usage(
                             repository_id=repository_id,
                             review_session_id=review_session_id,
+                            user_id=actor_user_id,
                             estimated_input_tokens=estimated_input,
                             estimated_output_tokens=estimated_output,
                             gitea_api_calls=gitea_api_calls,
@@ -594,6 +611,15 @@ class WebhookHandler:
                     logger.error(f"更新数据库记录失败: {db_error}")
 
             return False
+
+    def _extract_actor_username(self, payload: Dict[str, Any]) -> Optional[str]:
+        """从 Webhook payload 中提取触发者用户名。"""
+        return (
+            payload.get("sender", {}).get("login")
+            or payload.get("sender", {}).get("username")
+            or payload.get("pull_request", {}).get("user", {}).get("login")
+            or payload.get("pull_request", {}).get("user", {}).get("username")
+        )
 
     async def process_comment_async(self, payload: Dict[str, Any]):
         """

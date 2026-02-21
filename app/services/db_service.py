@@ -15,6 +15,7 @@ from app.models import (
     ModelConfig,
     Repository,
     ReviewSession,
+    User,
     UsageStat,
 )
 
@@ -67,6 +68,24 @@ class DBService:
         repo.webhook_secret = webhook_secret
         await self.session.flush()
         return repo
+
+    async def get_or_create_user_by_username(self, username: str) -> User:
+        """按用户名获取或创建用户记录。"""
+        stmt = select(User).where(User.username == username)
+        result = await self.session.execute(stmt)
+        user = result.scalar_one_or_none()
+
+        if not user:
+            user = User(
+                username=username,
+                role="user",
+                is_active=True,
+            )
+            self.session.add(user)
+            await self.session.flush()
+            logger.info("创建用户记录: %s", username)
+
+        return user
 
     async def list_repositories(
         self, is_active: Optional[bool] = None
@@ -371,6 +390,7 @@ class DBService:
         self,
         repository_id: int,
         review_session_id: Optional[int] = None,
+        user_id: Optional[int] = None,
         estimated_input_tokens: int = 0,
         estimated_output_tokens: int = 0,
         gitea_api_calls: int = 0,
@@ -382,6 +402,7 @@ class DBService:
         stat = UsageStat(
             repository_id=repository_id,
             review_session_id=review_session_id,
+            user_id=user_id,
             stat_date=date.today(),
             estimated_input_tokens=estimated_input_tokens,
             estimated_output_tokens=estimated_output_tokens,
@@ -396,6 +417,7 @@ class DBService:
     async def get_usage_stats(
         self,
         repository_id: Optional[int] = None,
+        user_id: Optional[int] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> List[UsageStat]:
@@ -404,6 +426,8 @@ class DBService:
 
         if repository_id:
             stmt = stmt.where(UsageStat.repository_id == repository_id)
+        if user_id is not None:
+            stmt = stmt.where(UsageStat.user_id == user_id)
         if start_date:
             stmt = stmt.where(UsageStat.stat_date >= start_date)
         if end_date:
@@ -416,6 +440,7 @@ class DBService:
     async def get_usage_summary(
         self,
         repository_id: Optional[int] = None,
+        user_id: Optional[int] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> Dict[str, Any]:
@@ -431,6 +456,8 @@ class DBService:
 
         if repository_id:
             stmt = stmt.where(UsageStat.repository_id == repository_id)
+        if user_id is not None:
+            stmt = stmt.where(UsageStat.user_id == user_id)
         if start_date:
             stmt = stmt.where(UsageStat.stat_date >= start_date)
         if end_date:
