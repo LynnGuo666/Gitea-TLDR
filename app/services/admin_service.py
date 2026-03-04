@@ -28,6 +28,14 @@ class AdminService:
     """管理后台服务"""
 
     def __init__(self, session: AsyncSession):
+        """初始化实例状态。
+
+        Args:
+            session: 数据库会话。
+
+        Returns:
+            无返回值。
+        """
         self.session = session
 
     # ==================== User 操作 ====================

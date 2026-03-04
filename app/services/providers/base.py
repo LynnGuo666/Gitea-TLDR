@@ -113,12 +113,36 @@ class ReviewProvider(ABC):
 
     @property
     def last_error(self) -> Optional[str]:
+        """处理last error相关逻辑。
+
+        Args:
+            无。
+
+        Returns:
+            可能为空的结果。
+        """
         return getattr(self, "_last_error", None)
 
     def _clear_last_error(self) -> None:
+        """处理last error相关逻辑。
+
+        Args:
+            无。
+
+        Returns:
+            无返回值。
+        """
         setattr(self, "_last_error", None)
 
     def _set_last_error(self, message: Optional[str]) -> None:
+        """处理last error相关逻辑。
+
+        Args:
+            message: 错误消息文本。
+
+        Returns:
+            无返回值。
+        """
         text = (message or "").strip()
         if not text:
             self._clear_last_error()
@@ -144,7 +168,24 @@ class ReviewProvider(ABC):
         custom_prompt: Optional[str] = None,
         model: Optional[str] = None,
         wire_api: Optional[str] = None,
-    ) -> Optional[ReviewResult]: ...
+    ) -> Optional[ReviewResult]:
+        """分析PR。
+
+        Args:
+            repo_path: 本地仓库路径。
+            diff_content: PR 的差异内容。
+            focus_areas: 审查关注点列表。
+            pr_info: PR 基本信息。
+            api_url: API 地址。
+            api_key: API 密钥。
+            custom_prompt: 自定义提示词。
+            model: 模型名称。
+            wire_api: 底层 API 协议标识。
+
+        Returns:
+            可能为空的结果。
+        """
+        ...
 
     @abstractmethod
     async def analyze_pr_simple(
@@ -157,4 +198,20 @@ class ReviewProvider(ABC):
         custom_prompt: Optional[str] = None,
         model: Optional[str] = None,
         wire_api: Optional[str] = None,
-    ) -> Optional[ReviewResult]: ...
+    ) -> Optional[ReviewResult]:
+        """分析PR简单模式。
+
+        Args:
+            diff_content: PR 的差异内容。
+            focus_areas: 审查关注点列表。
+            pr_info: PR 基本信息。
+            api_url: API 地址。
+            api_key: API 密钥。
+            custom_prompt: 自定义提示词。
+            model: 模型名称。
+            wire_api: 底层 API 协议标识。
+
+        Returns:
+            可能为空的结果。
+        """
+        ...

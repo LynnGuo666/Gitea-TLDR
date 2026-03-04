@@ -62,6 +62,14 @@ class GiteaClient:
 
     @classmethod
     def _redact_mapping(cls, data: Mapping[str, Any]) -> Dict[str, Any]:
+        """处理mapping相关逻辑。
+
+        Args:
+            data: 待脱敏映射数据。
+
+        Returns:
+            字典结果。
+        """
         safe: Dict[str, Any] = {}
         for key, value in data.items():
             lower_key = key.lower()

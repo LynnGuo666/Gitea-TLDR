@@ -111,6 +111,16 @@ def create_admin_router(context: AppContext) -> APIRouter:
         is_active: Optional[bool] = None,
         admin: User = Depends(admin_required("users", "read")),
     ):
+        """列出用户列表。
+
+        Args:
+            request: 请求对象。
+            is_active: 筛选启用状态。
+            admin: 管理员用户对象。
+
+        Returns:
+            用户列表响应数据。
+        """
         database = getattr(request.state, "database", None)
         if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")

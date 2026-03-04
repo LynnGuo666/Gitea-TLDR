@@ -224,6 +224,14 @@ class RepoManager:
 
     @staticmethod
     def _classify_clone_error(stderr_text: str) -> str:
+        """克隆error。
+
+        Args:
+            stderr_text: 标准错误输出文本。
+
+        Returns:
+            字符串结果。
+        """
         normalized = stderr_text.lower()
         if "authentication failed" in normalized or "could not read username" in normalized:
             return "认证失败（请检查 Gitea Token 权限）"

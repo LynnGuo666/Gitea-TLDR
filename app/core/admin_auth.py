@@ -14,6 +14,15 @@ logger = logging.getLogger(__name__)
 
 
 async def get_admin_user(session: AsyncSession, username: str) -> Optional[User]:
+    """获取管理员用户。
+
+    Args:
+        session: 数据库会话。
+        username: 用户名。
+
+    Returns:
+        可能为空的结果。
+    """
     stmt = select(User).where(
         User.username == username,
         User.role.in_(["admin", "super_admin"]),
@@ -30,6 +39,18 @@ async def create_user(
     role: str = "user",
     permissions: Optional[str] = None,
 ) -> User:
+    """创建用户。
+
+    Args:
+        session: 数据库会话。
+        username: 用户名。
+        email: 用户邮箱。
+        role: 用户角色。
+        permissions: 权限字符串。
+
+    Returns:
+        User 类型结果。
+    """
     user = User(
         username=username,
         email=email,
@@ -46,6 +67,15 @@ async def create_user(
 async def ensure_initial_admin(
     session: AsyncSession, initial_username: Optional[str]
 ) -> None:
+    """确保initial管理员。
+
+    Args:
+        session: 数据库会话。
+        initial_username: 初始管理员用户名。
+
+    Returns:
+        无返回值。
+    """
     if not initial_username:
         return
 
@@ -76,6 +106,16 @@ async def check_admin_permission(
     required_resource: Optional[str] = None,
     required_action: Optional[str] = None,
 ) -> User:
+    """检查管理员权限。
+
+    Args:
+        request: 请求对象。
+        required_resource: 需要校验的权限资源。
+        required_action: 需要校验的权限动作。
+
+    Returns:
+        User 类型结果。
+    """
     auth_status = getattr(request.state, "auth_status", None)
     if not auth_status or not auth_status.get("loggedIn"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="需要登录")
@@ -110,7 +150,24 @@ async def check_admin_permission(
 
 
 def admin_required(resource: Optional[str] = None, action: Optional[str] = None):
+    """创建管理员权限校验依赖。
+
+    Args:
+        resource: 权限资源。
+        action: 权限动作。
+
+    Returns:
+        可注入 FastAPI 路由的依赖函数。
+    """
     async def dependency(request: Request) -> User:
+        """执行管理员权限校验。
+
+        Args:
+            request: 请求对象。
+
+        Returns:
+            通过校验的管理员用户对象。
+        """
         return await check_admin_permission(request, resource, action)
 
     return dependency

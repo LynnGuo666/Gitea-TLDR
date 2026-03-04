@@ -111,7 +111,14 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        # 启动时输出版本信息
+        """管理应用的启动与关闭流程。
+
+        Args:
+            app: FastAPI 应用实例。
+
+        Returns:
+            异步上下文管理器执行结果。
+        """
         print(get_version_banner())
         logger.info(get_version_info())
         logger.info("LCPU AI Reviewer 启动")
@@ -171,6 +178,15 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def auth_middleware(request: Request, call_next):
+        """为请求附加当前认证状态。
+
+        Args:
+            request: 请求对象。
+            call_next: 下一个中间件处理器。
+
+        Returns:
+            下游处理后的响应对象。
+        """
         app_context = getattr(request.app.state, "context", None)
         if app_context:
             session = app_context.auth_manager.get_session(request)
@@ -183,6 +199,15 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def database_middleware(request: Request, call_next):
+        """为请求注入数据库上下文。
+
+        Args:
+            request: 请求对象。
+            call_next: 下一个中间件处理器。
+
+        Returns:
+            下游处理后的响应对象。
+        """
         app_context = getattr(request.app.state, "context", None)
         if app_context and hasattr(app_context, "database"):
             request.state.database = app_context.database
@@ -208,6 +233,15 @@ def create_app() -> FastAPI:
 
         @app.get("/{full_path:path}", include_in_schema=False)
         async def serve_frontend(full_path: str, request: Request):
+            """提供前端静态资源并处理回退路由。
+
+            Args:
+                full_path: 前端资源路径。
+                request: 请求对象。
+
+            Returns:
+                匹配到的静态资源响应。
+            """
             if full_path.startswith("api"):
                 raise HTTPException(status_code=404)
             target = full_path or "index.html"

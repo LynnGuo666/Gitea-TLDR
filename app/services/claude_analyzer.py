@@ -22,6 +22,15 @@ class ClaudeAnalyzer:
     """Claude Code分析器 (backward-compatibility wrapper)"""
 
     def __init__(self, claude_code_path: str = "claude", debug: bool = False):
+        """初始化实例状态。
+
+        Args:
+            claude_code_path: Claude CLI 可执行路径。
+            debug: 是否启用调试模式。
+
+        Returns:
+            无返回值。
+        """
         self._provider = ClaudeCodeProvider(cli_path=claude_code_path, debug=debug)
 
     async def analyze_pr(
@@ -33,6 +42,19 @@ class ClaudeAnalyzer:
         api_url: Optional[str] = None,
         api_key: Optional[str] = None,
     ) -> Optional[ClaudeReviewResult]:
+        """分析pr。
+
+        Args:
+            repo_path: 本地仓库路径。
+            diff_content: PR 的差异内容。
+            focus_areas: 审查关注点列表。
+            pr_info: PR 基本信息。
+            api_url: API 地址。
+            api_key: API 密钥。
+
+        Returns:
+            可能为空的结果。
+        """
         return await self._provider.analyze_pr(
             repo_path,
             diff_content,
@@ -50,6 +72,18 @@ class ClaudeAnalyzer:
         api_url: Optional[str] = None,
         api_key: Optional[str] = None,
     ) -> Optional[ClaudeReviewResult]:
+        """分析pr simple。
+
+        Args:
+            diff_content: PR 的差异内容。
+            focus_areas: 审查关注点列表。
+            pr_info: PR 基本信息。
+            api_url: API 地址。
+            api_key: API 密钥。
+
+        Returns:
+            可能为空的结果。
+        """
         return await self._provider.analyze_pr_simple(
             diff_content,
             focus_areas,

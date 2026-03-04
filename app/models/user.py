@@ -27,4 +27,12 @@ class User(Base, TimestampMixin):
 
     @property
     def is_super_admin(self) -> bool:
+        """判断是否super管理员。
+
+        Args:
+            无。
+
+        Returns:
+            是否验证通过。
+        """
         return self.role == "super_admin"

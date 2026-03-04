@@ -69,6 +69,15 @@ class RepoRegistry:
         os.replace(tmp, self.registry_file)
 
     def _key(self, owner: str, repo: str) -> str:
+        """处理key相关逻辑。
+
+        Args:
+            owner: 仓库所有者。
+            repo: 仓库名称。
+
+        Returns:
+            字符串结果。
+        """
         return f"{owner}/{repo}"
 
     def get_secret(self, owner: str, repo: str) -> Optional[str]:

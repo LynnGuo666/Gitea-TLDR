@@ -129,6 +129,14 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     public_router = APIRouter()
 
     def _serialize_review_summary(review_session):
+        """序列化审查会话的摘要信息。
+
+        Args:
+            review_session: 审查会话对象。
+
+        Returns:
+            审查摘要字典。
+        """
         return {
             "id": review_session.id,
             "repository_id": review_session.repository_id,
@@ -163,6 +171,15 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         }
 
     def _serialize_review_detail(review_session, inline_comments):
+        """序列化审查会话的详情信息。
+
+        Args:
+            review_session: 审查会话对象。
+            inline_comments: 行内评论列表。
+
+        Returns:
+            审查详情字典。
+        """
         return {
             "id": review_session.id,
             "repository_id": review_session.repository_id,
@@ -214,6 +231,15 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         }
 
     async def _resolve_accessible_repo_ids(db_service, user_repos):
+        """解析当前用户可访问的仓库 ID 列表。
+
+        Args:
+            db_service: 数据库服务实例。
+            user_repos: 当前用户可访问仓库列表。
+
+        Returns:
+            可访问仓库 ID 列表。
+        """
         repo_ids: list[int] = []
         for repo_item in user_repos:
             owner = repo_item.get("owner", {}).get("username") or repo_item.get(
@@ -228,6 +254,16 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         return repo_ids
 
     async def _require_repo_setup_permission(owner: str, repo: str, request: Request):
+        """校验当前用户是否具备仓库接入权限。
+
+        Args:
+            owner: 仓库所有者。
+            repo: 仓库名称。
+            request: 请求对象。
+
+        Returns:
+            可用于后续调用的 Gitea 客户端实例。
+        """
         session_data = context.auth_manager.require_session(request)
         client = context.auth_manager.build_user_client(session_data)
 
@@ -283,6 +319,14 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
     @api_router.get("/providers")
     async def list_providers():
+        """列出提供方列表。
+
+        Args:
+            无。
+
+        Returns:
+            可用审查引擎列表及默认引擎。
+        """
         provider_labels = {
             "claude_code": "Claude Code",
             "codex_cli": "Codex CLI",
@@ -391,6 +435,14 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
     @api_router.get("/auth/admin-status")
     async def auth_admin_status(request: Request):
+        """返回当前登录用户的管理员状态。
+
+        Args:
+            request: 请求对象。
+
+        Returns:
+            管理员状态信息。
+        """
         session = context.auth_manager.get_session(request)
         logged_in = bool(session)
 

@@ -37,6 +37,14 @@ class AuthManager:
     """封装OAuth流程和会话生命周期"""
 
     def __init__(self) -> None:
+        """初始化实例状态。
+
+        Args:
+            无。
+
+        Returns:
+            无返回值。
+        """
         self.enabled = bool(settings.oauth_client_id and settings.oauth_redirect_url)
         self._state_store: Dict[str, float] = {}
         self._sessions: Dict[str, SessionData] = {}
@@ -51,17 +59,41 @@ class AuthManager:
         self._userinfo_endpoint = f"{settings.gitea_url.rstrip('/')}/api/v1/user"
 
     def _generate_state(self) -> str:
+        """处理state相关逻辑。
+
+        Args:
+            无。
+
+        Returns:
+            字符串结果。
+        """
         state = secrets.token_urlsafe(32)
         with self._sync_lock:
             self._state_store[state] = time.time() + 600  # 10分钟有效期
         return state
 
     def _consume_state(self, state: str) -> bool:
+        """处理state相关逻辑。
+
+        Args:
+            state: OAuth 状态参数。
+
+        Returns:
+            是否验证通过。
+        """
         with self._sync_lock:
             expires = self._state_store.pop(state, None)
         return bool(expires and expires > time.time())
 
     def build_authorize_url(self) -> str:
+        """构建authorize URL。
+
+        Args:
+            无。
+
+        Returns:
+            字符串结果。
+        """
         if not self.enabled:
             raise HTTPException(status_code=400, detail="OAuth 尚未配置")
         state = self._generate_state()
@@ -76,6 +108,14 @@ class AuthManager:
         return f"{self._authorize_endpoint}?{urlencode(params)}"
 
     async def _exchange_code(self, code: str) -> Dict[str, Any]:
+        """处理code相关逻辑。
+
+        Args:
+            code: OAuth 授权码。
+
+        Returns:
+            字典结果。
+        """
         payload = {
             "client_id": settings.oauth_client_id,
             "code": code,
@@ -95,6 +135,14 @@ class AuthManager:
             return response.json()
 
     async def _fetch_user(self, token: str) -> Dict[str, Any]:
+        """处理用户相关逻辑。
+
+        Args:
+            token: OAuth 访问令牌。
+
+        Returns:
+            字典结果。
+        """
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.get(
                 self._userinfo_endpoint,
@@ -110,6 +158,17 @@ class AuthManager:
         response: Response,
         database: Optional[Any] = None,
     ) -> Response:
+        """处理回调。
+
+        Args:
+            code: OAuth 授权码。
+            state: OAuth 状态参数。
+            response: 响应对象。
+            database: 数据库实例。
+
+        Returns:
+            Response 类型结果。
+        """
         if not self.enabled:
             raise HTTPException(status_code=400, detail="OAuth 尚未配置")
         if not state or not self._consume_state(state):
@@ -178,6 +237,16 @@ class AuthManager:
     def _attach_cookie(
         self, response: Response, session_id: str, expires_in: int
     ) -> None:
+        """处理cookie相关逻辑。
+
+        Args:
+            response: 响应对象。
+            session_id: 会话 ID。
+            expires_in: 会话过期秒数。
+
+        Returns:
+            无返回值。
+        """
         response.set_cookie(
             key=settings.session_cookie_name,
             value=session_id,
@@ -189,12 +258,28 @@ class AuthManager:
         )
 
     def require_session(self, request: Request) -> SessionData:
+        """校验并要求会话。
+
+        Args:
+            request: 请求对象。
+
+        Returns:
+            SessionData 类型结果。
+        """
         session = self.get_session(request)
         if not session:
             raise HTTPException(status_code=401, detail="请先登录")
         return session
 
     def get_session(self, request: Request) -> Optional[SessionData]:
+        """获取会话。
+
+        Args:
+            request: 请求对象。
+
+        Returns:
+            可能为空的结果。
+        """
         if not self.enabled:
             return None
         session_id = request.cookies.get(settings.session_cookie_name)
@@ -210,10 +295,27 @@ class AuthManager:
         return session
 
     def delete_session(self, session_id: str) -> None:
+        """删除会话。
+
+        Args:
+            session_id: 会话 ID。
+
+        Returns:
+            无返回值。
+        """
         with self._sync_lock:
             self._sessions.pop(session_id, None)
 
     def logout(self, request: Request, response: Response) -> None:
+        """处理登出相关逻辑。
+
+        Args:
+            request: 请求对象。
+            response: 响应对象。
+
+        Returns:
+            无返回值。
+        """
         session_id = request.cookies.get(settings.session_cookie_name)
         if session_id:
             self.delete_session(session_id)
@@ -225,6 +327,16 @@ class AuthManager:
     async def _persist_session(
         self, session_id: str, session: SessionData, database: Any
     ) -> None:
+        """处理会话相关逻辑。
+
+        Args:
+            session_id: 会话 ID。
+            session: 数据库会话。
+            database: 数据库实例。
+
+        Returns:
+            无返回值。
+        """
         try:
             from app.models import UserSession  # noqa: PLC0415
 
@@ -246,6 +358,15 @@ class AuthManager:
     async def _load_session_from_db(
         self, session_id: str, database: Any
     ) -> Optional[SessionData]:
+        """处理会话从db相关逻辑。
+
+        Args:
+            session_id: 会话 ID。
+            database: 数据库实例。
+
+        Returns:
+            可能为空的结果。
+        """
         try:
             from sqlalchemy import select  # noqa: PLC0415
             from app.models import UserSession  # noqa: PLC0415
@@ -280,6 +401,15 @@ class AuthManager:
             return None
 
     async def _delete_session_from_db(self, session_id: str, database: Any) -> None:
+        """处理会话从db相关逻辑。
+
+        Args:
+            session_id: 会话 ID。
+            database: 数据库实例。
+
+        Returns:
+            无返回值。
+        """
         try:
             from sqlalchemy import delete  # noqa: PLC0415
             from app.models import UserSession  # noqa: PLC0415
@@ -294,6 +424,15 @@ class AuthManager:
     async def get_session_async(
         self, request: Request, database: Optional[Any] = None
     ) -> Optional[SessionData]:
+        """获取会话async。
+
+        Args:
+            request: 请求对象。
+            database: 数据库实例。
+
+        Returns:
+            可能为空的结果。
+        """
         if not self.enabled:
             return None
         session_id = request.cookies.get(settings.session_cookie_name)
@@ -315,6 +454,16 @@ class AuthManager:
     async def logout_async(
         self, request: Request, response: Response, database: Optional[Any] = None
     ) -> None:
+        """处理登出async相关逻辑。
+
+        Args:
+            request: 请求对象。
+            response: 响应对象。
+            database: 数据库实例。
+
+        Returns:
+            无返回值。
+        """
         session_id = request.cookies.get(settings.session_cookie_name)
         if session_id:
             self.delete_session(session_id)
@@ -323,6 +472,14 @@ class AuthManager:
         response.delete_cookie(key=settings.session_cookie_name, path="/")
 
     def get_status_payload(self, request: Request) -> Dict[str, Any]:
+        """获取状态请求体。
+
+        Args:
+            request: 请求对象。
+
+        Returns:
+            字典结果。
+        """
         session = self.get_session(request)
         return {
             "enabled": self.enabled,
@@ -331,4 +488,12 @@ class AuthManager:
         }
 
     def build_user_client(self, session: SessionData) -> GiteaClient:
+        """构建用户client。
+
+        Args:
+            session: 数据库会话。
+
+        Returns:
+            GiteaClient 类型结果。
+        """
         return GiteaClient(settings.gitea_url, session.access_token, settings.debug)

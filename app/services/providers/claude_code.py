@@ -22,20 +22,55 @@ class ClaudeCodeProvider(ReviewProvider):
     DISPLAY_NAME = "Claude Code"
 
     def __init__(self, cli_path: str = "claude", debug: bool = False):
+        """初始化实例状态。
+
+        Args:
+            cli_path: CLI 可执行文件路径。
+            debug: 是否启用调试模式。
+
+        Returns:
+            无返回值。
+        """
         self.cli_path = cli_path
         self.debug = debug
 
     @property
     def name(self) -> str:
+        """处理name相关逻辑。
+
+        Args:
+            无。
+
+        Returns:
+            字符串结果。
+        """
         return self.PROVIDER_NAME
 
     @property
     def display_name(self) -> str:
+        """处理display name相关逻辑。
+
+        Args:
+            无。
+
+        Returns:
+            字符串结果。
+        """
         return self.DISPLAY_NAME
 
     def _build_review_prompt(
         self, focus_areas: List[str], pr_info: dict, custom_prompt: Optional[str] = None
     ) -> str:
+        """处理审查prompt相关逻辑。
+
+        Args:
+            focus_areas: 审查关注点列表。
+            pr_info: PR 基本信息。
+            custom_prompt: 自定义提示词。
+
+        Returns:
+            字符串结果。
+        """
         focus_map = {
             "quality": "代码质量和最佳实践",
             "security": "安全漏洞（SQL注入、XSS、命令注入等）",
@@ -101,6 +136,22 @@ JSON结构示例：
         model: Optional[str] = None,
         wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
+        """分析pr。
+
+        Args:
+            repo_path: 本地仓库路径。
+            diff_content: PR 的差异内容。
+            focus_areas: 审查关注点列表。
+            pr_info: PR 基本信息。
+            api_url: API 地址。
+            api_key: API 密钥。
+            custom_prompt: 自定义提示词。
+            model: 模型名称。
+            wire_api: 底层 API 协议标识。
+
+        Returns:
+            可能为空的结果。
+        """
         self._clear_last_error()
         try:
             prompt = self._build_review_prompt(focus_areas, pr_info, custom_prompt)
@@ -181,6 +232,21 @@ JSON结构示例：
         model: Optional[str] = None,
         wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
+        """分析pr simple。
+
+        Args:
+            diff_content: PR 的差异内容。
+            focus_areas: 审查关注点列表。
+            pr_info: PR 基本信息。
+            api_url: API 地址。
+            api_key: API 密钥。
+            custom_prompt: 自定义提示词。
+            model: 模型名称。
+            wire_api: 底层 API 协议标识。
+
+        Returns:
+            可能为空的结果。
+        """
         self._clear_last_error()
         try:
             prompt = self._build_review_prompt(focus_areas, pr_info, custom_prompt)
@@ -258,6 +324,16 @@ JSON结构示例：
         api_key: Optional[str],
         model: Optional[str],
     ) -> dict:
+        """处理环境变量相关逻辑。
+
+        Args:
+            api_url: API 地址。
+            api_key: API 密钥。
+            model: 模型名称。
+
+        Returns:
+            字典结果。
+        """
         custom_env = os.environ.copy()
         if api_url:
             custom_env["ANTHROPIC_BASE_URL"] = api_url
@@ -275,10 +351,27 @@ JSON结构示例：
 
     @staticmethod
     def _set_model_metadata(result: ReviewResult, model: Optional[str]) -> None:
+        """处理模型metadata相关逻辑。
+
+        Args:
+            result: 审查结果对象。
+            model: 模型名称。
+
+        Returns:
+            无返回值。
+        """
         if model and model.strip():
             result.usage_metadata["model"] = model.strip()
 
     def _parse_output(self, output: str) -> Optional[ReviewResult]:
+        """处理output相关逻辑。
+
+        Args:
+            output: 工具输出文本。
+
+        Returns:
+            可能为空的结果。
+        """
         sanitized = (output or "").strip()
         if not sanitized:
             return None
@@ -318,6 +411,14 @@ JSON结构示例：
         )
 
     def _parse_inline_comment(self, item: Dict[str, Any]) -> Optional[InlineComment]:
+        """处理行内评论相关逻辑。
+
+        Args:
+            item: 单条解析项数据。
+
+        Returns:
+            可能为空的结果。
+        """
         if not isinstance(item, dict):
             return None
 
@@ -355,6 +456,14 @@ JSON结构示例：
         )
 
     def _extract_json_payload(self, text: str) -> Optional[Dict[str, Any]]:
+        """处理json请求体相关逻辑。
+
+        Args:
+            text: 待解析文本。
+
+        Returns:
+            字典结果。
+        """
         try:
             return json.loads(text)
         except json.JSONDecodeError:
@@ -381,6 +490,15 @@ JSON结构示例：
 
     @staticmethod
     def _extract_actionable_error(stderr_text: str, stdout_text: str) -> str:
+        """处理actionable error相关逻辑。
+
+        Args:
+            stderr_text: 标准错误输出文本。
+            stdout_text: 标准输出文本。
+
+        Returns:
+            字符串结果。
+        """
         combined = "\n".join(
             part for part in [stderr_text.strip(), stdout_text.strip()] if part.strip()
         )
@@ -406,6 +524,14 @@ JSON结构示例：
 
     @staticmethod
     def _coerce_int(value: Any) -> Optional[int]:
+        """处理int相关逻辑。
+
+        Args:
+            value: 配置值。
+
+        Returns:
+            可能为空的结果。
+        """
         if value is None or value == "":
             return None
         try:

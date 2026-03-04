@@ -31,6 +31,18 @@ class WebhookHandler:
         database: Optional[Database] = None,
         bot_username: Optional[str] = None,
     ):
+        """初始化实例状态。
+
+        Args:
+            gitea_client: Gitea API 客户端实例。
+            repo_manager: 仓库管理器实例。
+            review_engine: 审查引擎实例。
+            database: 数据库实例。
+            bot_username: 机器人用户名。
+
+        Returns:
+            无返回值。
+        """
         self.gitea_client = gitea_client
         self.repo_manager = repo_manager
         self.review_engine = review_engine

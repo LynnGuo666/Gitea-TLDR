@@ -107,6 +107,14 @@ class Settings(BaseSettings):
     @field_validator("oauth_scopes", mode="after")
     @classmethod
     def _parse_scopes(cls, value):
+        """处理权限范围相关逻辑。
+
+        Args:
+            value: 配置值。
+
+        Returns:
+            规范化后的权限范围列表。
+        """
         if value is None or value == "":
             return []
         if isinstance(value, str):
@@ -116,6 +124,14 @@ class Settings(BaseSettings):
     @field_validator("work_dir", mode="after")
     @classmethod
     def _normalize_work_dir(cls, value: str) -> str:
+        """处理工作目录相关逻辑。
+
+        Args:
+            value: 配置值。
+
+        Returns:
+            字符串结果。
+        """
         path = Path(value).expanduser()
         if not path.is_absolute():
             path = (BASE_DIR / path).resolve()
