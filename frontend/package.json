@@ -1,6 +1,6 @@
 {
   "name": "gitea-pr-reviewer-ui",
-  "version": "1.21.3",
+  "version": "1.21.4",
   "private": true,
   "scripts": {
     "dev": "next dev",

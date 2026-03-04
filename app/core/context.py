@@ -3,7 +3,7 @@ Application context holding long-lived service instances.
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from app.services import (
     GiteaClient,
@@ -13,6 +13,9 @@ from app.services import (
     WebhookHandler,
     AuthManager,
 )
+
+if TYPE_CHECKING:
+    from app.core.database import Database
 
 
 @dataclass
@@ -26,10 +29,3 @@ class AppContext:
     repo_registry: RepoRegistry
     auth_manager: AuthManager
     database: Optional["Database"] = None
-
-    def __post_init__(self):
-        # 避免循环导入
-        from app.core.database import Database
-
-        # 类型标注用于IDE提示
-        self.database: Optional[Database]

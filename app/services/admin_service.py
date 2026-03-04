@@ -85,11 +85,11 @@ class AdminService:
 
         if email_set:
             user.email = email
-        if role_set:
+        if role_set and role is not None:
             user.role = role
         if permissions_set:
             user.permissions = json.dumps(permissions) if permissions is not None else None
-        if is_active_set:
+        if is_active_set and is_active is not None:
             user.is_active = is_active
 
         await self.session.flush()

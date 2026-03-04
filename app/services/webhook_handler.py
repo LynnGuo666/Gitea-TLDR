@@ -418,7 +418,12 @@ class WebhookHandler:
             # 克隆仓库
             clone_url = self.gitea_client.get_clone_url(owner, repo_name)
             repo_path = await self.repo_manager.clone_repository(
-                clone_url, owner, repo_name, pr_number, head_branch
+                clone_url,
+                owner,
+                repo_name,
+                pr_number,
+                head_branch,
+                auth_token=self.gitea_client.token,
             )
             if repo_path:
                 clone_operations += 1

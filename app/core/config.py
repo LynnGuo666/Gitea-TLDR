@@ -134,9 +134,9 @@ class Settings(BaseSettings):
             return cls(
                 _env_file=str(env_path),
                 _env_file_encoding="utf-8",
-            )
-        return cls()
+            )  # type: ignore[call-arg]
+        return cls()  # type: ignore[call-arg]
 
 
 # 全局配置实例
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]

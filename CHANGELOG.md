@@ -4,6 +4,25 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.21.4] - 2026-03-04
+
+### 新增功能 (Added)
+
+- **用户审查详情接口**: 新增 `GET /api/my/reviews/{review_id}`，仅返回当前登录用户有权限仓库的审查详情，越权访问返回 `404`
+- **安全回归测试**: 新增后端安全测试，覆盖鉴权、用户数据隔离、fail-closed 行为和 token 泄露防护
+
+### 修复 (Fixed)
+
+- **匿名读取审查数据漏洞**: `GET /api/my/reviews` 改为 fail-closed，未登录返回 `401`，Gitea 仓库拉取失败返回 `502`，不再回退到全量审查数据
+- **管理接口越权访问**: `GET /api/reviews`、`GET /api/reviews/{id}`、`GET/POST /api/configs`、`GET /api/repositories` 改为后端强校验管理员权限
+- **仓库接口鉴权缺失**: `GET /api/repos/{owner}/{repo}/pulls` 改为必须登录；`GET /api/repos/{owner}/{repo}/webhook-secret` 及 regenerate 改为复用仓库配置权限判定
+- **凭据暴露风险**: 仓库克隆移除 token-in-url，改为 `GIT_ASKPASS + GIT_TERMINAL_PROMPT=0` 注入认证，避免 token 出现在命令参数和日志中
+- **日志敏感信息泄露**: Webhook 调试日志改为事件元信息；Gitea 调试日志增加敏感字段脱敏并移除原始响应体输出
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.21.4`
+
 ## [1.21.3] - 2026-02-21
 
 ### 新增功能 (Added)

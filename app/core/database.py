@@ -5,9 +5,14 @@
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.pool import StaticPool
 
 logger = logging.getLogger(__name__)
@@ -24,8 +29,8 @@ class Database:
             database_url: 数据库连接URL
         """
         self.database_url = database_url
-        self._engine = None
-        self._session_factory = None
+        self._engine: Optional[AsyncEngine] = None
+        self._session_factory: Optional[async_sessionmaker[AsyncSession]] = None
 
     async def init(self) -> None:
         """初始化数据库引擎和会话工厂"""
@@ -61,6 +66,8 @@ class Database:
         """创建所有表（开发环境使用）"""
         from app.models import Base
 
+        if self._engine is None:
+            raise RuntimeError("数据库未初始化，请先调用 init()")
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("数据库表创建完成")

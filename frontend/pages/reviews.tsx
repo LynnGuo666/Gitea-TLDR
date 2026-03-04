@@ -132,7 +132,7 @@ export default function ReviewsPage() {
 
     setLoadingDetailId(id);
     try {
-      const res = await apiFetch(`/api/reviews/${id}`);
+      const res = await apiFetch(`/api/my/reviews/${id}`);
       if (!res.ok) {
         throw new Error('Failed to fetch detail');
       }

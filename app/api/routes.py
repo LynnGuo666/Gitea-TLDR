@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import hmac
 import hashlib
-import json
 import logging
 import secrets
 from datetime import datetime
@@ -20,9 +19,11 @@ from fastapi import (
     BackgroundTasks,
     Response,
     Query,
+    Depends,
 )
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from app.core.admin_auth import admin_required
 from app.core import (
     settings,
     __version__,
@@ -126,6 +127,126 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
     api_router = APIRouter()
     public_router = APIRouter()
+
+    def _serialize_review_summary(review_session):
+        return {
+            "id": review_session.id,
+            "repository_id": review_session.repository_id,
+            "repo_full_name": (
+                f"{review_session.repository.owner}/{review_session.repository.repo_name}"
+                if review_session.repository
+                else None
+            ),
+            "pr_number": review_session.pr_number,
+            "pr_title": review_session.pr_title,
+            "pr_author": review_session.pr_author,
+            "trigger_type": review_session.trigger_type,
+            "engine": review_session.engine,
+            "enabled_features": review_session.get_features(),
+            "focus_areas": review_session.get_focus(),
+            "analysis_mode": review_session.analysis_mode,
+            "model": review_session.model,
+            "config_source": review_session.config_source,
+            "overall_severity": review_session.overall_severity,
+            "overall_success": review_session.overall_success,
+            "error_message": review_session.error_message,
+            "inline_comments_count": review_session.inline_comments_count,
+            "started_at": (
+                review_session.started_at.isoformat() if review_session.started_at else None
+            ),
+            "completed_at": (
+                review_session.completed_at.isoformat()
+                if review_session.completed_at
+                else None
+            ),
+            "duration_seconds": review_session.duration_seconds,
+        }
+
+    def _serialize_review_detail(review_session, inline_comments):
+        return {
+            "id": review_session.id,
+            "repository_id": review_session.repository_id,
+            "repo_full_name": (
+                f"{review_session.repository.owner}/{review_session.repository.repo_name}"
+                if review_session.repository
+                else None
+            ),
+            "engine": review_session.engine,
+            "model": review_session.model,
+            "config_source": review_session.config_source,
+            "pr_number": review_session.pr_number,
+            "pr_title": review_session.pr_title,
+            "pr_author": review_session.pr_author,
+            "head_branch": review_session.head_branch,
+            "base_branch": review_session.base_branch,
+            "head_sha": review_session.head_sha,
+            "trigger_type": review_session.trigger_type,
+            "enabled_features": review_session.get_features(),
+            "focus_areas": review_session.get_focus(),
+            "analysis_mode": review_session.analysis_mode,
+            "diff_size_bytes": review_session.diff_size_bytes,
+            "overall_severity": review_session.overall_severity,
+            "summary_markdown": review_session.summary_markdown,
+            "inline_comments_count": review_session.inline_comments_count,
+            "overall_success": review_session.overall_success,
+            "error_message": review_session.error_message,
+            "started_at": (
+                review_session.started_at.isoformat() if review_session.started_at else None
+            ),
+            "completed_at": (
+                review_session.completed_at.isoformat()
+                if review_session.completed_at
+                else None
+            ),
+            "duration_seconds": review_session.duration_seconds,
+            "inline_comments": [
+                {
+                    "id": c.id,
+                    "file_path": c.file_path,
+                    "new_line": c.new_line,
+                    "old_line": c.old_line,
+                    "severity": c.severity,
+                    "comment": c.comment,
+                    "suggestion": c.suggestion,
+                }
+                for c in inline_comments
+            ],
+        }
+
+    async def _resolve_accessible_repo_ids(db_service, user_repos):
+        repo_ids: list[int] = []
+        for repo_item in user_repos:
+            owner = repo_item.get("owner", {}).get("username") or repo_item.get(
+                "owner", {}
+            ).get("login")
+            name = repo_item.get("name")
+            if not owner or not name:
+                continue
+            db_repo = await db_service.get_repository(owner, name)
+            if db_repo:
+                repo_ids.append(db_repo.id)
+        return repo_ids
+
+    async def _require_repo_setup_permission(owner: str, repo: str, request: Request):
+        session_data = context.auth_manager.require_session(request)
+        client = context.auth_manager.build_user_client(session_data)
+
+        permissions = await client.check_repo_permissions(owner, repo)
+        if permissions is None:
+            raise HTTPException(status_code=502, detail="无法获取仓库权限信息")
+
+        is_org = await client.is_organization(owner)
+        org_role = None
+        if is_org:
+            username = session_data.user.get("username") if session_data.user else None
+            if username:
+                org_role = await client.get_org_membership_role(owner, username)
+            if org_role not in {"owner", "admin"}:
+                raise HTTPException(status_code=403, detail="需要组织管理员权限")
+        elif not permissions.get("admin", False):
+            raise HTTPException(status_code=403, detail="需要仓库管理员权限")
+
+        return client
 
     @public_router.get("/health")
     async def health():
@@ -416,25 +537,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         owner: str, repo: str, payload: WebhookSetupRequest, request: Request
     ):
         """为指定仓库配置Webhook并可选邀请Bot账号"""
-        client = context.auth_manager.build_user_client(
-            context.auth_manager.require_session(request)
-        )
-
-        permissions = await client.check_repo_permissions(owner, repo)
-        if permissions is None:
-            raise HTTPException(status_code=502, detail="无法获取仓库权限信息")
-
-        is_org = await client.is_organization(owner)
-        org_role = None
-        if is_org:
-            session = context.auth_manager.require_session(request)
-            username = session.user.get("username") if session else None
-            if username:
-                org_role = await client.get_org_membership_role(owner, username)
-            if org_role not in {"owner", "admin"}:
-                raise HTTPException(status_code=403, detail="需要组织管理员权限")
-        elif not permissions.get("admin", False):
-            raise HTTPException(status_code=403, detail="需要仓库管理员权限")
+        client = await _require_repo_setup_permission(owner, repo, request)
 
         callback_url = payload.callback_url or str(request.url_for("webhook"))
         secret = await context.repo_registry.get_secret_async(owner, repo) or secrets.token_hex(20)
@@ -644,6 +747,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         success: Optional[bool] = Query(None, description="是否成功"),
         limit: int = Query(50, ge=1, le=200, description="返回数量"),
         offset: int = Query(0, ge=0, description="偏移量"),
+        admin: User = Depends(admin_required()),
     ):
         """获取审查历史列表"""
         database = getattr(request.state, "database", None)
@@ -663,44 +767,18 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             )
 
             return {
-                "reviews": [
-                    {
-                        "id": s.id,
-                        "repository_id": s.repository_id,
-                        "repo_full_name": f"{s.repository.owner}/{s.repository.repo_name}"
-                        if s.repository
-                        else None,
-                        "pr_number": s.pr_number,
-                        "pr_title": s.pr_title,
-                        "pr_author": s.pr_author,
-                        "trigger_type": s.trigger_type,
-                        "engine": s.engine,
-                        "enabled_features": s.get_features(),
-                        "focus_areas": s.get_focus(),
-                        "analysis_mode": s.analysis_mode,
-                        "model": s.model,
-                        "config_source": s.config_source,
-                        "overall_severity": s.overall_severity,
-                        "overall_success": s.overall_success,
-                        "error_message": s.error_message,
-                        "inline_comments_count": s.inline_comments_count,
-                        "started_at": s.started_at.isoformat()
-                        if s.started_at
-                        else None,
-                        "completed_at": s.completed_at.isoformat()
-                        if s.completed_at
-                        else None,
-                        "duration_seconds": s.duration_seconds,
-                    }
-                    for s in sessions
-                ],
+                "reviews": [_serialize_review_summary(s) for s in sessions],
                 "total": len(sessions),
                 "limit": limit,
                 "offset": offset,
             }
 
     @api_router.get("/reviews/{review_id}")
-    async def get_review(review_id: int, request: Request):
+    async def get_review(
+        review_id: int,
+        request: Request,
+        admin: User = Depends(admin_required()),
+    ):
         """获取审查详情"""
         database = getattr(request.state, "database", None)
         if not database:
@@ -716,52 +794,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 raise HTTPException(status_code=404, detail="审查记录不存在")
 
             inline_comments = await db_service.get_inline_comments(review_id)
-
-            return {
-                "id": review_session.id,
-                "repository_id": review_session.repository_id,
-                "repo_full_name": f"{review_session.repository.owner}/{review_session.repository.repo_name}"
-                if review_session.repository
-                else None,
-                "engine": review_session.engine,
-                "model": review_session.model,
-                "config_source": review_session.config_source,
-                "pr_number": review_session.pr_number,
-                "pr_title": review_session.pr_title,
-                "pr_author": review_session.pr_author,
-                "head_branch": review_session.head_branch,
-                "base_branch": review_session.base_branch,
-                "head_sha": review_session.head_sha,
-                "trigger_type": review_session.trigger_type,
-                "enabled_features": review_session.get_features(),
-                "focus_areas": review_session.get_focus(),
-                "analysis_mode": review_session.analysis_mode,
-                "diff_size_bytes": review_session.diff_size_bytes,
-                "overall_severity": review_session.overall_severity,
-                "summary_markdown": review_session.summary_markdown,
-                "inline_comments_count": review_session.inline_comments_count,
-                "overall_success": review_session.overall_success,
-                "error_message": review_session.error_message,
-                "started_at": review_session.started_at.isoformat()
-                if review_session.started_at
-                else None,
-                "completed_at": review_session.completed_at.isoformat()
-                if review_session.completed_at
-                else None,
-                "duration_seconds": review_session.duration_seconds,
-                "inline_comments": [
-                    {
-                        "id": c.id,
-                        "file_path": c.file_path,
-                        "new_line": c.new_line,
-                        "old_line": c.old_line,
-                        "severity": c.severity,
-                        "comment": c.comment,
-                        "suggestion": c.suggestion,
-                    }
-                    for c in inline_comments
-                ],
-            }
+            return _serialize_review_detail(review_session, inline_comments)
 
     @api_router.get("/my/reviews")
     async def list_my_reviews(
@@ -777,77 +810,59 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
         from app.services.db_service import DBService
 
-        try:
-            session_data = context.auth_manager.require_session(request)
-            client = context.auth_manager.build_user_client(session_data)
-            user_repos = await client.list_user_repos()
-        except Exception:
-            user_repos = None
+        session_data = context.auth_manager.require_session(request)
+        client = context.auth_manager.build_user_client(session_data)
+        user_repos = await client.list_user_repos()
+        if user_repos is None:
+            raise HTTPException(status_code=502, detail="无法从Gitea获取用户仓库列表")
 
         async with database.session() as db_session:
             db_service = DBService(db_session)
+            repo_ids = await _resolve_accessible_repo_ids(db_service, user_repos)
+            if not repo_ids:
+                return {"reviews": [], "total": 0, "limit": limit, "offset": offset}
 
-            if user_repos:
-                repo_ids = []
-                for repo in user_repos:
-                    owner = repo.get("owner", {}).get("username") or repo.get(
-                        "owner", {}
-                    ).get("login")
-                    name = repo.get("name")
-                    if owner and name:
-                        db_repo = await db_service.get_repository(owner, name)
-                        if db_repo:
-                            repo_ids.append(db_repo.id)
-
-                if not repo_ids:
-                    return {"reviews": [], "total": 0, "limit": limit, "offset": offset}
-
-                sessions = await db_service.list_review_sessions_by_repo_ids(
-                    repository_ids=repo_ids,
-                    success=success,
-                    limit=limit,
-                    offset=offset,
-                )
-            else:
-                sessions = await db_service.list_review_sessions(
-                    success=success,
-                    limit=limit,
-                    offset=offset,
-                )
+            sessions = await db_service.list_review_sessions_by_repo_ids(
+                repository_ids=repo_ids,
+                success=success,
+                limit=limit,
+                offset=offset,
+            )
 
             return {
-                "reviews": [
-                    {
-                        "id": s.id,
-                        "repository_id": s.repository_id,
-                        "repo_full_name": f"{s.repository.owner}/{s.repository.repo_name}"
-                        if s.repository
-                        else None,
-                        "pr_number": s.pr_number,
-                        "pr_title": s.pr_title,
-                        "pr_author": s.pr_author,
-                        "trigger_type": s.trigger_type,
-                        "analysis_mode": s.analysis_mode,
-                        "engine": s.engine,
-                        "model": s.model,
-                        "config_source": s.config_source,
-                        "overall_severity": s.overall_severity,
-                        "overall_success": s.overall_success,
-                        "inline_comments_count": s.inline_comments_count,
-                        "started_at": s.started_at.isoformat()
-                        if s.started_at
-                        else None,
-                        "completed_at": s.completed_at.isoformat()
-                        if s.completed_at
-                        else None,
-                        "duration_seconds": s.duration_seconds,
-                    }
-                    for s in sessions
-                ],
+                "reviews": [_serialize_review_summary(s) for s in sessions],
                 "total": len(sessions),
                 "limit": limit,
                 "offset": offset,
             }
+
+    @api_router.get("/my/reviews/{review_id}")
+    async def get_my_review(review_id: int, request: Request):
+        """获取当前用户可见仓库的单条审查详情"""
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        session_data = context.auth_manager.require_session(request)
+        client = context.auth_manager.build_user_client(session_data)
+        user_repos = await client.list_user_repos()
+        if user_repos is None:
+            raise HTTPException(status_code=502, detail="无法从Gitea获取用户仓库列表")
+
+        async with database.session() as db_session:
+            db_service = DBService(db_session)
+            repo_ids = await _resolve_accessible_repo_ids(db_service, user_repos)
+            if not repo_ids:
+                raise HTTPException(status_code=404, detail="审查记录不存在")
+
+            review_session = await db_service.get_review_session(review_id)
+            if not review_session or review_session.repository_id not in repo_ids:
+                raise HTTPException(status_code=404, detail="审查记录不存在")
+
+            inline_comments = await db_service.get_inline_comments(review_id)
+            return _serialize_review_detail(review_session, inline_comments)
 
     # ==================== 使用量统计 API ====================
 
@@ -933,7 +948,10 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     # ==================== 模型配置 API ====================
 
     @api_router.get("/configs")
-    async def list_configs(request: Request):
+    async def list_configs(
+        request: Request,
+        admin: User = Depends(admin_required()),
+    ):
         """获取所有模型配置"""
         database = getattr(request.state, "database", None)
         if not database:
@@ -965,7 +983,11 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             }
 
     @api_router.post("/configs")
-    async def create_or_update_config(payload: ModelConfigRequest, request: Request):
+    async def create_or_update_config(
+        payload: ModelConfigRequest,
+        request: Request,
+        admin: User = Depends(admin_required()),
+    ):
         """创建或更新模型配置"""
         database = getattr(request.state, "database", None)
         if not database:
@@ -1004,12 +1026,17 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     # ==================== 仓库管理 API ====================
 
     @api_router.get("/repos/{owner}/{repo}/pulls")
-    async def get_repo_pulls(owner: str, repo: str, state: str = "all", limit: int = 5):
+    async def get_repo_pulls(
+        owner: str,
+        repo: str,
+        request: Request,
+        state: str = "all",
+        limit: int = 5,
+    ):
         """获取仓库最新PR"""
-        gitea_client = context.gitea_client
-        pulls = await gitea_client.list_pull_requests(
-            owner, repo, state=state, limit=limit
-        )
+        session_data = context.auth_manager.require_session(request)
+        client = context.auth_manager.build_user_client(session_data)
+        pulls = await client.list_pull_requests(owner, repo, state=state, limit=limit)
 
         if pulls is None:
             raise HTTPException(status_code=404, detail="无法获取PR信息")
@@ -1235,6 +1262,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     @api_router.get("/repos/{owner}/{repo}/webhook-secret")
     async def get_webhook_secret(owner: str, repo: str, request: Request):
         """获取仓库的 Webhook Secret"""
+        await _require_repo_setup_permission(owner, repo, request)
         database = getattr(request.state, "database", None)
         if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
@@ -1257,7 +1285,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     @api_router.post("/repos/{owner}/{repo}/webhook-secret/regenerate")
     async def regenerate_webhook_secret(owner: str, repo: str, request: Request):
         """重新生成仓库的 Webhook Secret"""
-        context.auth_manager.require_session(request)
+        await _require_repo_setup_permission(owner, repo, request)
         database = getattr(request.state, "database", None)
         if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
@@ -1280,7 +1308,10 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         }
 
     @api_router.get("/repositories")
-    async def list_repositories(request: Request):
+    async def list_repositories(
+        request: Request,
+        admin: User = Depends(admin_required()),
+    ):
         """获取所有已配置的仓库"""
         database = getattr(request.state, "database", None)
         if not database:
@@ -1364,10 +1395,14 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 logger.warning("收到带签名的 Webhook，但未配置 WEBHOOK_SECRET")
                 raise HTTPException(status_code=401, detail="Invalid signature")
 
-            # Debug日志：输出完整的webhook payload
+            # Debug日志：仅输出事件元数据，避免泄露敏感字段
             if settings.debug:
                 logger.debug(
-                    f"[Webhook Payload] {json.dumps(payload, ensure_ascii=False, indent=2)}"
+                    "Webhook metadata: event=%s repo=%s/%s action=%s",
+                    x_gitea_event,
+                    owner_name,
+                    repo_name,
+                    payload.get("action") if isinstance(payload, dict) else None,
                 )
 
             # 处理Pull Request事件

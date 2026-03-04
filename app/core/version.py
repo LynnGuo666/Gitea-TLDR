@@ -2,12 +2,24 @@
 版本信息模块
 """
 
-__version__ = "1.21.3"
-__release_date__ = "2026-02-21"
+__version__ = "1.21.4"
+__release_date__ = "2026-03-04"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.21.4": {
+        "date": "2026-03-04",
+        "changes": [
+            "安全：收紧审查与配置相关接口权限，/api/reviews、/api/configs、/api/repositories 改为仅管理员可访问",
+            "安全：/api/my/reviews 改为 fail-closed，未登录返回 401，Gitea 拉仓库失败返回 502，不再回退全量数据",
+            "新增：/api/my/reviews/{review_id}，仅返回当前用户有权限仓库的审查详情，越权访问返回 404",
+            "安全：仓库克隆流程移除 token-in-url，改用 GIT_ASKPASS 注入认证，避免命令参数和日志泄露密钥",
+            "安全：Webhook 与 Gitea 调试日志改为元数据输出并增加敏感字段脱敏，避免 secret/token 明文落日志",
+            "测试：新增安全回归测试覆盖鉴权、数据隔离、fail-closed 与凭据泄露防护",
+            "维护：同步更新前后端版本号到 1.21.4",
+        ],
+    },
     "1.21.3": {
         "date": "2026-02-21",
         "changes": [

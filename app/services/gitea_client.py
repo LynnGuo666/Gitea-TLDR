@@ -1,17 +1,24 @@
-"""
-Gitea API客户端模块
-"""
+"""Gitea API客户端模块。"""
+
+import logging
+from typing import Any, Dict, List, Mapping, Optional
 
 import httpx
-from typing import Optional, Dict, Any, List
-import logging
-import json
 
 logger = logging.getLogger(__name__)
 
 
 class GiteaClient:
     """Gitea API客户端"""
+
+    _SENSITIVE_KEYS = {
+        "token",
+        "secret",
+        "password",
+        "api_key",
+        "authorization",
+        "cookie",
+    }
 
     def __init__(self, base_url: str, token: str, debug: bool = False):
         """
@@ -35,28 +42,42 @@ class GiteaClient:
         if self.debug:
             logger.debug(f"[API请求] {method} {url}")
             if "json" in kwargs:
-                logger.debug(
-                    f"[请求体] {json.dumps(kwargs['json'], ensure_ascii=False, indent=2)}"
-                )
+                payload = kwargs.get("json")
+                if isinstance(payload, dict):
+                    logger.debug("[请求体字段] %s", sorted(payload.keys()))
 
     def _log_response(self, response: httpx.Response):
         """记录响应debug日志"""
         if self.debug:
             logger.debug(f"[响应状态] {response.status_code}")
-            logger.debug(f"[响应头] {dict(response.headers)}")
-            try:
-                # 尝试解析JSON响应
-                response_data = response.json()
-                logger.debug(
-                    f"[响应体] {json.dumps(response_data, ensure_ascii=False, indent=2)}"
-                )
-            except json.JSONDecodeError:
-                # 如果不是JSON，记录文本内容（限制长度）
-                text = response.text
-                if len(text) > 1000:
-                    logger.debug(f"[响应体] {text[:1000]}... (truncated)")
-                else:
-                    logger.debug(f"[响应体] {text}")
+            logger.debug(
+                "[响应头] %s",
+                self._redact_mapping(dict(response.headers)),
+            )
+            logger.debug(
+                "[响应元信息] content_type=%s content_length=%s",
+                response.headers.get("content-type"),
+                response.headers.get("content-length"),
+            )
+
+    @classmethod
+    def _redact_mapping(cls, data: Mapping[str, Any]) -> Dict[str, Any]:
+        safe: Dict[str, Any] = {}
+        for key, value in data.items():
+            lower_key = key.lower()
+            if any(flag in lower_key for flag in cls._SENSITIVE_KEYS):
+                safe[key] = "***"
+                continue
+            if isinstance(value, Mapping):
+                safe[key] = cls._redact_mapping(value)
+            elif isinstance(value, list):
+                safe[key] = [
+                    cls._redact_mapping(item) if isinstance(item, Mapping) else item
+                    for item in value
+                ]
+            else:
+                safe[key] = value
+        return safe
 
     async def list_pull_requests(
         self, owner: str, repo: str, state: str = "all", limit: int = 10
@@ -74,7 +95,11 @@ class GiteaClient:
             PR列表
         """
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/pulls"
-        params = {"state": state, "limit": limit, "sort": "recentupdate"}
+        params: Dict[str, str | int] = {
+            "state": state,
+            "limit": limit,
+            "sort": "recentupdate",
+        }
 
         try:
             self._log_debug("GET", url)
@@ -271,7 +296,7 @@ class GiteaClient:
             是否成功
         """
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/pulls/{pr_number}/reviews"
-        payload = {"body": body, "event": event}
+        payload: Dict[str, Any] = {"body": body, "event": event}
         if comments:
             payload["comments"] = comments
         if commit_id:
@@ -491,7 +516,7 @@ class GiteaClient:
             提交列表
         """
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/commits"
-        params = {"limit": limit}
+        params: Dict[str, str | int] = {"limit": limit}
         if sha:
             params["sha"] = sha
 
@@ -605,16 +630,19 @@ class GiteaClient:
         target_url = hook_definition.get("config", {}).get("url")
         for hook in existing_hooks:
             if hook.get("config", {}).get("url") == target_url:
+                hook_id = hook.get("id")
+                if not isinstance(hook_id, int):
+                    continue
                 updated = await self.update_repo_hook(
-                    owner, repo, hook.get("id"), hook_definition
+                    owner, repo, hook_id, hook_definition
                 )
-                return hook.get("id") if updated else None
+                return hook_id if updated else None
 
         return await self.create_repo_hook(owner, repo, hook_definition)
 
     def get_clone_url(self, owner: str, repo: str) -> str:
         """
-        获取仓库克隆URL（带认证）
+        获取仓库克隆URL（不带认证）
 
         Args:
             owner: 仓库所有者
@@ -628,6 +656,7 @@ class GiteaClient:
 
         parsed = urlparse(self.base_url)
         host = parsed.netloc
+        scheme = parsed.scheme or "https"
 
-        # 构建带token的克隆URL
-        return f"https://{self.token}@{host}/{owner}/{repo}.git"
+        # 构建不带token的克隆URL，凭据由调用方通过安全通道注入
+        return f"{scheme}://{host}/{owner}/{repo}.git"

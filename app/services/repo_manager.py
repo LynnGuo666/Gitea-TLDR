@@ -6,6 +6,8 @@ import os
 import shutil
 import asyncio
 import logging
+import stat
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -40,17 +42,24 @@ class RepoManager:
         return self.work_dir / f"{owner}_{repo}_pr{pr_number}"
 
     async def clone_repository(
-        self, clone_url: str, owner: str, repo: str, pr_number: int, branch: str
+        self,
+        clone_url: str,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        branch: str,
+        auth_token: Optional[str] = None,
     ) -> Optional[Path]:
         """
         克隆仓库到本地
 
         Args:
-            clone_url: 克隆URL（带认证）
+            clone_url: 克隆URL（不带认证）
             owner: 仓库所有者
             repo: 仓库名称
             pr_number: PR编号
             branch: 要检出的分支
+            auth_token: 可选的访问令牌（通过 GIT_ASKPASS 注入）
 
         Returns:
             仓库本地路径，失败返回None
@@ -62,9 +71,11 @@ class RepoManager:
             logger.info(f"删除已存在的仓库目录: {repo_path}")
             shutil.rmtree(repo_path)
 
+        askpass_script: Optional[Path] = None
         try:
             # 克隆仓库
             logger.info(f"开始克隆仓库: {owner}/{repo} 分支: {branch}")
+            env, askpass_script = self._build_git_env(auth_token)
             process = await asyncio.create_subprocess_exec(
                 "git",
                 "clone",
@@ -76,12 +87,14 @@ class RepoManager:
                 str(repo_path),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=env,
             )
 
-            stdout, stderr = await process.communicate()
+            _, stderr = await process.communicate()
 
             if process.returncode != 0:
-                logger.error(f"克隆仓库失败: {stderr.decode()}")
+                stderr_text = stderr.decode(errors="ignore")
+                logger.error("克隆仓库失败: %s", self._classify_clone_error(stderr_text))
                 return None
 
             logger.info(f"成功克隆仓库到: {repo_path}")
@@ -90,6 +103,12 @@ class RepoManager:
         except Exception as e:
             logger.error(f"克隆仓库异常: {e}")
             return None
+        finally:
+            if askpass_script and askpass_script.exists():
+                try:
+                    askpass_script.unlink()
+                except OSError:
+                    pass
 
     async def checkout_pr_branch(
         self, repo_path: Path, base_branch: str, head_branch: str
@@ -171,3 +190,47 @@ class RepoManager:
         except Exception as e:
             logger.error(f"清理所有仓库目录失败: {e}")
             return False
+
+    def _build_git_env(self, auth_token: Optional[str]) -> tuple[dict[str, str], Optional[Path]]:
+        """构造 git 子进程环境，避免把 token 写入命令参数。"""
+        env = os.environ.copy()
+        env["GIT_TERMINAL_PROMPT"] = "0"
+
+        if not auth_token:
+            return env, None
+
+        askpass_content = (
+            "#!/bin/sh\n"
+            'case "$1" in\n'
+            '  *Username*) echo "oauth2" ;;\n'
+            '  *Password*) echo "$GITEA_TOKEN" ;;\n'
+            "  *) echo ;;\n"
+            "esac\n"
+        )
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            prefix="git_askpass_",
+            dir=str(self.work_dir),
+            delete=False,
+            encoding="utf-8",
+        ) as fp:
+            fp.write(askpass_content)
+            script_path = Path(fp.name)
+
+        script_path.chmod(stat.S_IRWXU)
+        env["GIT_ASKPASS"] = str(script_path)
+        env["GITEA_TOKEN"] = auth_token
+        return env, script_path
+
+    @staticmethod
+    def _classify_clone_error(stderr_text: str) -> str:
+        normalized = stderr_text.lower()
+        if "authentication failed" in normalized or "could not read username" in normalized:
+            return "认证失败（请检查 Gitea Token 权限）"
+        if "remote branch" in normalized and "not found" in normalized:
+            return "目标分支不存在"
+        if "could not resolve host" in normalized or "name or service not known" in normalized:
+            return "网络或域名解析失败"
+        if "repository not found" in normalized:
+            return "仓库不存在或无访问权限"
+        return "git clone 执行失败"
