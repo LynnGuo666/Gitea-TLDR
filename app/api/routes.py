@@ -437,7 +437,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             raise HTTPException(status_code=403, detail="需要仓库管理员权限")
 
         callback_url = payload.callback_url or str(request.url_for("webhook"))
-        secret = context.repo_registry.get_secret(owner, repo) or secrets.token_hex(20)
+        secret = await context.repo_registry.get_secret_async(owner, repo) or secrets.token_hex(20)
         context.repo_registry.set_secret(owner, repo, secret)
 
         webhook_config = {
