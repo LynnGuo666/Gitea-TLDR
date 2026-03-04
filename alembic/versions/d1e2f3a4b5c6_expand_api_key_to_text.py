@@ -1,7 +1,7 @@
 """expand api_key to Text in model_configs
 
 Revision ID: d1e2f3a4b5c6
-Revises: b7e3a1f09d42
+Revises: c2f9e4a7b1d0
 Create Date: 2026-03-04 00:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 
 revision: str = "d1e2f3a4b5c6"
-down_revision: Union[str, None] = "b7e3a1f09d42"
+down_revision: Union[str, None] = "c2f9e4a7b1d0"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
