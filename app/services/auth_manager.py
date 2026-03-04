@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import secrets
@@ -39,7 +40,8 @@ class AuthManager:
         self.enabled = bool(settings.oauth_client_id and settings.oauth_redirect_url)
         self._state_store: Dict[str, float] = {}
         self._sessions: Dict[str, SessionData] = {}
-        self._lock = Lock()
+        self._sync_lock = Lock()  # 用于同步方法（get_session、delete_session 等）
+        self._lock = asyncio.Lock()  # 用于 async 方法，避免阻塞事件循环
         self._authorize_endpoint = (
             f"{settings.gitea_url.rstrip('/')}/login/oauth/authorize"
         )
@@ -50,12 +52,12 @@ class AuthManager:
 
     def _generate_state(self) -> str:
         state = secrets.token_urlsafe(32)
-        with self._lock:
+        with self._sync_lock:
             self._state_store[state] = time.time() + 600  # 10分钟有效期
         return state
 
     def _consume_state(self, state: str) -> bool:
-        with self._lock:
+        with self._sync_lock:
             expires = self._state_store.pop(state, None)
         return bool(expires and expires > time.time())
 
@@ -164,7 +166,7 @@ class AuthManager:
                 logger.warning("用户落库失败，跳过: %s", exc)
 
         session_id = secrets.token_urlsafe(32)
-        with self._lock:
+        async with self._lock:
             self._sessions[session_id] = session
 
         if database:
@@ -198,7 +200,7 @@ class AuthManager:
         session_id = request.cookies.get(settings.session_cookie_name)
         if not session_id:
             return None
-        with self._lock:
+        with self._sync_lock:
             session = self._sessions.get(session_id)
         if not session:
             return None
@@ -208,7 +210,7 @@ class AuthManager:
         return session
 
     def delete_session(self, session_id: str) -> None:
-        with self._lock:
+        with self._sync_lock:
             self._sessions.pop(session_id, None)
 
     def logout(self, request: Request, response: Response) -> None:
@@ -270,7 +272,7 @@ class AuthManager:
                 user=user_data,
                 user_id=row.user_id,
             )
-            with self._lock:
+            async with self._lock:
                 self._sessions[session_id] = session
             return session
         except Exception as exc:
@@ -297,7 +299,7 @@ class AuthManager:
         session_id = request.cookies.get(settings.session_cookie_name)
         if not session_id:
             return None
-        with self._lock:
+        async with self._lock:
             session = self._sessions.get(session_id)
         if session:
             if session.expires_at <= time.time():

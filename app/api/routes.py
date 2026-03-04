@@ -114,7 +114,7 @@ def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> boo
         是否验证通过
     """
     if not secret:
-        return True  # 如果没有配置密钥，跳过验证
+        return False  # 未配置密钥时拒绝请求
 
     expected_signature = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
 
@@ -879,6 +879,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             except ValueError:
                 raise HTTPException(status_code=400, detail="无效的结束日期格式")
 
+        if start and end and start > end:
+            raise HTTPException(status_code=400, detail="start_date 不能晚于 end_date")
+
         async with database.session() as session:
             db_service = DBService(session)
             usage_user_id: Optional[int] = None
@@ -1245,12 +1248,10 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             if not repo_obj:
                 return {
                     "has_secret": False,
-                    "webhook_secret": None,
                 }
 
             return {
                 "has_secret": bool(repo_obj.webhook_secret),
-                "webhook_secret": repo_obj.webhook_secret,
             }
 
     @api_router.post("/repos/{owner}/{repo}/webhook-secret/regenerate")
@@ -1344,19 +1345,24 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             owner_name = owner_info.get("username") or owner_info.get("login")
             repo_name = repo_info.get("name")
             repo_secret = (
-                context.repo_registry.get_secret(owner_name, repo_name)
+                await context.repo_registry.get_secret_async(owner_name, repo_name)
                 if owner_name and repo_name
                 else None
             )
 
             # 验证签名
             secret_for_validation = repo_secret or settings.webhook_secret
-            if secret_for_validation and x_gitea_signature:
-                if not verify_webhook_signature(
+            if secret_for_validation:
+                # 配置了 secret，必须验证签名
+                if not x_gitea_signature or not verify_webhook_signature(
                     body, x_gitea_signature, secret_for_validation
                 ):
                     logger.warning("Webhook签名验证失败")
                     raise HTTPException(status_code=401, detail="Invalid signature")
+            elif x_gitea_signature:
+                # 未配置 secret 但携带了签名，同样拒绝（避免半配置状态被利用）
+                logger.warning("收到带签名的 Webhook，但未配置 WEBHOOK_SECRET")
+                raise HTTPException(status_code=401, detail="Invalid signature")
 
             # Debug日志：输出完整的webhook payload
             if settings.debug:
@@ -1426,6 +1432,6 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             raise
         except Exception as exc:
             logger.error(f"处理webhook异常: {exc}", exc_info=True)
-            raise HTTPException(status_code=500, detail=str(exc))
+            raise HTTPException(status_code=500, detail="内部错误，请查看服务端日志")
 
     return api_router, public_router

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Dict, Optional
@@ -60,10 +61,12 @@ class RepoRegistry:
             self.registry_file.write_text("{}", encoding="utf-8")
 
     def _save(self) -> None:
-        """保存数据到 JSON 文件"""
-        self.registry_file.write_text(
+        """原子写入数据到 JSON 文件（使用临时文件 + os.replace 保证原子性）"""
+        tmp = self.registry_file.with_suffix(".tmp")
+        tmp.write_text(
             json.dumps(self._data, indent=2, ensure_ascii=False), encoding="utf-8"
         )
+        os.replace(tmp, self.registry_file)
 
     def _key(self, owner: str, repo: str) -> str:
         return f"{owner}/{repo}"

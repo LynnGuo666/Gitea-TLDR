@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User
+from app.services.permission_service import has_permission as check_permission
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ async def check_admin_permission(
             )
 
         if required_resource and required_action:
-            if not admin.has_permission(required_resource, required_action):
+            if not check_permission(admin, required_resource, required_action):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"缺少 {required_resource}.{required_action} 权限",

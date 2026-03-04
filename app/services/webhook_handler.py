@@ -270,6 +270,20 @@ class WebhookHandler:
                 f"({head_branch} -> {base_branch})"
             )
 
+            # 幂等保护：避免同一 PR/head_sha 被重复审查
+            if self.database and head_sha:
+                async with self.database.session() as session:
+                    db_service = DBService(session)
+                    existing = await db_service.get_existing_review_session(
+                        owner, repo_name, pr_number, head_sha
+                    )
+                    if existing:
+                        logger.info(
+                            f"跳过重复审查: {owner}/{repo_name}#{pr_number} "
+                            f"head_sha={head_sha} 已有 session id={existing.id}"
+                        )
+                        return True
+
             # 查询仓库的 Anthropic 配置
             api_url = None
             api_key = None
@@ -406,7 +420,8 @@ class WebhookHandler:
             repo_path = await self.repo_manager.clone_repository(
                 clone_url, owner, repo_name, pr_number, head_branch
             )
-            clone_operations += 1
+            if repo_path:
+                clone_operations += 1
 
             if not repo_path:
                 logger.error("无法克隆仓库")

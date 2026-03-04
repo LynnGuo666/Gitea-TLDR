@@ -2,7 +2,7 @@
 审查会话模型
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
@@ -73,7 +73,7 @@ class ReviewSession(Base):
 
     # 时间信息
     started_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     duration_seconds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -99,7 +99,10 @@ class ReviewSession(Base):
         if not self.enabled_features:
             return []
         try:
-            return json.loads(self.enabled_features)
+            result = json.loads(self.enabled_features)
+            if not isinstance(result, list):
+                return []
+            return [str(x) for x in result]
         except (json.JSONDecodeError, TypeError):
             return []
 

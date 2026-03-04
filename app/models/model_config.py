@@ -44,7 +44,7 @@ class ModelConfig(Base, TimestampMixin):
         String(500), nullable=True, comment="Provider API Base URL"
     )
     api_key: Mapped[Optional[str]] = mapped_column(
-        String(500), nullable=True, comment="Provider Auth Token"
+        Text, nullable=True, comment="Provider Auth Token"
     )
     model: Mapped[Optional[str]] = mapped_column(
         String(200), nullable=True, comment="Actual LLM model identifier"

@@ -50,7 +50,7 @@ class GiteaClient:
                 logger.debug(
                     f"[响应体] {json.dumps(response_data, ensure_ascii=False, indent=2)}"
                 )
-            except:
+            except json.JSONDecodeError:
                 # 如果不是JSON，记录文本内容（限制长度）
                 text = response.text
                 if len(text) > 1000:

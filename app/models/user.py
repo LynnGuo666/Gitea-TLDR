@@ -25,21 +25,6 @@ class User(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_login_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
 
-    def has_permission(self, resource: str, action: str) -> bool:
-        if self.role == "super_admin":
-            return True
-
-        if not self.permissions:
-            return action in ["read"]
-
-        import json
-
-        try:
-            perms = json.loads(self.permissions)
-            return action in perms.get(resource, [])
-        except (json.JSONDecodeError, TypeError):
-            return False
-
     @property
     def is_super_admin(self) -> bool:
         return self.role == "super_admin"

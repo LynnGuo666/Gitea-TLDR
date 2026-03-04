@@ -3,7 +3,7 @@
 """
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select
@@ -196,6 +196,30 @@ class DBService:
 
     # ==================== ReviewSession 操作 ====================
 
+    async def get_existing_review_session(
+        self,
+        owner: str,
+        repo_name: str,
+        pr_number: int,
+        head_sha: str,
+    ) -> Optional[ReviewSession]:
+        """查询同一 PR（owner/repo + pr_number + head_sha）中已存在的 running/success 会话"""
+        stmt = (
+            select(ReviewSession)
+            .join(Repository)
+            .where(
+                Repository.owner == owner,
+                Repository.repo_name == repo_name,
+                ReviewSession.pr_number == pr_number,
+                ReviewSession.head_sha == head_sha,
+                ReviewSession.overall_success.isnot(False),  # None（running）或 True（success）
+            )
+            .order_by(ReviewSession.started_at.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def create_review_session(
         self,
         repository_id: int,
@@ -225,7 +249,7 @@ class DBService:
             head_branch=head_branch,
             base_branch=base_branch,
             head_sha=head_sha,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
         )
 
         if enabled_features:
@@ -285,7 +309,7 @@ class DBService:
             review_session.error_message = error_message
 
         if completed:
-            completed_at = datetime.utcnow()
+            completed_at = datetime.now(timezone.utc)
             review_session.completed_at = completed_at
             if review_session.started_at:
                 delta = completed_at - review_session.started_at
