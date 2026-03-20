@@ -606,6 +606,19 @@ class GiteaClient:
             logger.error(f"更新仓库webhook失败: {e}")
             return False
 
+    async def delete_repo_hook(self, owner: str, repo: str, hook_id: int) -> bool:
+        """删除仓库 Webhook"""
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/hooks/{hook_id}"
+        try:
+            self._log_debug("DELETE", url)
+            async with httpx.AsyncClient() as client:
+                response = await client.delete(url, headers=self.headers)
+                self._log_response(response)
+                return response.status_code in (200, 204)
+        except Exception as e:
+            logger.error(f"删除仓库webhook失败: {e}")
+            return False
+
     async def add_collaborator(self, owner: str, repo: str, username: str) -> bool:
         """邀请指定用户协作仓库"""
 

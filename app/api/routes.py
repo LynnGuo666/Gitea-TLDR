@@ -378,10 +378,11 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
     @api_router.put("/config/claude-global")
     @api_router.put("/config/provider-global")
     async def update_global_claude_config(
-        payload: ProviderConfigRequest, request: Request
+        payload: ProviderConfigRequest,
+        request: Request,
+        admin: User = Depends(admin_required("config", "write")),
     ):
         """更新全局 Claude 配置"""
-        context.auth_manager.require_session(request)
         database = getattr(request.state, "database", None)
         if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
@@ -593,7 +594,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
         callback_url = payload.callback_url or str(request.url_for("webhook"))
         secret = await context.repo_registry.get_secret_async(owner, repo) or secrets.token_hex(20)
-        context.repo_registry.set_secret(owner, repo, secret)
+        await context.repo_registry.set_secret_async(owner, repo, secret)
 
         webhook_config = {
             "type": "gitea",
@@ -731,24 +732,11 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             if (callback_url and hook_url == callback_url) or "webhook" in hook_url:
                 hook_id = hook.get("id")
                 if hook_id:
-                    # 调用 Gitea API 删除 webhook
-                    delete_url = (
-                        f"{client.base_url}/api/v1/repos/{owner}/{repo}/hooks/{hook_id}"
-                    )
-                    try:
-                        import httpx
-
-                        async with httpx.AsyncClient() as http_client:
-                            response = await http_client.delete(
-                                delete_url, headers=client.headers
-                            )
-                            if response.status_code in (200, 204):
-                                deleted = True
-                                # 同时清除本地保存的 secret
-                                context.repo_registry.delete_secret(owner, repo)
-                                break
-                    except Exception as e:
-                        logger.error(f"删除webhook失败: {e}")
+                    success = await client.delete_repo_hook(owner, repo, hook_id)
+                    if success:
+                        deleted = True
+                        context.repo_registry.delete_secret(owner, repo)
+                        break
 
         if deleted:
             return {"success": True, "message": "Webhook 已删除"}
@@ -949,18 +937,28 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         if start and end and start > end:
             raise HTTPException(status_code=400, detail="start_date 不能晚于 end_date")
 
+        session_data = context.auth_manager.require_session(request)
+        username = (
+            session_data.user.get("username")
+            if isinstance(session_data.user, dict)
+            else None
+        )
+
         async with database.session() as session:
             db_service = DBService(session)
             usage_user_id: Optional[int] = None
-            session_data = context.auth_manager.get_session(request)
-            username = (
-                session_data.user.get("username")
-                if session_data and isinstance(session_data.user, dict)
-                else None
-            )
             if username:
                 usage_user = await db_service.get_or_create_user_by_username(username)
                 usage_user_id = usage_user.id
+
+            if repository_id is not None:
+                db_repo = await db_service.get_repository_by_id(repository_id)
+                if not db_repo:
+                    raise HTTPException(status_code=404, detail="仓库不存在")
+                client = context.auth_manager.build_user_client(session_data)
+                perms = await client.check_repo_permissions(db_repo.owner, db_repo.repo_name)
+                if not perms or not perms.get("pull", False):
+                    raise HTTPException(status_code=403, detail="无权访问该仓库统计")
 
             # 获取汇总
             summary = await db_service.get_usage_summary(
@@ -1186,7 +1184,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         owner: str, repo: str, payload: ProviderConfigRequest, request: Request
     ):
         """保存仓库的 Claude 配置"""
-        context.auth_manager.require_session(request)
+        await _require_repo_setup_permission(owner, repo, request)
         database = getattr(request.state, "database", None)
         if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
@@ -1281,7 +1279,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         owner: str, repo: str, payload: ReviewSettingsRequest, request: Request
     ):
         """更新仓库的审查设置"""
-        context.auth_manager.require_session(request)
+        await _require_repo_setup_permission(owner, repo, request)
         database = getattr(request.state, "database", None)
         if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")

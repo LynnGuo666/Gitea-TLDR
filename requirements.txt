@@ -10,3 +10,6 @@ sqlalchemy
 alembic
 aiosqlite
 greenlet
+
+# Encryption
+PyNaCl>=1.5.0

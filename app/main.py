@@ -189,7 +189,8 @@ def create_app() -> FastAPI:
         """
         app_context = getattr(request.app.state, "context", None)
         if app_context:
-            session = app_context.auth_manager.get_session(request)
+            database = getattr(app_context, "database", None)
+            session = await app_context.auth_manager.get_session_async(request, database=database)
             request.state.auth_status = {
                 "loggedIn": bool(session),
                 "user": session.user if session else None,

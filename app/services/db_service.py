@@ -60,6 +60,12 @@ class DBService:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_repository_by_id(self, repo_id: int) -> Optional[Repository]:
+        """按 ID 获取仓库记录"""
+        stmt = select(Repository).where(Repository.id == repo_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def update_repository_secret(
         self, owner: str, repo_name: str, webhook_secret: Optional[str]
     ) -> Optional[Repository]:

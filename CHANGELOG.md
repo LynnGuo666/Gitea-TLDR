@@ -4,6 +4,52 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.21.6] - 2026-03-20
+
+### 安全 (Security)
+
+- **数据库敏感字段加密**: `access_token`、`refresh_token`、`api_key`、`webhook_secret` 等敏感字段启用 PyNaCl 加密存储（X25519 + XSalsa20-Poly1305），密钥独立存储于 `work_dir/encryption.key`
+- **API 响应脱敏**: 敏感配置字段在 API 响应中返回脱敏掩码，防止日志或响应泄露
+- **向后兼容**: 解密失败时自动回退为明文，兼容旧版本未加密的数据
+
+### 依赖 (Dependencies)
+
+- 新增 `PyNaCl>=1.5.0` 加密库依赖
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.21.6`
+
+## [1.21.5] - 2026-03-05
+
+### 安全 (Security)
+
+- **全局 Provider 配置写保护**: `PUT /api/config/provider-global` 改为仅管理员可写（`admin_required("config", "write")`），阻止普通登录用户覆盖全局 AI Provider API Key 或替换为恶意端点
+- **仓库 Provider 配置写保护**: `PUT /api/repos/{owner}/{repo}/provider-config` 改为复用仓库配置权限校验（个人仓库需 `admin`，组织仓库需 `owner/admin`），防止任意登录用户覆盖仓库级 API Key
+- **仓库审查设置写保护**: `PUT /api/repos/{owner}/{repo}/review-settings` 同步收紧，仅仓库管理员可修改
+- **统计接口强制登录**: `GET /api/stats` 改为 `require_session`（强制登录，未登录返回 `401`）；`repository_id` 参数新增仓库读权限校验，无权限返回 `403`
+
+### 修复 (Fixed)
+
+- **Session 持久化生效**: `auth_middleware` 改为调用 `get_session_async`（含 DB 回退逻辑），服务重启后持有有效 cookie 的用户可从 `user_sessions` 表恢复会话
+- **异步上下文调用同步方法**: `setup_repo_review` 路由中 `set_secret()` 改为 `await set_secret_async()`，消除异步路由内通过 `ThreadPoolExecutor + asyncio.run()` 绕过连接池的设计缺陷
+
+### 重构 (Refactored)
+
+- **GiteaClient 封装**: `delete_webhook` 路由中内联的 `httpx` 删除块提取为 `GiteaClient.delete_repo_hook(owner, repo, hook_id)` 方法，统一 Gitea 客户端封装边界，降低路由层复杂度
+
+### 测试 (Testing)
+
+- 新增 4 个安全回归测试：
+  - `test_provider_global_write_requires_admin`：非 admin 用户 `PUT /config/provider-global` → 401/403
+  - `test_repo_provider_config_write_requires_repo_admin`：无仓库 admin 权限 `PUT /repos/.../provider-config` → 403
+  - `test_review_settings_write_requires_repo_admin`：无仓库 admin 权限 `PUT /repos/.../review-settings` → 403
+  - `test_stats_requires_login`：未登录 `GET /stats` → 401
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.21.5`
+
 ## [1.21.4] - 2026-03-04
 
 ### 新增功能 (Added)

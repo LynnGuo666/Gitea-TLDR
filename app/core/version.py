@@ -2,12 +2,36 @@
 版本信息模块
 """
 
-__version__ = "1.21.4"
-__release_date__ = "2026-03-04"
+__version__ = "1.21.6"
+__release_date__ = "2026-03-20"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.21.6": {
+        "date": "2026-03-20",
+        "changes": [
+            "安全：数据库敏感字段（access_token、refresh_token、api_key、webhook_secret）启用 PyNaCl 加密存储，密钥独立存储于 work_dir/encryption.key",
+            "安全：API 响应中敏感字段返回脱敏掩码，防止日志/响应泄露",
+            "安全：兼容旧版本未加密数据，解密失败时回退为明文",
+            "依赖：新增 PyNaCl>=1.5.0 加密库依赖",
+            "维护：同步更新前后端版本号到 1.21.6",
+        ],
+    },
+    "1.21.5": {
+        "date": "2026-03-05",
+        "changes": [
+            "安全：PUT /config/provider-global 改为仅管理员可写，阻止普通用户覆盖全局 AI Provider API Key",
+            "安全：PUT /repos/{owner}/{repo}/provider-config 改为复用仓库配置权限校验（需仓库 admin 或组织 owner/admin），防止任意用户覆盖仓库 API Key",
+            "安全：PUT /repos/{owner}/{repo}/review-settings 同步收紧为仓库 admin 权限，防止任意用户篡改审查配置",
+            "安全：GET /api/stats 改为强制登录（require_session），未登录返回 401；新增 repository_id 访问控制，无仓库读权限返回 403",
+            "修复：Session 中间件改为调用 get_session_async，服务重启后可从 DB 恢复会话，user_sessions 表不再形同虚设",
+            "修复：setup_repo_review 异步路由中同步调用 set_secret 改为 await set_secret_async，消除跨线程 asyncio.run 绕过连接池问题",
+            "重构：delete_webhook 中内联 httpx 块提取为 GiteaClient.delete_repo_hook 方法，统一 Gitea 客户端封装边界",
+            "测试：新增 4 个安全回归测试（全局配置写权限、仓库配置写权限、审查设置写权限、统计接口登录校验）",
+            "维护：同步更新前后端版本号到 1.21.5",
+        ],
+    },
     "1.21.4": {
         "date": "2026-03-04",
         "changes": [

@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, List, Optional
 from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.encryption import encryption_service
+
 from .base import Base, TimestampMixin
 
 if TYPE_CHECKING:
@@ -43,8 +45,9 @@ class ModelConfig(Base, TimestampMixin):
     api_url: Mapped[Optional[str]] = mapped_column(
         String(500), nullable=True, comment="Provider API Base URL"
     )
-    api_key: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True, comment="Provider Auth Token"
+    # api_key 字段加密存储，内部用 _api_key 存储密文
+    _api_key: Mapped[Optional[str]] = mapped_column(
+        "api_key", Text, nullable=True, comment="Provider Auth Token（加密存储）"
     )
     model: Mapped[Optional[str]] = mapped_column(
         String(200), nullable=True, comment="Actual LLM model identifier"
@@ -60,6 +63,18 @@ class ModelConfig(Base, TimestampMixin):
     repository: Mapped[Optional["Repository"]] = relationship(
         "Repository", back_populates="model_config"
     )
+
+    @property
+    def api_key(self) -> Optional[str]:
+        """获取 API Key（自动解密）"""
+        if not self._api_key:
+            return None
+        return encryption_service.decrypt(self._api_key)
+
+    @api_key.setter
+    def api_key(self, value: Optional[str]) -> None:
+        """设置 API Key（自动加密）"""
+        self._api_key = encryption_service.encrypt(value) if value else value
 
     def get_features(self) -> List[str]:
         """获取功能列表"""

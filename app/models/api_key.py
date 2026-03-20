@@ -6,8 +6,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import Boolean, Integer, String
+from sqlalchemy import Boolean, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.encryption import encryption_service
 
 from .base import Base, TimestampMixin
 
@@ -33,8 +35,9 @@ class ApiKey(Base, TimestampMixin):
     provider_api_base_url: Mapped[Optional[str]] = mapped_column(
         String(500), nullable=True, comment="Provider API Base URL"
     )
-    provider_auth_token: Mapped[str] = mapped_column(
-        String(500), nullable=False, comment="Provider Auth Token（加密存储）"
+    # 内部存储加密后的 token
+    _provider_auth_token: Mapped[str] = mapped_column(
+        "provider_auth_token", Text, nullable=False, comment="Provider Auth Token（加密存储）"
     )
     priority: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False, comment="优先级（数字越大优先级越高）"
@@ -71,6 +74,16 @@ class ApiKey(Base, TimestampMixin):
     last_used_at: Mapped[Optional[datetime]] = mapped_column(
         nullable=True, comment="最后使用时间"
     )
+
+    @property
+    def provider_auth_token(self) -> str:
+        """获取 Provider Auth Token（自动解密）"""
+        return encryption_service.decrypt(self._provider_auth_token)
+
+    @provider_auth_token.setter
+    def provider_auth_token(self, value: str) -> None:
+        """设置 Provider Auth Token（自动加密）"""
+        self._provider_auth_token = encryption_service.encrypt(value)
 
     @property
     def quota_remaining_daily(self) -> Optional[int]:
