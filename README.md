@@ -1,49 +1,96 @@
 # LCPU AI Reviewer
 
-基于Claude Code的Gitea Pull Request自动审查工具。当用户提交PR后，该工具会自动接收webhook通知，使用Claude Code分析代码变更，并将审查结果反馈到Gitea。
+基于多引擎（Claude Code / Codex CLI）的 Gitea Pull Request 自动审查工具。当用户提交 PR 后，该工具会自动接收 webhook 通知，使用 AI 模型分析代码变更，并将审查结果反馈到 Gitea。
+
+**当前版本**: v1.21.6 | **发布日期**: 2026-03-20
 
 ## 功能特性
 
-- **自动化审查**：接收Gitea webhook，自动触发PR代码审查
-- **手动触发**：通过评论 `/review` 命令手动触发审查
-- **完整上下文分析**：克隆完整代码库，提供完整上下文给Claude Code
-- **灵活的反馈机制**：通过HTTP标头或命令参数控制审查功能
-  - PR评论（Comment）
-  - PR审查（Review）
+- **自动化审查**: 接收 Gitea webhook，PR 创建/更新时自动触发审查
+- **手动触发**: 通过评论 `/review` 命令（可配合 `@bot` 提及）手动触发审查
+- **多审查引擎**: 支持 Claude Code 和 Codex CLI，可按仓库灵活配置
+- **完整上下文分析**: 克隆完整代码库，为 AI 提供充分的项目上下文
+- **灵活反馈机制**: 通过 HTTP 标头或命令参数控制审查功能
+  - PR 评论（Comment）
+  - PR 审查（Review）
   - 提交状态（Status）
-- **多维度审查**：
+- **多维度审查**:
   - 代码质量和最佳实践
   - 安全漏洞检测
   - 性能问题分析
-  - 逻辑错误和bug发现
-- **异步处理**：立即返回202响应，后台处理审查任务，避免webhook超时
+  - 逻辑错误和 bug 发现
+- **异步处理**: 立即返回 202 响应，后台处理审查任务，避免 webhook 超时
+- **OAuth 用户登录**: 前端用户可使用自己的 Gitea 账号登录
+- **管理后台**: Dashboard、用户管理、仓库管理、配置管理、Webhook 日志
 
 ## 技术栈
 
-- **FastAPI**：高性能异步Web框架
-- **Next.js 静态导出**：构建 `/ui` 前端控制台
-- **Claude Code CLI**：代码分析引擎
-- **httpx**：异步HTTP客户端
-- **Pydantic**：配置管理和数据验证
+| 层级 | 技术 |
+|------|------|
+| 后端 | FastAPI + SQLAlchemy/Alembic + PyNaCl 加密 |
+| 前端 | Next.js (Pages Router) + HeroUI + Tailwind CSS |
+| 数据库 | SQLite（默认）+ 异步引擎 aiosqlite |
+| 审查引擎 | Claude Code CLI / Codex CLI |
+| 部署 | Docker + Docker Compose |
 
 ## 项目结构
 
 ```
 gitea-tldr/
 ├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI应用入口
-│   ├── config.py            # 配置管理
-│   ├── version.py           # 版本信息管理
-│   ├── gitea_client.py      # Gitea API客户端
-│   ├── repo_manager.py      # 代码库克隆和管理
-│   ├── claude_analyzer.py   # Claude Code CLI调用
-│   ├── webhook_handler.py   # Webhook处理逻辑
-│   └── command_parser.py    # 命令解析器（手动触发）
-├── requirements.txt
-├── .env.example
-├── README.md
-└── CHANGELOG.md             # 更新日志
+│   ├── main.py                 # FastAPI 应用入口
+│   ├── core/
+│   │   ├── config.py          # 配置管理（环境变量）
+│   │   ├── context.py         # 应用上下文
+│   │   ├── database.py        # 异步数据库连接
+│   │   ├── encryption.py       # PyNaCl 敏感数据加密
+│   │   ├── version.py         # 版本信息
+│   │   ├── admin_auth.py      # 管理员权限校验
+│   │   └── admin_settings.py  # 管理员设置
+│   ├── api/
+│   │   ├── routes.py          # 主 API 路由
+│   │   └── admin_routes.py    # 管理后台 API
+│   ├── models/                # SQLAlchemy ORM 模型
+│   │   ├── user.py            # 用户
+│   │   ├── user_session.py    # 会话（加密存储 access_token）
+│   │   ├── repository.py       # 仓库（加密存储 webhook_secret）
+│   │   ├── model_config.py    # AI 模型配置（加密存储 api_key）
+│   │   ├── api_key.py         # API Key 池（加密存储 provider_auth_token）
+│   │   ├── review_session.py  # 审查会话
+│   │   ├── inline_comment.py  # 行级评论
+│   │   ├── usage_stat.py      # 用量统计
+│   │   └── webhook_log.py     # Webhook 日志
+│   └── services/
+│       ├── auth_manager.py    # OAuth 认证管理
+│       ├── db_service.py      # 数据库操作服务
+│       ├── gitea_client.py     # Gitea API 客户端
+│       ├── webhook_handler.py  # Webhook 处理器
+│       ├── review_engine.py   # 审查引擎调度
+│       ├── repo_manager.py    # 代码库克隆管理
+│       ├── admin_service.py   # 管理后台服务
+│       └── providers/         # 审查引擎实现
+│           ├── base.py         # Provider 抽象基类
+│           ├── claude_code.py  # Claude Code 实现
+│           ├── codex_cli.py    # Codex CLI 实现
+│           └── registry.py    # Provider 注册表
+├── frontend/
+│   ├── pages/                 # Next.js Pages Router
+│   │   ├── index.tsx         # 首页/仪表盘
+│   │   ├── reviews.tsx        # 审查历史
+│   │   ├── settings.tsx       # 个人设置
+│   │   ├── preferences.tsx    # 用户中心
+│   │   ├── usage.tsx          # 用量统计
+│   │   ├── repo/[owner]/[repo].tsx  # 仓库详情
+│   │   └── admin/             # 管理后台页面
+│   ├── components/            # React 组件
+│   └── lib/version.ts         # 前端版本信息
+├── alembic/versions/         # 数据库迁移脚本
+├── tests/                    # 测试套件
+├── requirements.txt          # Python 依赖
+├── package.json              # 前端依赖
+├── docker-compose.yml        # Docker Compose 配置
+├── Dockerfile                # 镜像构建
+└── README.md
 ```
 
 ## 安装部署
@@ -51,83 +98,107 @@ gitea-tldr/
 ### 1. 环境要求
 
 - Python 3.11+
+- Node.js 20+（前端构建）
 - Git
-- Claude Code CLI（已安装并配置）
+- Claude Code CLI 或 Codex CLI（至少安装一个）
 
 ### 2. 安装依赖
 
 ```bash
 # 克隆仓库
 git clone <repository-url>
-cd gitea-pr-reviewer
+cd gitea-tldr
 
 # 创建虚拟环境
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
-# 或
-venv\Scripts\activate  # Windows
 
-# 安装依赖
+# 安装 Python 依赖
 pip install -r requirements.txt
+
+# 安装前端依赖
+cd frontend && npm install && cd ..
 ```
 
 ### 3. 配置环境变量
 
-复制 `.env.example` 为 `.env` 并填写配置：
-
-```bash
-cp .env.example .env
-```
-
-编辑 `.env` 文件：
+创建 `.env` 文件：
 
 ```env
-# Gitea配置
+# ============ 必需配置 ============
+
+# Gitea 服务器地址
 GITEA_URL=https://gitea.example.com
+
+# Gitea 访问令牌（Bot 用户或 Personal Access Token）
 GITEA_TOKEN=your_gitea_access_token_here
 
-# Webhook配置（可选，用于验证webhook请求）
+# ============ 可选配置 ============
+
+# Webhook 签名密钥（用于验证 webhook 请求来源）
 WEBHOOK_SECRET=your_webhook_secret_here
 
-# Claude Code配置
+# Claude Code CLI 路径（默认: claude）
 CLAUDE_CODE_PATH=claude
 
-# 工作目录配置（默认使用项目目录下的 review-workspace）
-# WORK_DIR=./review-workspace
+# Codex CLI 路径（默认: codex）
+CODEX_CLI_PATH=codex
 
-# 服务器配置
+# 默认审查引擎（claude_code | codex_cli）
+DEFAULT_PROVIDER=claude_code
+
+# 工作目录（默认: ./review-workspace）
+WORK_DIR=./review-workspace
+
+# 数据库连接 URL（默认: sqlite+aiosqlite:///work_dir/gitea_pr_reviewer.db）
+# DATABASE_URL=sqlite+aiosqlite:///path/to/database.db
+
+# ============ 服务器配置 ============
+
 HOST=0.0.0.0
 PORT=8000
-
-# 日志配置
 LOG_LEVEL=INFO
-
-# Debug模式（可选，开启详细日志）
 DEBUG=false
 
-# Bot配置（可选，用于手动触发功能）
-BOT_USERNAME=pr-reviewer-bot
+# ============ OAuth 配置（可选） ============
+# 用于前端用户使用自己的 Gitea 账号登录
 
-# OAuth（可选，用于用户登录）
-OAUTH_CLIENT_ID=
-OAUTH_CLIENT_SECRET=
+OAUTH_CLIENT_ID=your_oauth_client_id
+OAUTH_CLIENT_SECRET=your_oauth_client_secret
 OAUTH_REDIRECT_URL=http://localhost:8000/api/auth/callback
-# 逗号分隔的scope列表
+# OAuth 申请的 scope 列表
 OAUTH_SCOPES=read:user,read:repository
 SESSION_COOKIE_NAME=gitea_session
 SESSION_COOKIE_SECURE=false
+
+# ============ 管理后台配置 ============
+
+# 是否启用管理后台（默认: true）
+ADMIN_ENABLED=true
+# 初始管理员用户名（首次启动时自动创建）
+INITIAL_ADMIN_USERNAME=admin
+
+# ============ 审查配置 ============
+
+# Bot 用户名（用于识别 @提及，触发手动审查）
+BOT_USERNAME=pr-reviewer-bot
+
+# 默认审查重点（逗号分隔）
+DEFAULT_REVIEW_FOCUS=quality,security,performance,logic
+
+# 自动请求审查者（创建 review 后自动将 bot 添加为审查者）
+AUTO_REQUEST_REVIEWER=true
+
+# Webhook 日志保留天数
+WEBHOOK_LOG_RETENTION_DAYS=30
+WEBHOOK_LOG_RETENTION_DAYS_FAILED=90
 ```
 
-### 4. 数据库迁移
+### 4. 数据库初始化
 
-应用使用 Alembic 进行数据库版本控制。首次启动时，应用会自动运行数据库迁移。
-
-如果需要手动管理数据库迁移：
+应用启动时自动运行 Alembic 迁移，无需手动执行。
 
 ```bash
-# 激活虚拟环境
-source venv/bin/activate  # Linux/Mac
-
 # 查看当前数据库版本
 alembic current
 
@@ -141,71 +212,62 @@ alembic history --verbose
 alembic revision --autogenerate -m "描述变更内容"
 ```
 
-**注意**: 
-- 应用启动时会自动运行 `alembic upgrade head`，通常不需要手动执行
-- 如果迁移失败，应用会回退使用 `create_tables()` 创建表
-- 所有迁移文件已纳入版本控制，部署到新环境时会自动应用
-
 ### 5. 启动服务
 
 ```bash
 # 开发模式
 python -m app.main
 
-# 或使用uvicorn
+# 或使用 uvicorn
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-前端控制台位于 `frontend` 目录，可通过 Next.js 静态导出后与 FastAPI 一并托管：
+### 6. 构建前端 UI
 
 ```bash
 cd frontend
 npm install
-npm run build  # 生成 out/ 目录
+npm run build   # 生成 out/ 目录
 ```
 
-如果检测到 `frontend/out`，FastAPI 将自动在 `/ui` 路径挂载静态资源。
+服务启动后，访问 `http://localhost:8000/ui` 即可使用前端控制台。
 
-### 6. 配置Gitea Webhook
+### 7. 配置 Gitea Webhook
 
-在Gitea仓库设置中添加Webhook：
+在 Gitea 仓库设置中添加 Webhook：
 
-1. 进入仓库 → 设置 → Webhooks → 添加Webhook
+1. 进入仓库 → 设置 → Webhooks → 添加 Webhook → 选择 "Gitea"
 2. 配置参数：
-   - **URL**: `http://your-server:8000/webhook`
-   - **HTTP方法**: POST
+   - **目标 URL**: `http://your-server:8000/webhook`
+   - **HTTP 方法**: POST
    - **内容类型**: application/json
-   - **密钥**（可选）: 与 `.env` 中的 `WEBHOOK_SECRET` 一致
+   - **密钥**: 与 `.env` 中的 `WEBHOOK_SECRET` 一致
    - **触发事件**:
-     - ✅ 选择 "Pull Request"（用于自动触发）
-     - ✅ 选择 "Issue Comment"（用于手动触发）
-   - **自定义标头**（可选，仅用于自动触发）:
+     - ✅ Pull Request（自动触发）
+     - ✅ Issue Comment（手动触发 `/review`）
+   - **自定义标头**（可选）:
      - `X-Review-Features: comment,review,status`
      - `X-Review-Focus: quality,security,performance,logic`
 
 ## 使用说明
 
-### 1. 自动触发（Webhook）
+### 自动触发（Webhook）
 
-当PR被创建或更新时，工具会自动触发审查。
+PR 被创建或更新时，工具自动触发审查。
 
-### 2. 手动触发（评论命令）
+### 手动触发（评论命令）
 
-在PR评论中使用 `/review` 命令可以手动触发审查：
-
-#### 基本用法
+在 PR 评论中使用：
 
 ```
 /review
 ```
 
-如果配置了 `BOT_USERNAME`，需要@bot：
+或配合 `@bot` 提及：
 
 ```
 @pr-reviewer-bot /review
 ```
-
-#### 高级用法
 
 指定审查功能：
 
@@ -219,387 +281,190 @@ npm run build  # 生成 out/ 目录
 @pr-reviewer-bot /review --focus security,performance
 ```
 
-完整示例：
+### Webhook 标头配置
 
-```
-@pr-reviewer-bot /review --features comment,review,status --focus security,quality
-```
+| 标头 | 说明 | 可选值 |
+|------|------|--------|
+| `X-Review-Features` | 启用的审查功能 | `comment`, `review`, `status`（逗号分隔） |
+| `X-Review-Focus` | 审查重点 | `quality`, `security`, `performance`, `logic`（逗号分隔） |
 
-#### 命令参数说明
+### OAuth 登录
 
-- `--features`: 指定启用的功能（comment, review, status）
-  - 默认值：`comment`
+若希望前端用户使用自己的 Gitea 账号操作：
 
-- `--focus`: 指定审查重点（quality, security, performance, logic）
-  - 默认值：`quality,security,performance,logic`
+1. 在 Gitea `Settings → Applications → Manage OAuth2 Applications` 创建应用
+2. 设置 Redirect URL 为 `http(s)://your-server/api/auth/callback`
+3. 将 Client ID / Secret 写入 `.env` 的 `OAUTH_*` 配置
+4. 重启服务后，侧边栏出现 "连接 Gitea" 按钮
 
-### Webhook标头配置
+## API 端点
 
-### 使用 OAuth 登录（可选）
+### 认证相关
 
-若希望前端用户使用自己的 Gitea 账号登录并下发仓库访问权限，需要在 Gitea 中创建 OAuth2 Application，并填写上文的 `OAUTH_*` 配置：
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/auth/status` | 获取当前登录状态 |
+| GET | `/api/auth/admin-status` | 获取管理员状态 |
+| GET | `/api/auth/login-url` | 获取 OAuth 授权 URL |
+| POST | `/api/auth/logout` | 注销会话 |
+| GET | `/api/auth/callback` | OAuth 回调 |
 
-1. 在 Gitea `Settings → Applications → Manage OAuth2 Applications` 中创建应用，记录 **Client ID** / **Client Secret**，并将 Redirect URL 指向 `http(s)://your-server/api/auth/callback`。
-2. 确保 Gitea OAuth 授权端点为 `https://<gitea>/login/oauth/authorize`，令牌端点为 `https://<gitea>/login/oauth/access_token`（参考官方文档: https://docs.gitea.com/development/oauth2-provider ）。
-3. 将得到的 Client 信息写入 `.env`，并按需调整 `OAUTH_SCOPES`（默认申请 `read:user`、`read:repository`）。
-4. 重启服务后，前端侧边栏会出现 “连接 Gitea” 按钮；登录完成后，仓库列表及 Webhook 配置均将使用用户自身的访问令牌调用 Gitea API。
+### 仓库相关
 
-通过自定义HTTP标头控制审查行为：
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/repos` | 列出用户可访问的仓库 |
+| GET | `/api/repos/{owner}/{repo}/permissions` | 检查仓库权限 |
+| POST | `/api/repos/{owner}/{repo}/setup` | 配置仓库（创建 Webhook） |
+| GET | `/api/repos/{owner}/{repo}/webhook-status` | 查询 Webhook 状态 |
+| DELETE | `/api/repos/{owner}/{repo}/webhook` | 删除 Webhook |
+| POST | `/api/repos/{owner}/{repo}/validate-admin` | 校验仓库管理权限 |
+| GET | `/api/repos/{owner}/{repo}/pulls` | 获取 PR 列表 |
+| GET | `/api/repos/{owner}/{repo}/provider-config` | 获取 AI 配置 |
+| PUT | `/api/repos/{owner}/{repo}/provider-config` | 更新 AI 配置 |
+| GET | `/api/repos/{owner}/{repo}/review-settings` | 获取审查设置 |
+| PUT | `/api/repos/{owner}/{repo}/review-settings` | 更新审查设置 |
+| GET | `/api/repos/{owner}/{repo}/webhook-secret` | 获取 Webhook 密钥 |
+| POST | `/api/repos/{owner}/{repo}/webhook-secret/regenerate` | 重新生成 Webhook 密钥 |
 
-#### X-Review-Features
+### 审查相关
 
-控制启用的功能，多个功能用逗号分隔：
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/reviews` | 列出所有审查会话（管理员） |
+| GET | `/api/reviews/{review_id}` | 获取审查详情（管理员） |
+| GET | `/api/my/reviews` | 获取当前用户的审查会话 |
+| GET | `/api/my/reviews/{review_id}` | 获取当前用户的指定审查详情 |
 
-- `comment`: 在PR中发布评论
-- `review`: 创建PR审查
-- `status`: 设置提交状态
+### 配置相关
 
-示例：
-```
-X-Review-Features: comment,review,status
-```
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/config/public` | 获取公开配置 |
+| GET | `/api/providers` | 获取可用的审查引擎列表 |
+| GET | `/api/config/provider-global` | 获取全局 AI 配置（管理员） |
+| PUT | `/api/config/provider-global` | 更新全局 AI 配置（管理员） |
+| GET | `/api/configs` | 列出所有配置（管理员） |
+| POST | `/api/configs` | 创建配置（管理员） |
 
-如果不设置此标头，默认只启用 `comment`。
+### 统计相关
 
-#### X-Review-Focus
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/stats` | 获取用量统计（需登录） |
 
-控制审查重点，多个重点用逗号分隔：
+### 系统相关
 
-- `quality`: 代码质量和最佳实践
-- `security`: 安全漏洞检测
-- `performance`: 性能问题分析
-- `logic`: 逻辑错误和bug
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/` | 健康检查 |
+| GET | `/health` | 健康检查 |
+| GET | `/version` | 版本信息 |
+| GET | `/changelog` | 完整更新日志 |
 
-示例：
-```
-X-Review-Focus: security,performance
-```
+### Webhook
 
-如果不设置此标头，默认启用所有审查重点。
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/webhook` | 接收 Gitea Webhook |
 
-### API端点
+## Docker 部署
 
-#### GET /
-
-健康检查端点，返回服务状态和版本信息
-
-```bash
-curl http://localhost:8000/
-```
-
-响应示例：
-```json
-{
-  "status": "ok",
-  "service": "LCPU AI Reviewer",
-  "version": "1.0.0"
-}
-```
-
-#### GET /health
-
-健康检查端点
-
-```bash
-curl http://localhost:8000/health
-```
-
-#### GET /version
-
-查询版本信息和当前版本更新日志
-
-```bash
-curl http://localhost:8000/version
-```
-
-响应示例：
-```json
-{
-  "version": "1.0.0",
-  "info": "LCPU AI Reviewer v1.0.0 (2025-11-28)",
-  "changelog": "..."
-}
-```
-
-#### GET /changelog
-
-查询完整更新日志
+### 使用 Docker Compose（推荐）
 
 ```bash
-curl http://localhost:8000/changelog
-```
-
-#### POST /webhook
-
-Gitea Webhook接收端点
-
-请求标头：
-- `X-Gitea-Signature`: Webhook签名（如果配置了密钥）
-- `X-Gitea-Event`: 事件类型（`pull_request` 或 `issue_comment`）
-- `X-Review-Features`: 审查功能配置（可选，仅用于PR事件）
-- `X-Review-Focus`: 审查重点配置（可选，仅用于PR事件）
-
-## 工作流程
-
-### 自动触发流程
-
-1. 用户在Gitea中创建或更新PR
-2. Gitea发送 `pull_request` webhook到本服务
-3. 服务验证webhook签名（如果配置）
-4. 解析标头获取功能和重点配置
-5. 返回202响应，启动后台任务
-6. 后台任务执行：
-   - 设置初始状态（如果启用）
-   - 获取PR diff
-   - 克隆完整代码库
-   - 调用Claude Code分析
-   - 根据配置发布评论/审查/状态
-   - 清理临时文件
-7. 审查结果显示在Gitea PR页面
-
-### 手动触发流程
-
-1. 用户在PR评论中输入 `/review` 命令（可能需要@bot）
-2. Gitea发送 `issue_comment` webhook到本服务
-3. 服务解析评论内容，识别命令和参数
-4. 如果是有效命令，返回202响应，启动后台任务
-5. 后台任务执行（与自动触发相同）
-6. 审查结果显示在Gitea PR页面
-
-## 生产部署建议
-
-### 使用systemd服务
-
-创建 `/etc/systemd/system/gitea-pr-reviewer.service`：
-
-```ini
-[Unit]
-Description=LCPU AI Reviewer
-After=network.target
-
-[Service]
-Type=simple
-User=your-user
-WorkingDirectory=/path/to/gitea-pr-reviewer
-Environment="PATH=/path/to/venv/bin"
-ExecStart=/path/to/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-启动服务：
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable gitea-pr-reviewer
-sudo systemctl start gitea-pr-reviewer
-```
-
-### 使用Nginx反向代理
-
-```nginx
-server {
-    listen 80;
-    server_name pr-reviewer.example.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-### 使用Docker部署
-
-项目已包含完整的Docker支持，Claude Code CLI已打包在镜像中。
-
-#### 方式1：使用Docker Compose（推荐）
-
-Docker Compose 会自动从 `.env` 文件读取所有环境变量，无需在 `docker-compose.yml` 中逐个配置。
-
-1. 创建并配置 `.env` 文件：
-
-```bash
+# 创建并配置 .env 文件
 cp .env.example .env
-# 编辑 .env 文件，填写所有必需的配置项
-# 重要：确保配置了以下关键变量
-# - GITEA_URL
-# - GITEA_TOKEN
-# - OAUTH_CLIENT_ID (如果使用OAuth登录)
-# - OAUTH_CLIENT_SECRET (如果使用OAuth登录)
-# - OAUTH_REDIRECT_URL (如果使用OAuth登录)
-# - ANTHROPIC_AUTH_TOKEN (如果使用Claude Code)
-```
+# 编辑 .env 填写配置
 
-2. 一条命令启动服务：
-
-```bash
+# 启动服务
 docker compose up -d
-```
 
-3. 验证配置加载（可选）：
-
-```bash
-# 检查环境变量是否正确加载
-docker compose config | grep -A 20 environment
-
-# 在容器内验证OAuth配置
-docker exec gitea-pr-reviewer python -c "
-from app.core.config import settings
-from app.services.auth_manager import AuthManager
-print(f'OAuth enabled: {AuthManager().enabled}')
-"
-```
-
-4. 查看日志：
-
-```bash
+# 查看日志
 docker compose logs -f
-```
 
-5. 停止服务：
-
-```bash
+# 停止服务
 docker compose down
 ```
 
-**注意事项：**
-- `.env` 文件包含敏感信息（如token和密钥），请勿提交到版本控制系统
-- 修改 `.env` 后需要重启容器：`docker compose restart`
-- 如需使用不同的配置文件，可以通过 `--env-file` 参数指定：
-  ```bash
-  docker compose --env-file .env.production up -d
-  ```
-
-#### 方式2：使用Docker命令
-
-推荐使用 `--env-file` 参数从 `.env` 文件加载所有配置：
+### 使用 Docker 命令
 
 ```bash
 # 构建镜像
-docker build -t gitea-pr-reviewer .
+docker build -t gitea-tldr .
 
-# 使用 .env 文件运行容器（推荐）
+# 运行容器
 docker run -d \
-  --name gitea-pr-reviewer \
+  --name gitea-tldr \
   -p 8000:8000 \
   --env-file .env \
-  -v pr-reviewer-data:/tmp/gitea-pr-reviewer \
-  gitea-pr-reviewer
+  -v $(pwd)/data:/tmp/gitea-tldr \
+  gitea-tldr
 ```
 
-或者手动指定每个环境变量：
+### 拉取预构建镜像
 
 ```bash
-docker run -d \
-  --name gitea-pr-reviewer \
-  -p 8000:8000 \
-  -e GITEA_URL=https://gitea.example.com \
-  -e GITEA_TOKEN=your_token \
-  -e OAUTH_CLIENT_ID=your_client_id \
-  -e OAUTH_CLIENT_SECRET=your_client_secret \
-  -e OAUTH_REDIRECT_URL=http://localhost:8000/api/auth/callback \
-  -e ANTHROPIC_BASE_URL=https://api.anthropic.com \
-  -e ANTHROPIC_AUTH_TOKEN=your_anthropic_token \
-  -e WEBHOOK_SECRET=your_secret \
-  gitea-pr-reviewer
-```
-
-#### 方式3：使用GitHub Container Registry
-
-项目配置了GitHub Actions自动构建，可以直接拉取镜像：
-
-```bash
-# 拉取 main 分支镜像
+# 从 GitHub Container Registry 拉取
 docker pull ghcr.io/lynnguo666/gitea-tldr:main
 
-# 运行（推荐使用.env文件）
+# 运行
 docker run -d \
-  --name gitea-pr-reviewer \
+  --name gitea-tldr \
   -p 8000:8000 \
   --env-file .env \
   ghcr.io/lynnguo666/gitea-tldr:main
-
-# 或直接指定环境变量
-docker run -d \
-  --name gitea-pr-reviewer \
-  -p 8000:8000 \
-  -e GITEA_URL=https://gitea.example.com \
-  -e GITEA_TOKEN=your_token \
-  -e ANTHROPIC_BASE_URL=https://api.anthropic.com \
-  -e ANTHROPIC_AUTH_TOKEN=your_anthropic_token \
-  ghcr.io/lynnguo666/gitea-tldr:main
 ```
 
-#### Docker镜像特性
+## 安全特性
 
-- 基于 `python:3.11-slim`
-- 已预装 Node.js 20.x 和 npm
-- 已预装 Claude Code CLI（通过npm安装）
-- 已内置前端静态产物（`/app/frontend/out`），可直接通过 `/ui` 访问
-- 支持 `linux/amd64` 和 `linux/arm64` 架构
-- 包含健康检查
-- 自动重启策略
-
-## 故障排查
-
-### 查看版本信息
-
-```bash
-# 方式1：访问API端点
-curl http://localhost:8000/version
-
-# 方式2：查看启动日志
-# 服务启动时会打印版本横幅
-```
-
-### Claude Code调用失败
-
-- 确认Claude Code CLI已正确安装：`claude --version`
-- 检查 `CLAUDE_CODE_PATH` 配置是否正确
-- 查看日志中的详细错误信息
-
-### 仓库克隆失败
-
-- 确认Gitea token有足够的权限
-- 检查网络连接
-- 确认工作目录有足够的磁盘空间
-
-### Webhook未触发
-
-- 检查Gitea webhook配置是否正确
-- 确认服务器端口可访问
-- 查看Gitea webhook日志
+- **敏感数据加密**: `access_token`、`refresh_token`、`api_key`、`webhook_secret` 等字段使用 PyNaCl（X25519 + XSalsa20-Poly1305）加密存储，密钥位于 `work_dir/encryption.key`，文件权限 `0600`
+- **API 响应脱敏**: 敏感配置字段在 API 响应中返回脱敏掩码
+- **Webhook 签名验证**: 支持 HMAC-SHA256 签名校验
+- **权限控制**: 管理接口强校验管理员身份，仓库配置接口校验仓库/组织权限
+- **Fail-Closed**: 鉴权失败默认拒绝访问，不泄露信息
+- **审计日志**: Webhook 请求完整记录（状态、耗时、payload 摘要）
+- **会话管理**: 支持会话持久化到数据库，重启后可恢复
 
 ## 开发
 
 ### 运行测试
 
 ```bash
-# TODO: 添加测试
-pytest
+# 安装测试依赖（如 pytest-asyncio）
+pip install pytest pytest-asyncio
+
+# 运行所有测试
+pytest tests/ -v
+
+# 运行加密测试
+pytest tests/test_encryption.py -v
 ```
 
-### 代码格式化
+### 代码检查
 
 ```bash
-black app/
-isort app/
+# Python 类型检查
+python -m mypy app
+
+# 前端 TypeScript 检查
+cd frontend && npm run lint && npx tsc --noEmit
 ```
+
+## 故障排查
+
+| 问题 | 解决方案 |
+|------|----------|
+| Webhook 未触发 | 检查 Gitea Webhook 配置、服务器端口可达性、WEBHOOK_SECRET 一致性 |
+| 仓库克隆失败 | 确认 GITEA_TOKEN 权限充足、网络连接正常、工作目录磁盘空间充足 |
+| Claude/Codex 调用失败 | 确认 CLI 已安装（`claude --version` 或 `codex --version`）、路径配置正确 |
+| OAuth 登录失败 | 检查 OAUTH_CLIENT_ID/SECRET/REDIRECT_URL 配置是否正确 |
+| 数据库迁移失败 | 查看 alembic 日志，确保数据库文件目录有写入权限 |
 
 ## 许可证
 
 MIT License
 
-## 贡献
-
-欢迎提交Issue和Pull Request！
-
 ## 联系方式
 
-如有问题或建议，请提交Issue。
+如有问题或建议，请提交 Issue。
