@@ -2,12 +2,20 @@
 版本信息模块
 """
 
-__version__ = "1.21.6"
-__release_date__ = "2026-03-20"
+__version__ = "1.22.0"
+__release_date__ = "2026-03-27"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.22.0": {
+        "date": "2026-03-27",
+        "changes": [
+            "新增：Claude Provider 通过嵌入式 HTTP 代理拦截 Anthropic API 响应，捕获真实 input_tokens / output_tokens",
+            "优化：用量统计从粗略估算（diff_size//4+500）升级为 API 真实 token 数据",
+            "维护：同步更新前后端版本号到 1.22.0",
+        ],
+    },
     "1.21.6": {
         "date": "2026-03-20",
         "changes": [

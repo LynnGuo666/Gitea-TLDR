@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .base import InlineComment, ReviewProvider, ReviewResult
+from .usage_proxy import UsageCapturingProxy
 
 logger = logging.getLogger(__name__)
 
@@ -162,24 +163,31 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
-            custom_env = self._build_env(api_url, api_key, model)
+            # 启动 usage 捕获代理
+            proxy = UsageCapturingProxy(api_url or "https://api.anthropic.com")
+            port = await proxy.start()
 
-            process = await asyncio.create_subprocess_exec(
-                self.cli_path,
-                "-p",
-                prompt,
-                "--output-format",
-                "text",
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=str(repo_path),
-                env=custom_env,
-            )
+            try:
+                custom_env = self._build_env(f"http://127.0.0.1:{port}", api_key, model)
 
-            stdout, stderr = await process.communicate(
-                input=diff_content.encode("utf-8")
-            )
+                process = await asyncio.create_subprocess_exec(
+                    self.cli_path,
+                    "-p",
+                    prompt,
+                    "--output-format",
+                    "text",
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=str(repo_path),
+                    env=custom_env,
+                )
+
+                stdout, stderr = await process.communicate(
+                    input=diff_content.encode("utf-8")
+                )
+            finally:
+                await proxy.stop()
 
             if process.returncode != 0:
                 stderr_text = stderr.decode(errors="ignore").strip()
@@ -210,6 +218,10 @@ JSON结构示例：
                 logger.error(f"{self.DISPLAY_NAME} 返回结果为空")
                 self._set_last_error(f"{self.DISPLAY_NAME} 返回结果为空")
                 return None
+
+            # 写入代理捕获的真实 token 用量
+            if proxy.usage:
+                parsed_result.usage_metadata.update(proxy.usage)
 
             self._set_model_metadata(parsed_result, model)
 
@@ -257,23 +269,30 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt - Simple Mode]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
-            custom_env = self._build_env(api_url, api_key, model)
+            # 启动 usage 捕获代理
+            proxy = UsageCapturingProxy(api_url or "https://api.anthropic.com")
+            port = await proxy.start()
 
-            process = await asyncio.create_subprocess_exec(
-                self.cli_path,
-                "-p",
-                prompt,
-                "--output-format",
-                "text",
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=custom_env,
-            )
+            try:
+                custom_env = self._build_env(f"http://127.0.0.1:{port}", api_key, model)
 
-            stdout, stderr = await process.communicate(
-                input=diff_content.encode("utf-8")
-            )
+                process = await asyncio.create_subprocess_exec(
+                    self.cli_path,
+                    "-p",
+                    prompt,
+                    "--output-format",
+                    "text",
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=custom_env,
+                )
+
+                stdout, stderr = await process.communicate(
+                    input=diff_content.encode("utf-8")
+                )
+            finally:
+                await proxy.stop()
 
             if process.returncode != 0:
                 stderr_text = stderr.decode(errors="ignore").strip()
@@ -307,6 +326,10 @@ JSON结构示例：
                 logger.error(f"{self.DISPLAY_NAME} 返回结果为空（简单模式）")
                 self._set_last_error(f"{self.DISPLAY_NAME} 返回结果为空（简单模式）")
                 return None
+
+            # 写入代理捕获的真实 token 用量
+            if proxy.usage:
+                parsed_result.usage_metadata.update(proxy.usage)
 
             self._set_model_metadata(parsed_result, model)
 
