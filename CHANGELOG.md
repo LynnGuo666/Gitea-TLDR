@@ -4,6 +4,30 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.22.1] - 2026-03-30
+
+### 安全 (Security)
+
+- **存量数据加密修复**: Alembic 迁移 `0001` 补全 `upgrade()`，自动检测并加密旧版本遗留的明文 `api_key`、`webhook_secret`、`access_token`、`refresh_token`，迁移幂等安全
+- **解密失败分级处理**: `encryption.py` 将 base64 解码失败（旧明文兼容）与 `CryptoError`（密钥不匹配/数据损坏）分离处理，后者升级为 `ERROR` 级别日志，不再静默忽略
+- **ApiKey setter 空值防护**: `ApiKey.provider_auth_token` setter 与其他模型对齐，`value` 为空时跳过加密
+- **EncryptionService 并发安全**: 首次密钥加载添加 `threading.Lock` 双重检查锁定，消除多协程竞态
+- **CLI 子进程凭证隔离**: `_build_env` 过滤已知凭证环境变量（`AWS_ACCESS_KEY_ID`、`GITHUB_TOKEN`、`GITLAB_TOKEN` 等），防止父进程凭证传入 Claude CLI 子进程
+- **错误信息脱敏增强**: `_set_last_error` 正则扩展覆盖 `password`/`passwd`/`bearer`/`credential`；先截断后过滤，防止因长度超限秘密未被脱敏
+
+### 修复 (Fixed)
+
+- **Claude CLI 超时保护**: `analyze_pr` / `analyze_pr_simple` 添加 300 秒超时（`asyncio.wait_for`），超时后强制 `kill` 子进程，防止请求永久挂起
+- **UsageCapturingProxy Task 泄漏**: `start()` 将 `serve_forever` Task 存入 `_serve_task`，`stop()` 中显式 `cancel + await`，消除每次审查泄漏孤立 Task
+- **代理启动 fallback**: 代理启动失败时降级为直连真实 API，不再因端口耗尽等原因终止审查
+- **SSE token 计数累加**: `output_tokens` 改为 `+= delta`，修复多段 `message_delta` 时只记最后一次的计数丢失
+- **JSON 括号匹配**: `_extract_json_payload` 改为字符级深度追踪，修复 `find/rfind` 对含嵌套 `{}` 结构截取错误的问题
+- **diff 长度截断**: `claude_code.py` 补齐 `MAX_DIFF_CHARS = 200_000` 截断逻辑，与 `codex_cli.py` 保持一致
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.22.1`
+
 ## [1.21.6] - 2026-03-20
 
 ### 安全 (Security)

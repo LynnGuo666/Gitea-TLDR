@@ -2,12 +2,30 @@
 版本信息模块
 """
 
-__version__ = "1.22.0"
-__release_date__ = "2026-03-27"
+__version__ = "1.22.1"
+__release_date__ = "2026-03-30"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.22.1": {
+        "date": "2026-03-30",
+        "changes": [
+            "安全：数据库存量明文数据修复——Alembic 迁移 0001 补全 upgrade()，自动检测并加密旧版本遗留的明文 api_key / webhook_secret / access_token / refresh_token",
+            "安全：encryption.py 解密失败分级处理——base64 非法视为旧明文静默兼容，CryptoError 升级为 ERROR 日志，明确区分密钥不匹配与旧数据",
+            "安全：ApiKey.provider_auth_token setter 空值处理与其他模型保持一致，防止 None 传入导致未定义行为",
+            "安全：EncryptionService 初始化加 threading.Lock 双重检查锁定，消除多协程并发首次加载密钥的竞态条件",
+            "安全：_build_env 过滤已知凭证环境变量（AWS/GitHub/GitLab token 等），避免父进程凭证泄露给 Claude CLI 子进程",
+            "安全：_set_last_error 正则扩展覆盖 password/passwd/bearer/credential，先截断后过滤防止秘密因长度超限未被脱敏",
+            "修复：Claude CLI 子进程添加 300s 超时（asyncio.wait_for），超时后强制 kill，防止请求永久挂起",
+            "修复：UsageCapturingProxy 后台 serve_forever Task 存入 _serve_task，stop() 中显式 cancel + await，消除每次审查泄漏一个孤立 Task",
+            "修复：usage 代理启动失败时降级为直连真实 API，不再因端口耗尽等原因直接终止审查",
+            "修复：SSE output_tokens 改为累加（+= delta），修复多段 message_delta 时只记最后一次的计数丢失",
+            "修复：_extract_json_payload 括号匹配改为字符级深度追踪，修复 find/rfind 对嵌套结构截取错误的缺陷",
+            "修复：claude_code.py 补齐 MAX_DIFF_CHARS = 200_000 截断逻辑，与 codex_cli.py 保持一致",
+            "维护：同步更新前后端版本号到 1.22.1",
+        ],
+    },
     "1.22.0": {
         "date": "2026-03-27",
         "changes": [
