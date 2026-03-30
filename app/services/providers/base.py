@@ -147,13 +147,13 @@ class ReviewProvider(ABC):
         if not text:
             self._clear_last_error()
             return
+        if len(text) > 500:
+            text = text[:500] + "..."
         text = re.sub(
-            r"(?i)(token|key|secret|authorization)\s*[:=]\s*([^\s,;]+)",
+            r"(?i)(token|key|secret|authorization|password|passwd|bearer|credential)\s*[:=]\s*([^\s,;]+)",
             r"\1=[REDACTED]",
             text,
         )
-        if len(text) > 500:
-            text = text[:500] + "..."
         setattr(self, "_last_error", text)
 
     @abstractmethod

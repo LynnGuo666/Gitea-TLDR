@@ -45,6 +45,7 @@ class UsageCapturingProxy:
         self.usage: Dict[str, Any] = {}
         self._server: Optional[asyncio.AbstractServer] = None
         self._port: int = 0
+        self._serve_task: Optional[asyncio.Task] = None
 
     @property
     def port(self) -> int:
@@ -56,7 +57,7 @@ class UsageCapturingProxy:
             self._handle_connection, "127.0.0.1", 0
         )
         self._port = self._server.sockets[0].getsockname()[1]
-        asyncio.get_event_loop().create_task(self._server.serve_forever())
+        self._serve_task = asyncio.ensure_future(self._server.serve_forever())
         logger.debug(f"UsageCapturingProxy listening on 127.0.0.1:{self._port}")
         return self._port
 
@@ -66,7 +67,14 @@ class UsageCapturingProxy:
             self._server.close()
             await self._server.wait_closed()
             self._server = None
-            logger.debug("UsageCapturingProxy closed")
+        if self._serve_task is not None:
+            self._serve_task.cancel()
+            try:
+                await self._serve_task
+            except asyncio.CancelledError:
+                pass
+            self._serve_task = None
+        logger.debug("UsageCapturingProxy closed")
 
     # ------------------------------------------------------------------
     # 连接处理
@@ -272,4 +280,7 @@ class UsageCapturingProxy:
         elif event_type == "message_delta":
             usage = event.get("usage", {})
             if "output_tokens" in usage:
-                self.usage["output_tokens"] = usage["output_tokens"]
+                # 累加增量，SSE 可能包含多段 message_delta
+                self.usage["output_tokens"] = (
+                    self.usage.get("output_tokens", 0) + usage["output_tokens"]
+                )

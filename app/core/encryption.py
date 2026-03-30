@@ -6,8 +6,9 @@ import base64
 import binascii
 import json
 import logging
+import threading
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from nacl.exceptions import CryptoError
 from nacl.public import PrivateKey, PublicKey, SealedBox
@@ -30,6 +31,7 @@ class EncryptionService:
         self._key_path = key_path
         self._private_key: Optional[PrivateKey] = None
         self._public_key: Optional[PublicKey] = None
+        self._lock = threading.Lock()
 
     @property
     def key_path(self) -> Path:
@@ -54,10 +56,12 @@ class EncryptionService:
         return private_key
 
     def _ensure_keys(self) -> PrivateKey:
-        """确保密钥已加载"""
+        """确保密钥已加载（线程安全的双重检查锁定）"""
         if self._private_key is None:
-            self._private_key = self._ensure_key_exists()
-            self._public_key = self._private_key.public_key
+            with self._lock:
+                if self._private_key is None:
+                    self._private_key = self._ensure_key_exists()
+                    self._public_key = self._private_key.public_key
         return self._private_key
 
     def _get_encrypt_box(self) -> SealedBox:
@@ -87,21 +91,36 @@ class EncryptionService:
 
     def decrypt(self, ciphertext: str) -> str:
         """
-        解密 base64 密文；无法解密时返回原值（兼容旧明文数据）
+        解密 base64 密文。
+
+        - 若 base64 解码失败，认为是未加密的旧明文，静默返回原值（向后兼容）。
+        - 若 base64 解码成功但解密失败（CryptoError），记录 ERROR 级别日志，
+          说明可能存在密钥不匹配或数据损坏，返回原始密文。
 
         Args:
             ciphertext: Base64 编码的密文
 
         Returns:
-            解密后的明文字符串；若无法解密则返回原值（兼容未加密的旧数据）
+            解密后的明文字符串；若为旧明文则返回原值；解密失败时返回原始密文并记录错误
         """
         if not ciphertext:
             return ciphertext
+        # 尝试 base64 解码：失败则视为未加密的旧明文
         try:
             data = base64.b64decode(ciphertext.encode("ascii"))
+        except (binascii.Error, ValueError):
+            return ciphertext
+        # base64 解码成功，尝试解密
+        try:
             return self._get_decrypt_box().decrypt(data).decode("utf-8")
-        except (binascii.Error, CryptoError, TypeError):
-            logger.warning("无法解密数据，假定为未加密的明文")
+        except CryptoError:
+            logger.error(
+                "解密失败：数据为有效 base64 但无法用当前密钥解密，"
+                "可能是密钥不匹配或数据损坏"
+            )
+            return ciphertext
+        except (TypeError, UnicodeDecodeError) as exc:
+            logger.error("解密后数据无法解码为 UTF-8: %s", exc)
             return ciphertext
 
     def encrypt_dict(self, data: dict) -> str:

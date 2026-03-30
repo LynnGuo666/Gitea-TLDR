@@ -21,6 +21,24 @@ class ClaudeCodeProvider(ReviewProvider):
 
     PROVIDER_NAME = "claude_code"
     DISPLAY_NAME = "Claude Code"
+    MAX_DIFF_CHARS = 200_000
+
+    # 不应传递给 CLI 子进程的已知凭证环境变量
+    _SENSITIVE_ENV_KEYS = frozenset(
+        {
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "AWS_SESSION_TOKEN",
+            "GITHUB_TOKEN",
+            "GITLAB_TOKEN",
+            "NPM_TOKEN",
+            "PYPI_TOKEN",
+            "GIT_CREDENTIALS",
+            "NETRC",
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+        }
+    )
 
     def __init__(self, cli_path: str = "claude", debug: bool = False):
         """初始化实例状态。
@@ -155,6 +173,13 @@ JSON结构示例：
         """
         self._clear_last_error()
         try:
+            # P5: 截断过长 diff，防止内存溢出和 token 炸弹
+            if len(diff_content) > self.MAX_DIFF_CHARS:
+                diff_content = (
+                    diff_content[: self.MAX_DIFF_CHARS]
+                    + "\n\n... (diff 内容过长，已截断)"
+                )
+
             prompt = self._build_review_prompt(focus_areas, pr_info, custom_prompt)
 
             logger.info(f"开始使用 {self.DISPLAY_NAME} 分析PR，仓库路径: {repo_path}")
@@ -163,12 +188,19 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
-            # 启动 usage 捕获代理
-            proxy = UsageCapturingProxy(api_url or "https://api.anthropic.com")
-            port = await proxy.start()
+            # P3: 代理启动失败时降级为直连 API
+            proxy: Optional[UsageCapturingProxy] = None
+            effective_base_url = api_url or "https://api.anthropic.com"
+            try:
+                proxy = UsageCapturingProxy(effective_base_url)
+                port = await proxy.start()
+                effective_base_url = f"http://127.0.0.1:{port}"
+            except Exception as proxy_exc:
+                logger.warning("usage 捕获代理启动失败，将直连 API: %s", proxy_exc)
+                proxy = None
 
             try:
-                custom_env = self._build_env(f"http://127.0.0.1:{port}", api_key, model)
+                custom_env = self._build_env(effective_base_url, api_key, model)
 
                 process = await asyncio.create_subprocess_exec(
                     self.cli_path,
@@ -183,11 +215,20 @@ JSON结构示例：
                     env=custom_env,
                 )
 
-                stdout, stderr = await process.communicate(
-                    input=diff_content.encode("utf-8")
-                )
+                # P1: 添加超时，防止 CLI 挂起导致请求永久阻塞
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        process.communicate(input=diff_content.encode("utf-8")),
+                        timeout=300.0,
+                    )
+                except asyncio.TimeoutError:
+                    process.kill()
+                    await process.wait()
+                    self._set_last_error(f"{self.DISPLAY_NAME} 执行超时（300s）")
+                    return None
             finally:
-                await proxy.stop()
+                if proxy is not None:
+                    await proxy.stop()
 
             if process.returncode != 0:
                 stderr_text = stderr.decode(errors="ignore").strip()
@@ -220,7 +261,7 @@ JSON结构示例：
                 return None
 
             # 写入代理捕获的真实 token 用量
-            if proxy.usage:
+            if proxy is not None and proxy.usage:
                 parsed_result.usage_metadata.update(proxy.usage)
 
             self._set_model_metadata(parsed_result, model)
@@ -261,6 +302,13 @@ JSON结构示例：
         """
         self._clear_last_error()
         try:
+            # P5: 截断过长 diff，防止内存溢出和 token 炸弹
+            if len(diff_content) > self.MAX_DIFF_CHARS:
+                diff_content = (
+                    diff_content[: self.MAX_DIFF_CHARS]
+                    + "\n\n... (diff 内容过长，已截断)"
+                )
+
             prompt = self._build_review_prompt(focus_areas, pr_info, custom_prompt)
 
             logger.info(f"开始使用 {self.DISPLAY_NAME} 分析PR（简单模式）")
@@ -269,12 +317,19 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt - Simple Mode]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
-            # 启动 usage 捕获代理
-            proxy = UsageCapturingProxy(api_url or "https://api.anthropic.com")
-            port = await proxy.start()
+            # P3: 代理启动失败时降级为直连 API
+            proxy: Optional[UsageCapturingProxy] = None
+            effective_base_url = api_url or "https://api.anthropic.com"
+            try:
+                proxy = UsageCapturingProxy(effective_base_url)
+                port = await proxy.start()
+                effective_base_url = f"http://127.0.0.1:{port}"
+            except Exception as proxy_exc:
+                logger.warning("usage 捕获代理启动失败，将直连 API: %s", proxy_exc)
+                proxy = None
 
             try:
-                custom_env = self._build_env(f"http://127.0.0.1:{port}", api_key, model)
+                custom_env = self._build_env(effective_base_url, api_key, model)
 
                 process = await asyncio.create_subprocess_exec(
                     self.cli_path,
@@ -288,11 +343,20 @@ JSON结构示例：
                     env=custom_env,
                 )
 
-                stdout, stderr = await process.communicate(
-                    input=diff_content.encode("utf-8")
-                )
+                # P1: 添加超时，防止 CLI 挂起导致请求永久阻塞
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        process.communicate(input=diff_content.encode("utf-8")),
+                        timeout=300.0,
+                    )
+                except asyncio.TimeoutError:
+                    process.kill()
+                    await process.wait()
+                    self._set_last_error(f"{self.DISPLAY_NAME} 执行超时（300s）（简单模式）")
+                    return None
             finally:
-                await proxy.stop()
+                if proxy is not None:
+                    await proxy.stop()
 
             if process.returncode != 0:
                 stderr_text = stderr.decode(errors="ignore").strip()
@@ -328,7 +392,7 @@ JSON结构示例：
                 return None
 
             # 写入代理捕获的真实 token 用量
-            if proxy.usage:
+            if proxy is not None and proxy.usage:
                 parsed_result.usage_metadata.update(proxy.usage)
 
             self._set_model_metadata(parsed_result, model)
@@ -357,7 +421,12 @@ JSON结构示例：
         Returns:
             字典结果。
         """
-        custom_env = os.environ.copy()
+        # 从父进程环境变量中去除已知凭证 key，避免泄露给 CLI 子进程
+        custom_env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in self._SENSITIVE_ENV_KEYS
+        }
         if api_url:
             custom_env["ANTHROPIC_BASE_URL"] = api_url
             if self.debug:
@@ -492,22 +561,45 @@ JSON结构示例：
         except json.JSONDecodeError:
             pass
 
-        code_block_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.S)
-        if code_block_match:
+        # 尝试从 markdown 代码块中提取 JSON
+        for code_block_match in re.finditer(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.S):
             candidate = code_block_match.group(1)
             try:
                 return json.loads(candidate)
             except json.JSONDecodeError:
-                logger.debug("JSON解析失败（code block）", exc_info=True)
+                continue
+        logger.debug("JSON解析失败（code block）")
 
-        first_brace = text.find("{")
-        last_brace = text.rfind("}")
-        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-            candidate = text[first_brace : last_brace + 1]
-            try:
-                return json.loads(candidate)
-            except json.JSONDecodeError:
-                logger.debug("JSON解析失败（brace scan）", exc_info=True)
+        # 使用深度追踪找到最外层完整 JSON 对象，避免 find/rfind 的括号错位问题
+        start = text.find("{")
+        if start != -1:
+            depth = 0
+            in_string = False
+            escape_next = False
+            for i in range(start, len(text)):
+                ch = text[i]
+                if escape_next:
+                    escape_next = False
+                    continue
+                if ch == "\\" and in_string:
+                    escape_next = True
+                    continue
+                if ch == '"':
+                    in_string = not in_string
+                    continue
+                if in_string:
+                    continue
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        candidate = text[start : i + 1]
+                        try:
+                            return json.loads(candidate)
+                        except json.JSONDecodeError:
+                            logger.debug("JSON解析失败（brace scan）")
+                        break
 
         return None
 

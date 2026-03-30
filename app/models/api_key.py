@@ -83,7 +83,7 @@ class ApiKey(Base, TimestampMixin):
     @provider_auth_token.setter
     def provider_auth_token(self, value: str) -> None:
         """设置 Provider Auth Token（自动加密）"""
-        self._provider_auth_token = encryption_service.encrypt(value)
+        self._provider_auth_token = encryption_service.encrypt(value) if value else value
 
     @property
     def quota_remaining_daily(self) -> Optional[int]:
