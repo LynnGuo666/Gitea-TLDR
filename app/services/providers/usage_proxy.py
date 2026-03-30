@@ -16,6 +16,9 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+_SSE_IDLE_LOG_INTERVAL_SECONDS = 15.0
+_SSE_CHUNK_LOG_EVERY = 20
+
 _HOP_BY_HOP = frozenset(
     h.lower()
     for h in [
@@ -102,7 +105,7 @@ class UsageCapturingProxy:
         self._connection_counter += 1
         conn_id = self._connection_counter
         peer = writer.get_extra_info("peername")
-        close_reason = "client_closed"
+        transport_end = "client_disconnected"
         request_count = 0
 
         try:
@@ -154,19 +157,19 @@ class UsageCapturingProxy:
                         request_count=request_count,
                     )
                 if should_close:
-                    close_reason = "response_close"
+                    transport_end = "response_complete"
                     break
         except Exception:
-            close_reason = "proxy_error"
+            transport_end = "proxy_error"
             logger.warning("Proxy connection error", exc_info=self._debug)
         finally:
             if self._debug:
                 logger.info(
-                    "Usage proxy conn=%s peer=%s requests=%s closed=%s",
+                    "Usage proxy conn=%s peer=%s requests=%s transport_end=%s",
                     conn_id,
                     peer,
                     request_count,
-                    close_reason,
+                    transport_end,
                 )
             try:
                 writer.close()
@@ -225,7 +228,11 @@ class UsageCapturingProxy:
         """原样透传 SSE 字节流，同时旁路解析 usage。"""
         client = self._require_client()
         response_bytes = 0
+        chunk_count = 0
+        idle_log_count = 0
         parser_buffer = bytearray()
+        loop = asyncio.get_running_loop()
+        last_chunk_at = loop.time()
 
         try:
             async with client.stream(method, url, headers=headers, content=body) as resp:
@@ -235,11 +242,64 @@ class UsageCapturingProxy:
                     resp.headers,
                     close_connection=True,
                 )
-                async for chunk in resp.aiter_raw():
+                if self._debug:
+                    logger.info(
+                        "Usage proxy conn=%s req=%s SSE streaming started status=%s",
+                        conn_id,
+                        request_count,
+                        resp.status_code,
+                    )
+
+                if not self._debug:
+                    async for chunk in resp.aiter_raw():
+                        response_bytes += len(chunk)
+                        writer.write(chunk)
+                        await writer.drain()
+                        self._consume_sse_bytes(parser_buffer, chunk)
+                    return True
+
+                chunk_iter = resp.aiter_raw().__aiter__()
+                while True:
+                    try:
+                        chunk = await asyncio.wait_for(
+                            chunk_iter.__anext__(),
+                            timeout=_SSE_IDLE_LOG_INTERVAL_SECONDS,
+                        )
+                    except asyncio.TimeoutError:
+                        idle_log_count += 1
+                        logger.info(
+                            "Usage proxy conn=%s req=%s SSE idle=%ss chunks=%s bytes=%s",
+                            conn_id,
+                            request_count,
+                            int(_SSE_IDLE_LOG_INTERVAL_SECONDS * idle_log_count),
+                            chunk_count,
+                            response_bytes,
+                        )
+                        continue
+                    except StopAsyncIteration:
+                        break
+
+                    chunk_count += 1
+                    now = loop.time()
+                    gap_ms = int((now - last_chunk_at) * 1000)
+                    last_chunk_at = now
                     response_bytes += len(chunk)
                     writer.write(chunk)
                     await writer.drain()
                     self._consume_sse_bytes(parser_buffer, chunk)
+                    if (
+                        chunk_count == 1
+                        or chunk_count % _SSE_CHUNK_LOG_EVERY == 0
+                    ):
+                        logger.info(
+                            "Usage proxy conn=%s req=%s SSE chunk=%s chunk_bytes=%s total_bytes=%s gap_ms=%s",
+                            conn_id,
+                            request_count,
+                            chunk_count,
+                            len(chunk),
+                            response_bytes,
+                            gap_ms,
+                        )
         except Exception as exc:
             self.last_error = (
                 f"SSE 转发失败: {type(exc).__name__}: {exc}"

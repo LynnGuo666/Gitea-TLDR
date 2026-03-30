@@ -4,6 +4,18 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.22.4] - 2026-03-30
+
+### 优化 (Improved)
+
+- **SSE 诊断日志**: `UsageCapturingProxy` 补充 `SSE streaming started`、chunk 进度与 idle 心跳日志，便于判断上游是无响应、部分响应还是长流未结束
+- **连接结束语义**: 代理连接结束日志由 `closed=...` 调整为 `transport_end=...`，避免将单条连接关闭误解为整次 Claude 审查结束
+- **启动态可观测性**: 应用启动日志新增 Claude usage 代理开启状态与调试状态，方便快速确认当前实例是否走代理链路
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.22.4`
+
 ## [1.22.3] - 2026-03-30
 
 ### 修复 (Fixed)

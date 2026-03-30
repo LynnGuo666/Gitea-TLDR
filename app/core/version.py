@@ -2,12 +2,21 @@
 版本信息模块
 """
 
-__version__ = "1.22.3"
+__version__ = "1.22.4"
 __release_date__ = "2026-03-30"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.22.4": {
+        "date": "2026-03-30",
+        "changes": [
+            "优化：UsageCapturingProxy 补充 SSE started / chunk / idle 诊断日志，便于区分上游无响应、部分响应和长流未结束场景",
+            "优化：UsageCapturingProxy 连接结束日志改为 transport_end 语义，避免将单条代理连接关闭误解为整次 Claude 审查结束",
+            "优化：应用启动日志补充 Claude usage 代理开启状态与调试状态，方便确认当前实例是否在走代理链路",
+            "维护：同步更新后端与前端版本号到 1.22.4",
+        ],
+    },
     "1.22.3": {
         "date": "2026-03-30",
         "changes": [
