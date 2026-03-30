@@ -4,6 +4,18 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.22.2] - 2026-03-30
+
+### 修复 (Fixed)
+
+- **UsageCapturingProxy Header 大小写**: HTTP header key 统一转小写存储，修复 Claude Code CLI 发送小写 `content-length` 时 body 读成空、上游收到空 JSON 导致 400 `unexpected end of JSON input` 的问题
+- **Chunked Transfer Encoding 支持**: 新增 `_read_chunked_body` 方法，正确解码 `Transfer-Encoding: chunked` 请求体，不再丢失 body
+- **路径匹配含查询参数**: `is_messages` 判断改为 `path.split("?")[0]`，修复 `/v1/messages?beta=true` 不进入 usage 捕获分支的问题
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.22.2`
+
 ## [1.22.1] - 2026-03-30
 
 ### 安全 (Security)

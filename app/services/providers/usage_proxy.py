@@ -91,7 +91,7 @@ class UsageCapturingProxy:
 
             upstream_url = f"{self._real_api_url}{path}"
             upstream_headers = self._build_upstream_headers(headers)
-            is_messages = path.rstrip("/") == "/v1/messages"
+            is_messages = path.split("?")[0].rstrip("/") == "/v1/messages"
 
             async with httpx.AsyncClient(timeout=300.0) as client:
                 if is_messages:
@@ -217,14 +217,33 @@ class UsageCapturingProxy:
             decoded = line.decode(errors="replace").strip()
             if ":" in decoded:
                 key, _, value = decoded.partition(":")
-                headers[key.strip()] = value.strip()
+                # 统一小写存储，HTTP header 大小写不敏感
+                headers[key.strip().lower()] = value.strip()
 
-        content_length = int(headers.get("Content-Length", "0"))
         body = b""
-        if content_length > 0:
-            body = await reader.readexactly(content_length)
+        transfer_encoding = headers.get("transfer-encoding", "").lower()
+        if "chunked" in transfer_encoding:
+            body = await self._read_chunked_body(reader)
+        else:
+            content_length = int(headers.get("content-length", "0"))
+            if content_length > 0:
+                body = await reader.readexactly(content_length)
 
         return method, path, headers, body
+
+    async def _read_chunked_body(self, reader: asyncio.StreamReader) -> bytes:
+        """解码 chunked transfer encoding 请求体。"""
+        body = b""
+        while True:
+            size_line = await reader.readline()
+            chunk_size = int(size_line.strip().split(b";")[0], 16)
+            if chunk_size == 0:
+                await reader.readline()  # 消耗末尾 CRLF
+                break
+            chunk = await reader.readexactly(chunk_size)
+            await reader.readline()  # 消耗 chunk 后的 CRLF
+            body += chunk
+        return body
 
     def _build_upstream_headers(self, headers: Dict[str, str]) -> Dict[str, str]:
         """构建转发到上游的请求头，过滤 hop-by-hop 头。"""

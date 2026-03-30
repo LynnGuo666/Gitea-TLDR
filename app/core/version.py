@@ -2,12 +2,21 @@
 版本信息模块
 """
 
-__version__ = "1.22.1"
+__version__ = "1.22.2"
 __release_date__ = "2026-03-30"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.22.2": {
+        "date": "2026-03-30",
+        "changes": [
+            "修复：UsageCapturingProxy HTTP 请求解析大小写不敏感——header key 统一转小写存储，修复 Claude Code CLI 发送小写 content-length 时 body 读成空导致上游 400 unexpected end of JSON input",
+            "修复：UsageCapturingProxy 支持 Transfer-Encoding: chunked 请求体解码，新增 _read_chunked_body，兼容 chunked 编码的请求",
+            "修复：is_messages 路径匹配改用 path.split('?')[0]，修复 /v1/messages?beta=true 不触发 usage 捕获分支的问题",
+            "维护：同步更新前后端版本号到 1.22.2",
+        ],
+    },
     "1.22.1": {
         "date": "2026-03-30",
         "changes": [
