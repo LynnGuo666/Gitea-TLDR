@@ -141,6 +141,12 @@ WEBHOOK_SECRET=your_webhook_secret_here
 # Claude Code CLI 路径（默认: claude）
 CLAUDE_CODE_PATH=claude
 
+# 是否启用 Claude usage 捕获代理（默认: true，需旁路排障时可设为 false）
+CLAUDE_USAGE_PROXY_ENABLED=true
+
+# 是否输出 Claude usage 代理诊断日志（默认: false）
+CLAUDE_USAGE_PROXY_DEBUG=false
+
 # Codex CLI 路径（默认: codex）
 CODEX_CLI_PATH=codex
 

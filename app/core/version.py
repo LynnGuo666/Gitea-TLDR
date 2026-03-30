@@ -2,12 +2,23 @@
 版本信息模块
 """
 
-__version__ = "1.22.2"
+__version__ = "1.22.3"
 __release_date__ = "2026-03-30"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.22.3": {
+        "date": "2026-03-30",
+        "changes": [
+            "修复：重构 UsageCapturingProxy 的响应转发语义，非流式响应补齐 Content-Length，SSE 改为原始字节透传，降低 Claude CLI 在代理路径下卡死超时的概率",
+            "修复：UsageCapturingProxy 支持同一连接上的连续非流式请求，并为代理异常补充 last_error 诊断信息",
+            "优化：Claude provider 增加 CLAUDE_USAGE_PROXY_ENABLED / CLAUDE_USAGE_PROXY_DEBUG 配置接入，保留代理观察能力并支持按需旁路",
+            "优化：审查记录页对进行中的审查启用自动刷新，并明确展示“审查进行中”的等待提示",
+            "测试：新增 UsageCapturingProxy 回归测试，覆盖多请求连接复用、SSE 透传与 usage 捕获开关",
+            "维护：同步更新后端与前端版本号到 1.22.3",
+        ],
+    },
     "1.22.2": {
         "date": "2026-03-30",
         "changes": [

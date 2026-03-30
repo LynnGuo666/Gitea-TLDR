@@ -127,6 +127,11 @@ def create_app() -> FastAPI:
         logger.info(
             f"审查引擎 ({settings.default_provider}) CLI路径: {settings.claude_code_path}"
         )
+        logger.info(
+            "Claude usage 代理: %s（调试日志: %s）",
+            "开启" if settings.claude_usage_proxy_enabled else "关闭",
+            "开启" if settings.claude_usage_proxy_debug else "关闭",
+        )
         logger.info(f"可用引擎: {context.review_engine.registry.list_providers()}")
         logger.info(f"Debug模式: {'开启' if settings.debug else '关闭'}")
 

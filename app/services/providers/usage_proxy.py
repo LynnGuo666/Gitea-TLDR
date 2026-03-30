@@ -40,12 +40,16 @@ class UsageCapturingProxy:
     usage 字典在代理处理请求后被填充，与 ReviewProvider 共享引用。
     """
 
-    def __init__(self, real_api_url: str) -> None:
+    def __init__(self, real_api_url: str, debug: bool = False) -> None:
         self._real_api_url = (real_api_url or "https://api.anthropic.com").rstrip("/")
+        self._debug = debug
         self.usage: Dict[str, Any] = {}
+        self.last_error: Optional[str] = None
         self._server: Optional[asyncio.AbstractServer] = None
         self._port: int = 0
         self._serve_task: Optional[asyncio.Task] = None
+        self._client: Optional[httpx.AsyncClient] = None
+        self._connection_counter: int = 0
 
     @property
     def port(self) -> int:
@@ -53,6 +57,14 @@ class UsageCapturingProxy:
 
     async def start(self) -> int:
         """启动代理，返回监听端口。"""
+        self.last_error = None
+        self._client = httpx.AsyncClient(
+            timeout=httpx.Timeout(300.0, connect=30.0),
+            http1=True,
+            http2=False,
+            trust_env=False,
+            follow_redirects=False,
+        )
         self._server = await asyncio.start_server(
             self._handle_connection, "127.0.0.1", 0
         )
@@ -74,6 +86,9 @@ class UsageCapturingProxy:
             except asyncio.CancelledError:
                 pass
             self._serve_task = None
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
         logger.debug("UsageCapturingProxy closed")
 
     # ------------------------------------------------------------------
@@ -83,28 +98,76 @@ class UsageCapturingProxy:
     async def _handle_connection(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
-        """处理单个 TCP 连接（一个 HTTP 请求/响应周期）。"""
+        """处理单个 TCP 连接，必要时支持同连接多次非流式请求。"""
+        self._connection_counter += 1
+        conn_id = self._connection_counter
+        peer = writer.get_extra_info("peername")
+        close_reason = "client_closed"
+        request_count = 0
+
         try:
-            method, path, headers, body = await self._read_http_request(reader)
-            if not method or not path:
-                return
+            while True:
+                method, path, version, headers, body = await self._read_http_request(
+                    reader
+                )
+                if not method or not path:
+                    break
 
-            upstream_url = f"{self._real_api_url}{path}"
-            upstream_headers = self._build_upstream_headers(headers)
-            is_messages = path.split("?")[0].rstrip("/") == "/v1/messages"
+                request_count += 1
+                upstream_url = f"{self._real_api_url}{path}"
+                upstream_headers = self._build_upstream_headers(headers)
+                keep_alive = self._should_keep_alive(version, headers)
+                is_messages = path.split("?")[0].rstrip("/") == "/v1/messages"
 
-            async with httpx.AsyncClient(timeout=300.0) as client:
+                if self._debug:
+                    logger.info(
+                        "Usage proxy conn=%s req=%s peer=%s %s %s stream=%s bytes=%s",
+                        conn_id,
+                        request_count,
+                        peer,
+                        method,
+                        path,
+                        self._detect_streaming(body) if is_messages else False,
+                        len(body),
+                    )
+
                 if is_messages:
-                    await self._proxy_messages(
-                        client, method, upstream_url, upstream_headers, body, writer
+                    should_close = await self._proxy_messages(
+                        method=method,
+                        url=upstream_url,
+                        headers=upstream_headers,
+                        body=body,
+                        writer=writer,
+                        keep_alive=keep_alive,
+                        conn_id=conn_id,
+                        request_count=request_count,
                     )
                 else:
-                    await self._proxy_passthrough(
-                        client, method, upstream_url, upstream_headers, body, writer
+                    should_close = await self._proxy_passthrough(
+                        method=method,
+                        url=upstream_url,
+                        headers=upstream_headers,
+                        body=body,
+                        writer=writer,
+                        keep_alive=keep_alive,
+                        conn_id=conn_id,
+                        request_count=request_count,
                     )
+                if should_close:
+                    close_reason = "response_close"
+                    break
         except Exception:
-            logger.debug("Proxy connection error", exc_info=True)
+            close_reason = "proxy_error"
+            logger.warning("Proxy connection error", exc_info=self._debug)
         finally:
+            if self._debug:
+                logger.info(
+                    "Usage proxy conn=%s peer=%s requests=%s closed=%s",
+                    conn_id,
+                    peer,
+                    request_count,
+                    close_reason,
+                )
             try:
                 writer.close()
                 await writer.wait_closed()
@@ -117,61 +180,128 @@ class UsageCapturingProxy:
 
     async def _proxy_messages(
         self,
-        client: httpx.AsyncClient,
         method: str,
         url: str,
         headers: Dict[str, str],
         body: bytes,
         writer: asyncio.StreamWriter,
-    ) -> None:
+        keep_alive: bool,
+        conn_id: int,
+        request_count: int,
+    ) -> bool:
         is_streaming = self._detect_streaming(body)
         if is_streaming:
-            await self._proxy_sse(client, method, url, headers, body, writer)
-        else:
-            await self._proxy_non_streaming(client, method, url, headers, body, writer)
+            return await self._proxy_sse(
+                method=method,
+                url=url,
+                headers=headers,
+                body=body,
+                writer=writer,
+                conn_id=conn_id,
+                request_count=request_count,
+            )
+        return await self._proxy_non_streaming(
+            method=method,
+            url=url,
+            headers=headers,
+            body=body,
+            writer=writer,
+            keep_alive=keep_alive,
+            conn_id=conn_id,
+            request_count=request_count,
+            capture_usage=True,
+        )
 
     async def _proxy_sse(
         self,
-        client: httpx.AsyncClient,
         method: str,
         url: str,
         headers: Dict[str, str],
         body: bytes,
         writer: asyncio.StreamWriter,
-    ) -> None:
-        """逐行转发 SSE 流，边转发边解析 usage 事件（零延迟）。"""
-        async with client.stream(method, url, headers=headers, content=body) as resp:
-            self._write_status_and_headers(writer, resp.status_code, resp.headers)
-            async for line in resp.aiter_lines():
-                # 先转发，再解析——不阻塞数据流
-                writer.write(f"{line}\r\n".encode())
-                await writer.drain()
-                if line.startswith("data: "):
-                    self._extract_usage_from_sse(line[6:])
+        conn_id: int,
+        request_count: int,
+    ) -> bool:
+        """原样透传 SSE 字节流，同时旁路解析 usage。"""
+        client = self._require_client()
+        response_bytes = 0
+        parser_buffer = bytearray()
+
+        try:
+            async with client.stream(method, url, headers=headers, content=body) as resp:
+                self._write_status_and_headers(
+                    writer,
+                    resp.status_code,
+                    resp.headers,
+                    close_connection=True,
+                )
+                async for chunk in resp.aiter_raw():
+                    response_bytes += len(chunk)
+                    writer.write(chunk)
+                    await writer.drain()
+                    self._consume_sse_bytes(parser_buffer, chunk)
+        except Exception as exc:
+            self.last_error = (
+                f"SSE 转发失败: {type(exc).__name__}: {exc}"
+            )
+            raise
+
+        if self._debug:
+            logger.info(
+                "Usage proxy conn=%s req=%s SSE completed bytes=%s usage=%s",
+                conn_id,
+                request_count,
+                response_bytes,
+                self.usage,
+            )
+        return True
 
     async def _proxy_non_streaming(
         self,
-        client: httpx.AsyncClient,
         method: str,
         url: str,
         headers: Dict[str, str],
         body: bytes,
         writer: asyncio.StreamWriter,
-    ) -> None:
+        keep_alive: bool,
+        conn_id: int,
+        request_count: int,
+        capture_usage: bool = False,
+    ) -> bool:
         """转发非流式响应，从完整 JSON 中提取 usage。"""
-        resp = await client.request(method, url, headers=headers, content=body)
+        client = self._require_client()
         try:
-            usage = resp.json().get("usage")
-            if isinstance(usage, dict):
-                if "input_tokens" in usage:
-                    self.usage["input_tokens"] = usage["input_tokens"]
-                if "output_tokens" in usage:
-                    self.usage["output_tokens"] = usage["output_tokens"]
-        except (json.JSONDecodeError, ValueError, AttributeError):
-            pass
-        self._write_status_and_headers(writer, resp.status_code, resp.headers)
-        writer.write(resp.content)
+            resp = await client.request(method, url, headers=headers, content=body)
+        except Exception as exc:
+            self.last_error = (
+                f"上游请求失败: {type(exc).__name__}: {exc}"
+            )
+            raise
+
+        content = resp.content
+        if capture_usage:
+            self._extract_usage_from_json_body(content)
+
+        self._write_status_and_headers(
+            writer,
+            resp.status_code,
+            resp.headers,
+            content_length=len(content),
+            close_connection=not keep_alive,
+        )
+        writer.write(content)
         await writer.drain()
+
+        if self._debug:
+            logger.info(
+                "Usage proxy conn=%s req=%s status=%s bytes=%s keep_alive=%s",
+                conn_id,
+                request_count,
+                resp.status_code,
+                len(content),
+                keep_alive,
+            )
+        return not keep_alive
 
     # ------------------------------------------------------------------
     # 通用透传代理
@@ -179,18 +309,27 @@ class UsageCapturingProxy:
 
     async def _proxy_passthrough(
         self,
-        client: httpx.AsyncClient,
         method: str,
         url: str,
         headers: Dict[str, str],
         body: bytes,
         writer: asyncio.StreamWriter,
-    ) -> None:
+        keep_alive: bool,
+        conn_id: int,
+        request_count: int,
+    ) -> bool:
         """对非 messages 端点做纯透传。"""
-        resp = await client.request(method, url, headers=headers, content=body)
-        self._write_status_and_headers(writer, resp.status_code, resp.headers)
-        writer.write(resp.content)
-        await writer.drain()
+        return await self._proxy_non_streaming(
+            method=method,
+            url=url,
+            headers=headers,
+            body=body,
+            writer=writer,
+            keep_alive=keep_alive,
+            conn_id=conn_id,
+            request_count=request_count,
+            capture_usage=False,
+        )
 
     # ------------------------------------------------------------------
     # HTTP 解析辅助
@@ -198,16 +337,16 @@ class UsageCapturingProxy:
 
     async def _read_http_request(
         self, reader: asyncio.StreamReader
-    ) -> Tuple[str, str, Dict[str, str], bytes]:
+    ) -> Tuple[str, str, str, Dict[str, str], bytes]:
         """从 TCP 流中读取一个完整的 HTTP/1.1 请求。"""
         request_line = await reader.readline()
         if not request_line:
-            return "", "", {}, b""
+            return "", "", "", {}, b""
 
         parts = request_line.decode(errors="replace").strip().split(" ", 2)
-        if len(parts) < 2:
-            return "", "", {}, b""
-        method, path = parts[0], parts[1]
+        if len(parts) < 3:
+            return "", "", "", {}, b""
+        method, path, version = parts[0], parts[1], parts[2]
 
         headers: Dict[str, str] = {}
         while True:
@@ -229,7 +368,7 @@ class UsageCapturingProxy:
             if content_length > 0:
                 body = await reader.readexactly(content_length)
 
-        return method, path, headers, body
+        return method, path, version, headers, body
 
     async def _read_chunked_body(self, reader: asyncio.StreamReader) -> bytes:
         """解码 chunked transfer encoding 请求体。"""
@@ -249,6 +388,7 @@ class UsageCapturingProxy:
         """构建转发到上游的请求头，过滤 hop-by-hop 头。"""
         result = {k: v for k, v in headers.items() if k.lower() not in _HOP_BY_HOP}
         result["host"] = urlparse(self._real_api_url).netloc
+        result.setdefault("accept-encoding", "identity")
         return result
 
     @staticmethod
@@ -256,6 +396,8 @@ class UsageCapturingProxy:
         writer: asyncio.StreamWriter,
         status_code: int,
         headers: httpx.Headers,
+        content_length: Optional[int] = None,
+        close_connection: bool = False,
     ) -> None:
         """将 HTTP 响应状态行和头写入客户端 socket。"""
         reason = httpx.codes.get_reason_phrase(status_code)
@@ -263,6 +405,11 @@ class UsageCapturingProxy:
         for name, value in headers.items():
             if name.lower() not in _HOP_BY_HOP:
                 writer.write(f"{name}: {value}\r\n".encode())
+        if content_length is not None:
+            writer.write(f"Content-Length: {content_length}\r\n".encode())
+        writer.write(
+            f"Connection: {'close' if close_connection else 'keep-alive'}\r\n".encode()
+        )
         writer.write(b"\r\n")
 
     # ------------------------------------------------------------------
@@ -303,3 +450,45 @@ class UsageCapturingProxy:
                 self.usage["output_tokens"] = (
                     self.usage.get("output_tokens", 0) + usage["output_tokens"]
                 )
+
+    def _extract_usage_from_json_body(self, payload: bytes) -> None:
+        """从非流式 JSON 响应中提取 usage。"""
+        try:
+            data = json.loads(payload.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+            return
+
+        usage = data.get("usage")
+        if not isinstance(usage, dict):
+            return
+        if "input_tokens" in usage:
+            self.usage["input_tokens"] = usage["input_tokens"]
+        if "output_tokens" in usage:
+            self.usage["output_tokens"] = usage["output_tokens"]
+
+    def _consume_sse_bytes(self, buffer: bytearray, chunk: bytes) -> None:
+        """旁路解析 SSE，不改变实际转发出去的字节流。"""
+        buffer.extend(chunk)
+        while True:
+            newline_index = buffer.find(b"\n")
+            if newline_index == -1:
+                break
+            raw_line = bytes(buffer[:newline_index])
+            del buffer[: newline_index + 1]
+            line = raw_line.rstrip(b"\r")
+            if line.startswith(b"data: "):
+                self._extract_usage_from_sse(line[6:].decode("utf-8", errors="ignore"))
+
+    @staticmethod
+    def _should_keep_alive(version: str, headers: Dict[str, str]) -> bool:
+        """根据请求版本与 Connection 头判断是否保持连接。"""
+        connection = headers.get("connection", "").lower()
+        if version == "HTTP/1.0":
+            return "keep-alive" in connection
+        return "close" not in connection
+
+    def _require_client(self) -> httpx.AsyncClient:
+        """确保代理客户端已经初始化。"""
+        if self._client is None:
+            raise RuntimeError("UsageCapturingProxy client is not initialized")
+        return self._client

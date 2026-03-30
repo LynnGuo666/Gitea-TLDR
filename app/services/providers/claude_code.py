@@ -8,8 +8,9 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
+from app.core import settings
 from .base import InlineComment, ReviewProvider, ReviewResult
 from .usage_proxy import UsageCapturingProxy
 
@@ -143,6 +144,48 @@ JSON结构示例：
             prompt += f"\n\n**额外审查要求：**\n{custom_prompt.strip()}"
         return prompt
 
+    async def _prepare_usage_proxy(
+        self, api_url: Optional[str]
+    ) -> Tuple[Optional[UsageCapturingProxy], str]:
+        """按配置决定是否启用 usage 代理，并返回有效 base URL。"""
+        effective_base_url = api_url or "https://api.anthropic.com"
+
+        if not settings.claude_usage_proxy_enabled:
+            if self.debug or settings.claude_usage_proxy_debug:
+                logger.info(
+                    "Claude usage 代理已禁用，直连上游: %s", effective_base_url
+                )
+            return None, effective_base_url
+
+        proxy = UsageCapturingProxy(
+            effective_base_url,
+            debug=(self.debug or settings.claude_usage_proxy_debug),
+        )
+        try:
+            port = await proxy.start()
+        except Exception as proxy_exc:
+            logger.warning("usage 捕获代理启动失败，将直连 API: %s", proxy_exc)
+            await proxy.stop()
+            return None, effective_base_url
+
+        proxy_url = f"http://127.0.0.1:{port}"
+        if self.debug or settings.claude_usage_proxy_debug:
+            logger.info("Claude usage 代理已启用: %s -> %s", proxy_url, effective_base_url)
+        return proxy, proxy_url
+
+    def _build_timeout_error(
+        self, proxy: Optional[UsageCapturingProxy], simple_mode: bool = False
+    ) -> str:
+        """构造包含代理诊断信息的超时消息。"""
+        message = (
+            f"{self.DISPLAY_NAME} 执行超时（300s）（简单模式）"
+            if simple_mode
+            else f"{self.DISPLAY_NAME} 执行超时（300s）"
+        )
+        if proxy is not None and proxy.last_error:
+            message = f"{message}；代理异常：{proxy.last_error}"
+        return message
+
     async def analyze_pr(
         self,
         repo_path: Path,
@@ -188,16 +231,7 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
-            # P3: 代理启动失败时降级为直连 API
-            proxy: Optional[UsageCapturingProxy] = None
-            effective_base_url = api_url or "https://api.anthropic.com"
-            try:
-                proxy = UsageCapturingProxy(effective_base_url)
-                port = await proxy.start()
-                effective_base_url = f"http://127.0.0.1:{port}"
-            except Exception as proxy_exc:
-                logger.warning("usage 捕获代理启动失败，将直连 API: %s", proxy_exc)
-                proxy = None
+            proxy, effective_base_url = await self._prepare_usage_proxy(api_url)
 
             try:
                 custom_env = self._build_env(effective_base_url, api_key, model)
@@ -224,7 +258,7 @@ JSON结构示例：
                 except asyncio.TimeoutError:
                     process.kill()
                     await process.wait()
-                    self._set_last_error(f"{self.DISPLAY_NAME} 执行超时（300s）")
+                    self._set_last_error(self._build_timeout_error(proxy))
                     return None
             finally:
                 if proxy is not None:
@@ -317,16 +351,7 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt - Simple Mode]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
-            # P3: 代理启动失败时降级为直连 API
-            proxy: Optional[UsageCapturingProxy] = None
-            effective_base_url = api_url or "https://api.anthropic.com"
-            try:
-                proxy = UsageCapturingProxy(effective_base_url)
-                port = await proxy.start()
-                effective_base_url = f"http://127.0.0.1:{port}"
-            except Exception as proxy_exc:
-                logger.warning("usage 捕获代理启动失败，将直连 API: %s", proxy_exc)
-                proxy = None
+            proxy, effective_base_url = await self._prepare_usage_proxy(api_url)
 
             try:
                 custom_env = self._build_env(effective_base_url, api_key, model)
@@ -352,7 +377,9 @@ JSON结构示例：
                 except asyncio.TimeoutError:
                     process.kill()
                     await process.wait()
-                    self._set_last_error(f"{self.DISPLAY_NAME} 执行超时（300s）（简单模式）")
+                    self._set_last_error(
+                        self._build_timeout_error(proxy, simple_mode=True)
+                    )
                     return None
             finally:
                 if proxy is not None:

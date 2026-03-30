@@ -29,6 +29,12 @@ class Settings(BaseSettings):
 
     # Claude Code配置
     claude_code_path: str = Field("claude", description="Claude Code CLI路径")
+    claude_usage_proxy_enabled: bool = Field(
+        True, description="是否启用 Claude usage 捕获代理"
+    )
+    claude_usage_proxy_debug: bool = Field(
+        False, description="是否输出 Claude usage 代理诊断日志"
+    )
 
     # Codex CLI配置
     codex_cli_path: str = Field("codex", description="Codex CLI路径")

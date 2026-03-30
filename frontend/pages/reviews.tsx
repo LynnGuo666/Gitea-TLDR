@@ -8,6 +8,8 @@ import { RefreshCw, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, XCircle, 
 import PageHeader from '../components/PageHeader';
 import { apiFetch } from '../lib/api';
 
+const RUNNING_REVIEWS_POLL_INTERVAL_MS = 8000;
+
 type ReviewItem = {
   id: number;
   repository_id: number;
@@ -95,9 +97,12 @@ export default function ReviewsPage() {
   const [detailsCache, setDetailsCache] = useState<Record<number, ReviewDetail>>({});
   const [loadingDetailId, setLoadingDetailId] = useState<number | null>(null);
 
-  const fetchReviews = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchReviews = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = Boolean(options?.silent);
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       let url = '/api/my/reviews?limit=50&offset=0';
       if (filter === 'success') url += '&success=true';
@@ -109,16 +114,74 @@ export default function ReviewsPage() {
       }
       const data = await res.json() as ReviewsResponse;
       setReviews(data.reviews);
+      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '获取审查记录失败');
+      if (!silent) {
+        setError(err instanceof Error ? err.message : '获取审查记录失败');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [filter]);
 
   useEffect(() => {
     fetchReviews();
   }, [fetchReviews]);
+
+  const fetchReviewDetail = useCallback(async (id: number, options?: { silent?: boolean }) => {
+    const silent = Boolean(options?.silent);
+    if (!silent) {
+      setLoadingDetailId(id);
+    }
+
+    try {
+      const res = await apiFetch(`/api/my/reviews/${id}`);
+      if (!res.ok) {
+        throw new Error('Failed to fetch detail');
+      }
+      const detail = await res.json() as ReviewDetail;
+      setDetailsCache(prev => ({ ...prev, [id]: detail }));
+    } catch (err) {
+      console.error('Failed to fetch review detail', err);
+    } finally {
+      if (!silent) {
+        setLoadingDetailId(null);
+      }
+    }
+  }, []);
+
+  const hasRunningReviews = reviews.some((review) => review.overall_success === null);
+
+  useEffect(() => {
+    if (!hasRunningReviews) return;
+    const timer = window.setInterval(() => {
+      void fetchReviews({ silent: true });
+    }, RUNNING_REVIEWS_POLL_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [hasRunningReviews, fetchReviews]);
+
+  const expandedReview = expandedId === null
+    ? null
+    : reviews.find((review) => review.id === expandedId) ?? null;
+
+  useEffect(() => {
+    if (expandedId === null) return;
+    if (expandedReview?.overall_success !== null) return;
+    const timer = window.setInterval(() => {
+      void fetchReviewDetail(expandedId, { silent: true });
+    }, RUNNING_REVIEWS_POLL_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [expandedId, expandedReview?.overall_success, fetchReviewDetail]);
+
+  useEffect(() => {
+    if (expandedId === null) return;
+    if (!expandedReview || expandedReview.overall_success === null) return;
+    const cachedDetail = detailsCache[expandedId];
+    if (cachedDetail && cachedDetail.overall_success !== null) return;
+    void fetchReviewDetail(expandedId, { silent: true });
+  }, [expandedId, expandedReview, detailsCache, fetchReviewDetail]);
 
   const toggleExpand = async (id: number) => {
     if (expandedId === id) {
@@ -130,19 +193,7 @@ export default function ReviewsPage() {
     
     if (detailsCache[id]) return;
 
-    setLoadingDetailId(id);
-    try {
-      const res = await apiFetch(`/api/my/reviews/${id}`);
-      if (!res.ok) {
-        throw new Error('Failed to fetch detail');
-      }
-      const detail = await res.json() as ReviewDetail;
-      setDetailsCache(prev => ({ ...prev, [id]: detail }));
-    } catch (err) {
-      console.error('Failed to fetch review detail', err);
-    } finally {
-      setLoadingDetailId(null);
-    }
+    await fetchReviewDetail(id);
   };
 
   const renderStatus = (success: boolean | null) => {
@@ -154,6 +205,11 @@ export default function ReviewsPage() {
   const renderDetailContent = (id: number) => {
     const detail = detailsCache[id];
     const isLoading = loadingDetailId === id;
+    const summary = detail?.summary_markdown?.trim() || '';
+    const errorMessage = detail?.error_message?.trim() || '';
+    const currentReview = reviews.find((item) => item.id === id);
+    const isRunning =
+      detail?.overall_success === null || currentReview?.overall_success === null;
 
     if (isLoading) {
       return (
@@ -195,18 +251,27 @@ export default function ReviewsPage() {
           {renderFocusChips(detail.focus_areas)}
         </div>
 
-        {detail.error_message && (
-          <div className="p-3 bg-danger-50 text-danger-600 border border-danger-200 rounded-md flex items-start gap-2">
-            <AlertCircle size={18} className="mt-0.5 shrink-0" />
-            <div className="whitespace-pre-wrap font-mono text-xs">{detail.error_message}</div>
+        {isRunning && !summary && !errorMessage && (
+          <div className="p-3 bg-primary-50 text-primary-700 border border-primary-200 rounded-md flex items-start gap-2">
+            <Spinner size="sm" color="primary" className="mt-0.5 shrink-0" />
+            <div className="text-xs">
+              审查进行中，正在等待模型返回结果。页面会自动刷新。
+            </div>
           </div>
         )}
 
-        {detail.summary_markdown && (
+        {errorMessage && (
+          <div className="p-3 bg-danger-50 text-danger-600 border border-danger-200 rounded-md flex items-start gap-2">
+            <AlertCircle size={18} className="mt-0.5 shrink-0" />
+            <div className="whitespace-pre-wrap font-mono text-xs">{errorMessage}</div>
+          </div>
+        )}
+
+        {summary && (
           <div className="flex flex-col gap-2">
             <h3 className="font-semibold text-foreground">审查摘要</h3>
             <div className="p-3 bg-content1 rounded-md border border-default-200 whitespace-pre-wrap font-mono text-xs overflow-x-auto max-h-60">
-              {detail.summary_markdown}
+              {summary}
             </div>
           </div>
         )}
@@ -271,7 +336,9 @@ export default function ReviewsPage() {
               <Button 
                 isIconOnly 
                 variant="flat" 
-                onPress={fetchReviews}
+                onPress={() => {
+                  void fetchReviews();
+                }}
                 isLoading={loading}
               >
                 <RefreshCw size={18} />
@@ -289,7 +356,15 @@ export default function ReviewsPage() {
           <div className="flex flex-col items-center justify-center py-12 text-default-500 gap-4 bg-content1 rounded-lg border border-danger-200">
             <AlertCircle size={48} className="text-danger-400" />
             <p className="m-0 text-danger-600 font-medium">{error}</p>
-            <Button color="primary" variant="flat" onPress={fetchReviews}>重试</Button>
+            <Button
+              color="primary"
+              variant="flat"
+              onPress={() => {
+                void fetchReviews();
+              }}
+            >
+              重试
+            </Button>
           </div>
         ) : reviews.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-default-400 gap-4 bg-content1 rounded-lg border border-dashed border-default-300">
