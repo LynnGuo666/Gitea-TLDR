@@ -218,7 +218,9 @@ class DBService:
                 Repository.repo_name == repo_name,
                 ReviewSession.pr_number == pr_number,
                 ReviewSession.head_sha == head_sha,
-                ReviewSession.overall_success.isnot(False),  # None（running）或 True（success）
+                ReviewSession.overall_success.isnot(
+                    False
+                ),  # None（running）或 True（success）
             )
             .order_by(ReviewSession.started_at.desc())
             .limit(1)
@@ -318,7 +320,12 @@ class DBService:
             completed_at = datetime.now(timezone.utc)
             review_session.completed_at = completed_at
             if review_session.started_at:
-                delta = completed_at - review_session.started_at
+                started_naive = (
+                    review_session.started_at.replace(tzinfo=None)
+                    if review_session.started_at.tzinfo
+                    else review_session.started_at
+                )
+                delta = completed_at.replace(tzinfo=None) - started_naive
                 review_session.duration_seconds = delta.total_seconds()
 
         await self.session.flush()

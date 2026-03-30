@@ -15,8 +15,10 @@ class UserSession(Base, TimestampMixin):
     user_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    _access_token: Mapped[str] = mapped_column(Text, nullable=False)
-    _refresh_token: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    _access_token: Mapped[str] = mapped_column("access_token", Text, nullable=False)
+    _refresh_token: Mapped[Optional[str]] = mapped_column(
+        "refresh_token", Text, nullable=True
+    )
     scope: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     expires_at: Mapped[float] = mapped_column(Float, nullable=False)
     user_info: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
