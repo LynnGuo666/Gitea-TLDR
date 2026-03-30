@@ -4,6 +4,24 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.22.5] - 2026-03-30
+
+### 修复 (Fixed)
+
+- **Anthropic usage 语义对齐**: `UsageCapturingProxy` 按 Anthropic 官方文档修正流式 usage 提取逻辑，`message_delta.usage.output_tokens` 改为按累计值处理，不再重复累加
+
+### 优化 (Improved)
+
+- **SSE 事件上下文**: 代理在解析 SSE 时保留 `event:` 上下文，可更准确观察 `ping`、`message_stop`、`error` 等 Anthropic 风格事件
+
+### 测试 (Testing)
+
+- **Anthropic 风格事件序列**: 更新代理回归测试，覆盖 `message_start`、`ping`、`message_delta`、`message_stop` 的官方风格流式事件顺序
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.22.5`
+
 ## [1.22.4] - 2026-03-30
 
 ### 优化 (Improved)

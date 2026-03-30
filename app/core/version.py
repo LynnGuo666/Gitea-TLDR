@@ -2,12 +2,21 @@
 版本信息模块
 """
 
-__version__ = "1.22.4"
+__version__ = "1.22.5"
 __release_date__ = "2026-03-30"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.22.5": {
+        "date": "2026-03-30",
+        "changes": [
+            "修复：UsageCapturingProxy 对齐 Anthropic 官方流式 usage 语义，message_delta.usage.output_tokens 改按累计值处理，不再错误累加",
+            "优化：UsageCapturingProxy 在解析 SSE 时保留 event 上下文，支持观察 ping / message_stop / error 等事件摘要",
+            "测试：更新 UsageCapturingProxy 回归测试，覆盖 Anthropic 官方风格的 message_start / ping / message_delta / message_stop 事件序列",
+            "维护：同步更新后端与前端版本号到 1.22.5",
+        ],
+    },
     "1.22.4": {
         "date": "2026-03-30",
         "changes": [

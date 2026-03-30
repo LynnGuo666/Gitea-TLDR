@@ -224,10 +224,16 @@ def test_usage_proxy_streams_sse_without_rewriting_and_collects_usage():
             b"event: message_start\r\n"
             b'data: {"type":"message_start","message":{"usage":{"input_tokens":10}}}\r\n'
             b"\r\n"
+            b"event: ping\r\n"
+            b'data: {"type":"ping"}\r\n'
+            b"\r\n"
             b"event: message_delta\r\n"
             b'data: {"type":"message_delta","usage":{"output_tokens":3}}\r\n'
             b"\r\n"
             b'data: {"type":"message_delta","usage":{"output_tokens":4}}\r\n'
+            b"\r\n"
+            b"event: message_stop\r\n"
+            b'data: {"type":"message_stop"}\r\n'
             b"\r\n"
         )
         proxy = UsageCapturingProxy("https://api.example.com", debug=True)
@@ -262,7 +268,7 @@ def test_usage_proxy_streams_sse_without_rewriting_and_collects_usage():
         assert headers["content-type"] == "text/event-stream"
         assert headers["connection"] == "close"
         assert body == sse_payload
-        assert proxy.usage == {"input_tokens": 10, "output_tokens": 7}
+        assert proxy.usage == {"input_tokens": 10, "output_tokens": 4}
 
     asyncio.run(scenario())
 

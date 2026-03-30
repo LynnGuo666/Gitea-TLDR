@@ -231,6 +231,7 @@ class UsageCapturingProxy:
         chunk_count = 0
         idle_log_count = 0
         parser_buffer = bytearray()
+        event_state: Dict[str, Optional[str]] = {"event": None}
         loop = asyncio.get_running_loop()
         last_chunk_at = loop.time()
 
@@ -255,7 +256,7 @@ class UsageCapturingProxy:
                         response_bytes += len(chunk)
                         writer.write(chunk)
                         await writer.drain()
-                        self._consume_sse_bytes(parser_buffer, chunk)
+                        self._consume_sse_bytes(parser_buffer, chunk, event_state)
                     return True
 
                 chunk_iter = resp.aiter_raw().__aiter__()
@@ -286,7 +287,7 @@ class UsageCapturingProxy:
                     response_bytes += len(chunk)
                     writer.write(chunk)
                     await writer.drain()
-                    self._consume_sse_bytes(parser_buffer, chunk)
+                    self._consume_sse_bytes(parser_buffer, chunk, event_state)
                     if (
                         chunk_count == 1
                         or chunk_count % _SSE_CHUNK_LOG_EVERY == 0
@@ -484,12 +485,14 @@ class UsageCapturingProxy:
         except (json.JSONDecodeError, ValueError):
             return False
 
-    def _extract_usage_from_sse(self, data_str: str) -> None:
+    def _extract_usage_from_sse(
+        self, data_str: str, event_name: Optional[str] = None
+    ) -> None:
         """从 SSE data 行提取 usage 字段。
 
         SSE 事件结构:
           message_start  -> message.usage.input_tokens
-          message_delta  -> usage.output_tokens
+          message_delta  -> usage.output_tokens（累计值）
         """
         try:
             event = json.loads(data_str)
@@ -497,6 +500,16 @@ class UsageCapturingProxy:
             return
 
         event_type = event.get("type")
+        if self._debug and (
+            event_name in {"message_stop", "ping", "error"}
+            or event_type in {"message_stop", "ping", "error"}
+        ):
+            logger.info(
+                "Usage proxy SSE event observed event=%s type=%s keys=%s",
+                event_name or "-",
+                event_type or "-",
+                sorted(event.keys()),
+            )
 
         if event_type == "message_start":
             usage = event.get("message", {}).get("usage", {})
@@ -506,9 +519,9 @@ class UsageCapturingProxy:
         elif event_type == "message_delta":
             usage = event.get("usage", {})
             if "output_tokens" in usage:
-                # 累加增量，SSE 可能包含多段 message_delta
-                self.usage["output_tokens"] = (
-                    self.usage.get("output_tokens", 0) + usage["output_tokens"]
+                # Anthropic 官方文档中 message_delta.usage.output_tokens 为累计值。
+                self.usage["output_tokens"] = max(
+                    self.usage.get("output_tokens", 0), usage["output_tokens"]
                 )
 
     def _extract_usage_from_json_body(self, payload: bytes) -> None:
@@ -526,8 +539,14 @@ class UsageCapturingProxy:
         if "output_tokens" in usage:
             self.usage["output_tokens"] = usage["output_tokens"]
 
-    def _consume_sse_bytes(self, buffer: bytearray, chunk: bytes) -> None:
+    def _consume_sse_bytes(
+        self,
+        buffer: bytearray,
+        chunk: bytes,
+        event_state: Optional[Dict[str, Optional[str]]] = None,
+    ) -> None:
         """旁路解析 SSE，不改变实际转发出去的字节流。"""
+        event_state = event_state or {"event": None}
         buffer.extend(chunk)
         while True:
             newline_index = buffer.find(b"\n")
@@ -536,8 +555,17 @@ class UsageCapturingProxy:
             raw_line = bytes(buffer[:newline_index])
             del buffer[: newline_index + 1]
             line = raw_line.rstrip(b"\r")
+            if not line:
+                event_state["event"] = None
+                continue
+            if line.startswith(b"event: "):
+                event_state["event"] = line[7:].decode("utf-8", errors="ignore").strip()
+                continue
             if line.startswith(b"data: "):
-                self._extract_usage_from_sse(line[6:].decode("utf-8", errors="ignore"))
+                self._extract_usage_from_sse(
+                    line[6:].decode("utf-8", errors="ignore"),
+                    event_name=event_state.get("event"),
+                )
 
     @staticmethod
     def _should_keep_alive(version: str, headers: Dict[str, str]) -> bool:
