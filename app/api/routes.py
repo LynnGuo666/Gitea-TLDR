@@ -986,6 +986,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                         "date": s.stat_date.isoformat() if s.stat_date else None,
                         "estimated_input_tokens": s.estimated_input_tokens,
                         "estimated_output_tokens": s.estimated_output_tokens,
+                        "cache_creation_input_tokens": s.cache_creation_input_tokens,
+                        "cache_read_input_tokens": s.cache_read_input_tokens,
                         "gitea_api_calls": s.gitea_api_calls,
                         "provider_api_calls": s.provider_api_calls,
                         "claude_api_calls": s.provider_api_calls,

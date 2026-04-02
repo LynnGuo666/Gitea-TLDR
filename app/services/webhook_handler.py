@@ -609,18 +609,19 @@ class WebhookHandler:
 
                     # 记录使用量
                     if repository_id:
-                        input_tokens = analysis_result.usage_metadata.get(
-                            "input_tokens", 0
-                        )
-                        output_tokens = analysis_result.usage_metadata.get(
-                            "output_tokens", 0
-                        )
+                        meta = analysis_result.usage_metadata
                         await db_service.record_usage(
                             repository_id=repository_id,
                             review_session_id=review_session_id,
                             user_id=actor_user_id,
-                            estimated_input_tokens=input_tokens,
-                            estimated_output_tokens=output_tokens,
+                            estimated_input_tokens=meta.get("input_tokens", 0),
+                            estimated_output_tokens=meta.get("output_tokens", 0),
+                            cache_creation_input_tokens=meta.get(
+                                "cache_creation_input_tokens", 0
+                            ),
+                            cache_read_input_tokens=meta.get(
+                                "cache_read_input_tokens", 0
+                            ),
                             gitea_api_calls=gitea_api_calls,
                             provider_api_calls=1,
                             clone_operations=clone_operations,

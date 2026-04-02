@@ -491,8 +491,11 @@ class UsageCapturingProxy:
         """从 SSE data 行提取 usage 字段。
 
         SSE 事件结构:
-          message_start  -> message.usage.input_tokens
-          message_delta  -> usage.output_tokens（累计值）
+          message_start  -> message.usage.input_tokens / cache_*_input_tokens
+          message_delta  -> usage.output_tokens（本次调用最终值，每次调用累加）
+
+        Claude Code CLI 在一次审查中可能发起多次 API 调用（工具调用、多轮对话），
+        因此所有 token 字段均跨调用累加，而非覆盖或取最大值。
         """
         try:
             event = json.loads(data_str)
@@ -514,14 +517,27 @@ class UsageCapturingProxy:
         if event_type == "message_start":
             usage = event.get("message", {}).get("usage", {})
             if "input_tokens" in usage:
-                self.usage["input_tokens"] = usage["input_tokens"]
+                self.usage["input_tokens"] = (
+                    self.usage.get("input_tokens", 0) + usage["input_tokens"]
+                )
+            if "cache_creation_input_tokens" in usage:
+                self.usage["cache_creation_input_tokens"] = (
+                    self.usage.get("cache_creation_input_tokens", 0)
+                    + usage["cache_creation_input_tokens"]
+                )
+            if "cache_read_input_tokens" in usage:
+                self.usage["cache_read_input_tokens"] = (
+                    self.usage.get("cache_read_input_tokens", 0)
+                    + usage["cache_read_input_tokens"]
+                )
 
         elif event_type == "message_delta":
             usage = event.get("usage", {})
             if "output_tokens" in usage:
-                # Anthropic 官方文档中 message_delta.usage.output_tokens 为累计值。
-                self.usage["output_tokens"] = max(
-                    self.usage.get("output_tokens", 0), usage["output_tokens"]
+                # message_delta 每次调用只触发一次，包含本次调用的最终 output_tokens。
+                # 跨多次调用需累加而非取最大值。
+                self.usage["output_tokens"] = (
+                    self.usage.get("output_tokens", 0) + usage["output_tokens"]
                 )
 
     def _extract_usage_from_json_body(self, payload: bytes) -> None:
@@ -535,9 +551,23 @@ class UsageCapturingProxy:
         if not isinstance(usage, dict):
             return
         if "input_tokens" in usage:
-            self.usage["input_tokens"] = usage["input_tokens"]
+            self.usage["input_tokens"] = (
+                self.usage.get("input_tokens", 0) + usage["input_tokens"]
+            )
         if "output_tokens" in usage:
-            self.usage["output_tokens"] = usage["output_tokens"]
+            self.usage["output_tokens"] = (
+                self.usage.get("output_tokens", 0) + usage["output_tokens"]
+            )
+        if "cache_creation_input_tokens" in usage:
+            self.usage["cache_creation_input_tokens"] = (
+                self.usage.get("cache_creation_input_tokens", 0)
+                + usage["cache_creation_input_tokens"]
+            )
+        if "cache_read_input_tokens" in usage:
+            self.usage["cache_read_input_tokens"] = (
+                self.usage.get("cache_read_input_tokens", 0)
+                + usage["cache_read_input_tokens"]
+            )
 
     def _consume_sse_bytes(
         self,

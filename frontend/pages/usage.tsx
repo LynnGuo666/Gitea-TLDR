@@ -16,6 +16,8 @@ import PageHeader from '../components/PageHeader';
 
 const USD_PER_MILLION_INPUT = 3;
 const USD_PER_MILLION_OUTPUT = 15;
+const USD_PER_MILLION_CACHE_WRITE = 3.75;
+const USD_PER_MILLION_CACHE_READ = 0.30;
 
 type UsageStat = {
   id: number;
@@ -24,6 +26,8 @@ type UsageStat = {
   date: string | null;
   estimated_input_tokens: number;
   estimated_output_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
   gitea_api_calls: number;
   claude_api_calls: number;
   provider_api_calls: number;
@@ -33,6 +37,8 @@ type UsageStat = {
 type UsageSummary = {
   total_input_tokens: number;
   total_output_tokens: number;
+  total_cache_creation_tokens: number;
+  total_cache_read_tokens: number;
   total_gitea_calls: number;
   total_claude_calls: number;
   total_provider_calls: number;
@@ -95,20 +101,33 @@ export default function UsagePage() {
     if (!stats?.summary) return '0.00';
     const inputCost = (stats.summary.total_input_tokens / 1_000_000) * USD_PER_MILLION_INPUT;
     const outputCost = (stats.summary.total_output_tokens / 1_000_000) * USD_PER_MILLION_OUTPUT;
-    return (inputCost + outputCost).toFixed(2);
+    const cacheWriteCost = ((stats.summary.total_cache_creation_tokens ?? 0) / 1_000_000) * USD_PER_MILLION_CACHE_WRITE;
+    const cacheReadCost = ((stats.summary.total_cache_read_tokens ?? 0) / 1_000_000) * USD_PER_MILLION_CACHE_READ;
+    return (inputCost + outputCost + cacheWriteCost + cacheReadCost).toFixed(2);
   }, [stats]);
 
   const groupedByDate = useMemo(() => {
     if (!stats?.details?.length) return [];
-    const groups: { [key: string]: { date: string; inputTokens: number; outputTokens: number; requests: number } } = {};
+    const groups: {
+      [key: string]: {
+        date: string;
+        inputTokens: number;
+        outputTokens: number;
+        cacheCreationTokens: number;
+        cacheReadTokens: number;
+        requests: number;
+      };
+    } = {};
 
     for (const stat of stats.details) {
       const dateKey = stat.date || 'unknown';
       if (!groups[dateKey]) {
-        groups[dateKey] = { date: dateKey, inputTokens: 0, outputTokens: 0, requests: 0 };
+        groups[dateKey] = { date: dateKey, inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, requests: 0 };
       }
       groups[dateKey].inputTokens += stat.estimated_input_tokens;
       groups[dateKey].outputTokens += stat.estimated_output_tokens;
+      groups[dateKey].cacheCreationTokens += stat.cache_creation_input_tokens ?? 0;
+      groups[dateKey].cacheReadTokens += stat.cache_read_input_tokens ?? 0;
       groups[dateKey].requests += stat.provider_api_calls ?? stat.claude_api_calls;
     }
 
@@ -170,6 +189,8 @@ export default function UsagePage() {
                 { label: '总 tokens', value: totalTokens },
                 { label: '输入 tokens', value: stats?.summary?.total_input_tokens || 0 },
                 { label: '输出 tokens', value: stats?.summary?.total_output_tokens || 0 },
+                { label: '缓存写入 tokens', value: stats?.summary?.total_cache_creation_tokens || 0 },
+                { label: '缓存读取 tokens', value: stats?.summary?.total_cache_read_tokens || 0 },
                 { label: 'API 调用', value: totalRequests },
                 { label: '审查次数', value: stats?.summary?.review_count || 0 },
               ].map(({ label, value }) => (
@@ -187,6 +208,8 @@ export default function UsagePage() {
                     <TableColumn>日期</TableColumn>
                     <TableColumn>输入 Tokens</TableColumn>
                     <TableColumn>输出 Tokens</TableColumn>
+                    <TableColumn>缓存写入</TableColumn>
+                    <TableColumn>缓存读取</TableColumn>
                     <TableColumn>请求</TableColumn>
                     <TableColumn>费用</TableColumn>
                   </TableHeader>
@@ -194,13 +217,17 @@ export default function UsagePage() {
                     {groupedByDate.map((entry) => {
                       const cost = (
                         (entry.inputTokens / 1_000_000) * USD_PER_MILLION_INPUT +
-                        (entry.outputTokens / 1_000_000) * USD_PER_MILLION_OUTPUT
+                        (entry.outputTokens / 1_000_000) * USD_PER_MILLION_OUTPUT +
+                        (entry.cacheCreationTokens / 1_000_000) * USD_PER_MILLION_CACHE_WRITE +
+                        (entry.cacheReadTokens / 1_000_000) * USD_PER_MILLION_CACHE_READ
                       ).toFixed(2);
                       return (
                         <TableRow key={entry.date}>
                           <TableCell>{entry.date}</TableCell>
                           <TableCell>{entry.inputTokens.toLocaleString()}</TableCell>
                           <TableCell>{entry.outputTokens.toLocaleString()}</TableCell>
+                          <TableCell>{entry.cacheCreationTokens.toLocaleString()}</TableCell>
+                          <TableCell>{entry.cacheReadTokens.toLocaleString()}</TableCell>
                           <TableCell>{entry.requests}</TableCell>
                           <TableCell>${cost}</TableCell>
                         </TableRow>

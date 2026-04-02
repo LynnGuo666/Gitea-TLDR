@@ -2,12 +2,23 @@
 版本信息模块
 """
 
-__version__ = "1.22.5"
-__release_date__ = "2026-03-30"
+__version__ = "1.22.6"
+__release_date__ = "2026-04-02"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.22.6": {
+        "date": "2026-04-02",
+        "changes": [
+            "修复：UsageCapturingProxy 多次 API 调用时 input_tokens 改为跨调用累加（原为覆盖），output_tokens 改为跨调用累加（原为取最大值），非流式 JSON 分支同步修复",
+            "新增：UsageCapturingProxy 捕获 cache_creation_input_tokens / cache_read_input_tokens 并跨调用累加",
+            "新增：usage_stats 表新增 cache_creation_input_tokens / cache_read_input_tokens 字段（Alembic 迁移 e3a1b2c4d5f6）",
+            "新增：webhook_handler 将 cache token 写入 usage_stats，stats API 响应增加 cache token 字段",
+            "新增：用量统计页新增缓存写入/读取 tokens 概览卡片与明细列，成本计算按 Anthropic 缓存定价（写入 $3.75/M，读取 $0.30/M）更新",
+            "维护：同步更新后端与前端版本号到 1.22.6",
+        ],
+    },
     "1.22.5": {
         "date": "2026-03-30",
         "changes": [

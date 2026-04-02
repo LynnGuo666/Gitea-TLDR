@@ -42,6 +42,12 @@ class UsageStat(Base):
     estimated_output_tokens: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False
     )
+    cache_creation_input_tokens: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    cache_read_input_tokens: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
 
     # API调用统计
     gitea_api_calls: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

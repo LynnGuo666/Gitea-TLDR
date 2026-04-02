@@ -4,6 +4,23 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.22.6] - 2026-04-02
+
+### 修复 (Fixed)
+
+- **多轮 API 调用 token 计数**: `UsageCapturingProxy` 修复 `input_tokens` 覆盖问题——Claude Code CLI 每次 API 调用的 `message_start` 事件现按跨调用累加，不再只保留最后一次
+- **output_tokens 累加**: `message_delta` 的 `output_tokens` 改为跨调用累加（原为取最大值），非流式 JSON 分支同步修复
+
+### 新增 (Added)
+
+- **缓存 token 捕获**: `UsageCapturingProxy` 新增捕获 `cache_creation_input_tokens`、`cache_read_input_tokens` 并跨调用累加
+- **缓存 token 持久化**: `usage_stats` 表新增两列（Alembic 迁移 `e3a1b2c4d5f6`），`webhook_handler` 将缓存 token 写入数据库
+- **用量统计页展示**: 概览区新增"缓存写入 tokens"与"缓存读取 tokens"卡片，明细表新增对应列，成本计算按 Anthropic 缓存定价（写入 $3.75/M，读取 $0.30/M）更新
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.22.6`
+
 ## [1.22.5] - 2026-03-30
 
 ### 修复 (Fixed)
