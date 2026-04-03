@@ -4,6 +4,25 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.22.8] - 2026-04-03
+
+### 修复 (Fixed)
+
+- **Claude Base URL 解析收紧**: `ClaudeCodeProvider` 改为仅接受显式传入的 `api_url`，移除 `ANTHROPIC_BASE_URL` 环境变量与官方默认地址 `https://api.anthropic.com` fallback，避免代理链路在未配置时误走环境或默认上游
+- **缺失配置快速失败**: Claude Code 在缺少 `api_url` 时直接返回明确错误，不再启动 CLI 后再由子进程隐式决定连接目标
+
+### 测试 (Testing)
+
+- **Claude 配置回归测试**: 新增测试覆盖显式 `real_api_url` 校验、缺失 `api_url` 时不启动 CLI、以及父进程 `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` 不再被 Claude provider 继承
+
+### 优化 (Improved)
+
+- **前端配置提示**: Claude Code 配置页改为明确提示必须填写 Base URL，仓库全局配置摘要在缺少地址时显示“未配置”
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.22.8`
+
 ## [1.22.7] - 2026-04-03
 
 ### 修复 (Fixed)

@@ -44,7 +44,10 @@ class UsageCapturingProxy:
     """
 
     def __init__(self, real_api_url: str, debug: bool = False) -> None:
-        self._real_api_url = (real_api_url or "https://api.anthropic.com").rstrip("/")
+        normalized_api_url = (real_api_url or "").strip().rstrip("/")
+        if not normalized_api_url:
+            raise ValueError("UsageCapturingProxy 需要显式的 real_api_url")
+        self._real_api_url = normalized_api_url
         self._debug = debug
         self.usage: Dict[str, Any] = {}
         self.last_error: Optional[str] = None

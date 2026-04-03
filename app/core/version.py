@@ -2,12 +2,21 @@
 版本信息模块
 """
 
-__version__ = "1.22.7"
+__version__ = "1.22.8"
 __release_date__ = "2026-04-03"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.22.8": {
+        "date": "2026-04-03",
+        "changes": [
+            "修复：ClaudeCodeProvider 改为仅接受显式传入的 api_url，移除 ANTHROPIC_BASE_URL 环境变量与官方默认地址 fallback",
+            "修复：Claude Code 在缺少 api_url 时直接失败并返回明确错误，不再隐式继承父进程环境配置",
+            "优化：前端 Claude Code 配置文案改为必须填写 Base URL，仓库全局配置展示未配置状态",
+            "维护：同步更新后端与前端版本号到 1.22.8",
+        ],
+    },
     "1.22.7": {
         "date": "2026-04-03",
         "changes": [

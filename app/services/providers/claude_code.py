@@ -38,6 +38,8 @@ class ClaudeCodeProvider(ReviewProvider):
             "NETRC",
             "OPENAI_API_KEY",
             "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "ANTHROPIC_BASE_URL",
         }
     )
 
@@ -144,18 +146,22 @@ JSON结构示例：
             prompt += f"\n\n**额外审查要求：**\n{custom_prompt.strip()}"
         return prompt
 
-    async def _prepare_usage_proxy(
-        self, api_url: Optional[str]
-    ) -> Tuple[Optional[UsageCapturingProxy], str]:
-        """按配置决定是否启用 usage 代理，并返回有效 base URL。
+    def _resolve_api_url(self, api_url: Optional[str]) -> Optional[str]:
+        """规范化本次调用的 API 地址。
 
-        优先级：model config api_url > 环境变量 ANTHROPIC_BASE_URL > Anthropic 默认地址。
+        ClaudeCodeProvider 只接受显式传入的 api_url，不读取父进程环境变量，
+        也不回退到官方默认地址。
         """
-        effective_base_url = (
-            api_url
-            or os.environ.get("ANTHROPIC_BASE_URL")
-            or "https://api.anthropic.com"
-        )
+        normalized = (api_url or "").strip()
+        if not normalized:
+            return None
+        return normalized
+
+    async def _prepare_usage_proxy(
+        self, api_url: str
+    ) -> Tuple[Optional[UsageCapturingProxy], str]:
+        """按配置决定是否启用 usage 代理，并返回有效 base URL。"""
+        effective_base_url = api_url.rstrip("/")
 
         if not settings.claude_usage_proxy_enabled:
             if self.debug or settings.claude_usage_proxy_debug:
@@ -238,7 +244,16 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
-            proxy, effective_base_url = await self._prepare_usage_proxy(api_url)
+            resolved_api_url = self._resolve_api_url(api_url)
+            if not resolved_api_url:
+                self._set_last_error(
+                    f"{self.DISPLAY_NAME} 未配置 api_url，无法发起审查请求"
+                )
+                return None
+
+            proxy, effective_base_url = await self._prepare_usage_proxy(
+                resolved_api_url
+            )
 
             try:
                 custom_env = self._build_env(effective_base_url, api_key, model)
@@ -358,7 +373,16 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt - Simple Mode]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
-            proxy, effective_base_url = await self._prepare_usage_proxy(api_url)
+            resolved_api_url = self._resolve_api_url(api_url)
+            if not resolved_api_url:
+                self._set_last_error(
+                    f"{self.DISPLAY_NAME} 未配置 api_url，无法发起审查请求"
+                )
+                return None
+
+            proxy, effective_base_url = await self._prepare_usage_proxy(
+                resolved_api_url
+            )
 
             try:
                 custom_env = self._build_env(effective_base_url, api_key, model)

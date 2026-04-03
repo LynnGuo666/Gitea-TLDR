@@ -72,6 +72,11 @@ export default function PreferencesPage() {
       return;
     }
 
+    if (selectedProvider === 'claude_code' && !globalBaseUrl.trim()) {
+      addToast({ title: 'Claude Code 必须配置 Base URL', color: 'warning' });
+      return;
+    }
+
     setGlobalProviderSaving(true);
     try {
       const res = await apiFetch('/api/config/provider-global', {
@@ -112,7 +117,7 @@ export default function PreferencesPage() {
 
   const providerPlaceholders: Record<string, { baseUrl: string; apiKey: string }> = {
     claude_code: {
-      baseUrl: 'https://api.anthropic.com (留空使用默认)',
+      baseUrl: '必须填写 Claude API Base URL',
       apiKey: 'sk-ant-...',
     },
     codex_cli: {

@@ -409,6 +409,11 @@ export default function RepoConfigPage() {
   const saveProviderConfig = async () => {
     if (requiresLogin || !owner || !repo || !canEditRepo || inheritGlobal) return;
 
+    if (selectedProvider === 'claude_code' && !providerBaseUrl.trim()) {
+      addToast({ title: 'Claude Code 必须配置 Base URL', color: 'warning' });
+      return;
+    }
+
     setProviderSaving(true);
     try {
       const res = await apiFetch(`/api/repos/${owner}/${repo}/provider-config`, {
@@ -492,7 +497,7 @@ export default function RepoConfigPage() {
 
   const providerPlaceholders: Record<string, { baseUrl: string; apiKey: string }> = {
     claude_code: {
-      baseUrl: 'https://api.anthropic.com (留空使用默认)',
+      baseUrl: '必须填写 Claude API Base URL',
       apiKey: 'sk-ant-...',
     },
     codex_cli: {
@@ -729,7 +734,7 @@ export default function RepoConfigPage() {
                             模型 ID: {providerConfig.global_model || '未设置'}
                           </p>
                           <p className="m-0 mt-1 text-sm text-default-700">
-                            Base URL: {providerConfig.global_api_url || '默认官方地址'}
+                            Base URL: {providerConfig.global_api_url || '未配置'}
                           </p>
                           <p className="m-0 mt-1 text-sm text-default-700">
                             API Key: {providerConfig.global_has_api_key ? '已配置' : '未配置'}

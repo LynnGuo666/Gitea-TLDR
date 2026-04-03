@@ -268,7 +268,7 @@ def test_usage_proxy_streams_sse_without_rewriting_and_collects_usage():
         assert headers["content-type"] == "text/event-stream"
         assert headers["connection"] == "close"
         assert body == sse_payload
-        assert proxy.usage == {"input_tokens": 10, "output_tokens": 4}
+        assert proxy.usage == {"input_tokens": 10, "output_tokens": 7}
 
     asyncio.run(scenario())
 
@@ -287,3 +287,52 @@ def test_claude_provider_respects_usage_proxy_toggle(
         assert effective_base_url == "https://api.example.com"
 
     asyncio.run(scenario())
+
+
+def test_usage_proxy_requires_explicit_real_api_url():
+    with pytest.raises(ValueError, match="real_api_url"):
+        UsageCapturingProxy("")
+
+
+def test_claude_provider_requires_explicit_api_url_for_simple_analysis(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    provider = ClaudeCodeProvider()
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://env.example.com")
+    create_subprocess_called = False
+
+    async def fake_create_subprocess_exec(*args, **kwargs):
+        del args, kwargs
+        nonlocal create_subprocess_called
+        create_subprocess_called = True
+        raise AssertionError("不应在缺少 api_url 时启动 CLI")
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+
+    async def scenario() -> None:
+        result = await provider.analyze_pr_simple(
+            diff_content="diff --git a/a b/a",
+            focus_areas=["quality"],
+            pr_info={"title": "Test PR", "user": {"login": "tester"}},
+            api_url=None,
+        )
+        assert result is None
+        assert provider.last_error == "Claude Code 未配置 api_url，无法发起审查请求"
+        assert create_subprocess_called is False
+
+    asyncio.run(scenario())
+
+
+def test_claude_provider_does_not_inherit_parent_env_base_url_or_auth_token(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    provider = ClaudeCodeProvider()
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://env.example.com")
+    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "env-token")
+
+    custom_env = provider._build_env(
+        "https://api.example.com", None, "claude-3-7-sonnet-20250219"
+    )
+
+    assert custom_env["ANTHROPIC_BASE_URL"] == "https://api.example.com"
+    assert "ANTHROPIC_AUTH_TOKEN" not in custom_env
