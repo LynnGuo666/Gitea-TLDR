@@ -2,12 +2,20 @@
 版本信息模块
 """
 
-__version__ = "1.22.6"
-__release_date__ = "2026-04-02"
+__version__ = "1.22.7"
+__release_date__ = "2026-04-03"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.22.7": {
+        "date": "2026-04-03",
+        "changes": [
+            "修复：_prepare_usage_proxy 新增 ANTHROPIC_BASE_URL 环境变量作为二级 fallback，优先级为 model config api_url > ANTHROPIC_BASE_URL 环境变量 > Anthropic 默认地址",
+            "修复：当 model config 未配置 api_url 时，usage 代理不再将 ANTHROPIC_BASE_URL 强制覆盖为 https://api.anthropic.com，用户通过环境变量配置的自定义地址现在能被正确识别",
+            "维护：同步更新后端与前端版本号到 1.22.7",
+        ],
+    },
     "1.22.6": {
         "date": "2026-04-02",
         "changes": [

@@ -4,6 +4,16 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.22.7] - 2026-04-03
+
+### 修复 (Fixed)
+
+- **自定义 API 地址未识别**: `_prepare_usage_proxy` 新增 `ANTHROPIC_BASE_URL` 环境变量为二级 fallback，优先级为 model config `api_url` > `ANTHROPIC_BASE_URL` 环境变量 > Anthropic 默认地址。修复了 model config 未配置 `api_url` 时代理将 `ANTHROPIC_BASE_URL` 强制覆盖为 `https://api.anthropic.com`、导致用户通过环境变量配置的自定义地址被忽略的问题
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.22.7`
+
 ## [1.22.6] - 2026-04-02
 
 ### 修复 (Fixed)

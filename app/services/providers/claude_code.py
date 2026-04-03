@@ -147,8 +147,15 @@ JSON结构示例：
     async def _prepare_usage_proxy(
         self, api_url: Optional[str]
     ) -> Tuple[Optional[UsageCapturingProxy], str]:
-        """按配置决定是否启用 usage 代理，并返回有效 base URL。"""
-        effective_base_url = api_url or "https://api.anthropic.com"
+        """按配置决定是否启用 usage 代理，并返回有效 base URL。
+
+        优先级：model config api_url > 环境变量 ANTHROPIC_BASE_URL > Anthropic 默认地址。
+        """
+        effective_base_url = (
+            api_url
+            or os.environ.get("ANTHROPIC_BASE_URL")
+            or "https://api.anthropic.com"
+        )
 
         if not settings.claude_usage_proxy_enabled:
             if self.debug or settings.claude_usage_proxy_debug:
