@@ -334,6 +334,15 @@ class WebhookHandler:
                         if features is None:
                             features = model_config.get_features()
 
+                        # 仓库级配置缺少 api_url/api_key 时，从全局配置补全
+                        if model_config.repository_id == repository_id and not (
+                            api_url or api_key
+                        ):
+                            global_config = await db_service.get_global_model_config()
+                            if global_config:
+                                api_url = api_url or global_config.api_url
+                                api_key = api_key or global_config.api_key
+
                         if api_url or api_key:
                             logger.info(
                                 f"使用仓库 {owner}/{repo_name} 的自定义 Anthropic 配置"

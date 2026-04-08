@@ -22,24 +22,54 @@ class ClaudeCodeProvider(ReviewProvider):
 
     PROVIDER_NAME = "claude_code"
     DISPLAY_NAME = "Claude Code"
-    MAX_DIFF_CHARS = 200_000
+    MAX_DIFF_BYTES = 200_000
 
-    # 不应传递给 CLI 子进程的已知凭证环境变量
-    _SENSITIVE_ENV_KEYS = frozenset(
+    # 脱敏正则：在写入日志前过滤凭证信息，与 base._set_last_error 保持一致
+    _REDACT_RE = re.compile(
+        r"(?i)(token|key|secret|authorization|password|passwd|bearer|credential)"
+        r"\s*[:=]\s*([^\s,;\n]+)"
+    )
+
+    # 允许传递给 CLI 子进程的系统/运行时环境变量白名单
+    # 白名单策略：只传递最小必要集，避免 DATABASE_URL / SECRET_KEY 等应用敏感变量泄露
+    _SAFE_ENV_KEYS = frozenset(
         {
-            "AWS_ACCESS_KEY_ID",
-            "AWS_SECRET_ACCESS_KEY",
-            "AWS_SESSION_TOKEN",
-            "GITHUB_TOKEN",
-            "GITLAB_TOKEN",
-            "NPM_TOKEN",
-            "PYPI_TOKEN",
-            "GIT_CREDENTIALS",
-            "NETRC",
-            "OPENAI_API_KEY",
-            "ANTHROPIC_API_KEY",
-            "ANTHROPIC_AUTH_TOKEN",
-            "ANTHROPIC_BASE_URL",
+            # 可执行文件查找
+            "PATH",
+            # 用户主目录（Claude CLI 读取 ~/.claude/ 配置）
+            "HOME",
+            # 临时目录
+            "TMPDIR",
+            "TEMP",
+            "TMP",
+            # 语言/字符集
+            "LANG",
+            "LC_ALL",
+            "LC_CTYPE",
+            "LC_MESSAGES",
+            # 用户身份（部分 CLI 工具需要）
+            "USER",
+            "LOGNAME",
+            # Node.js 运行时（Claude CLI 基于 Node）
+            "NODE_PATH",
+            "NODE_ENV",
+            "NODE_EXTRA_CA_CERTS",
+            # SSL 证书（企业内网代理环境）
+            "SSL_CERT_FILE",
+            "SSL_CERT_DIR",
+            "REQUESTS_CA_BUNDLE",
+            "CURL_CA_BUNDLE",
+            # HTTP 代理（企业内网环境）
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "NO_PROXY",
+            "http_proxy",
+            "https_proxy",
+            "no_proxy",
+            # XDG 基础目录（Linux 运行时）
+            "XDG_RUNTIME_DIR",
+            "XDG_CONFIG_HOME",
+            "XDG_CACHE_HOME",
         }
     )
 
@@ -187,17 +217,127 @@ JSON结构示例：
         return proxy, proxy_url
 
     def _build_timeout_error(
-        self, proxy: Optional[UsageCapturingProxy], simple_mode: bool = False
+        self, proxy: Optional[UsageCapturingProxy], label: str = ""
     ) -> str:
         """构造包含代理诊断信息的超时消息。"""
-        message = (
-            f"{self.DISPLAY_NAME} 执行超时（300s）（简单模式）"
-            if simple_mode
-            else f"{self.DISPLAY_NAME} 执行超时（300s）"
-        )
+        message = f"{self.DISPLAY_NAME} 执行超时（300s）{label}"
         if proxy is not None and proxy.last_error:
             message = f"{message}；代理异常：{proxy.last_error}"
         return message
+
+    @classmethod
+    def _redact_output(cls, text: str) -> str:
+        """在写入日志前对输出文本脱敏，防止 API key 等凭证信息进入日志。"""
+        return cls._REDACT_RE.sub(r"\1=[REDACTED]", text)
+
+    def _truncate_diff(self, diff_content: str) -> bytes:
+        """将 diff 编码为 UTF-8 并按字节上限截断。
+
+        使用字节计数而非字符计数，避免中文等多字节字符导致实际传输量超限。
+        """
+        diff_bytes = diff_content.encode("utf-8")
+        if len(diff_bytes) <= self.MAX_DIFF_BYTES:
+            return diff_bytes
+        # 截断后重新解码再编码，确保截断点不落在多字节字符中间
+        truncated = diff_bytes[: self.MAX_DIFF_BYTES].decode("utf-8", errors="ignore")
+        return (truncated + "\n\n... (diff 内容过长，已截断)").encode("utf-8")
+
+    async def _run_cli(
+        self,
+        prompt: str,
+        diff_bytes: bytes,
+        api_url: str,
+        api_key: Optional[str],
+        model: Optional[str],
+        cwd: Optional[str],
+        label: str,
+    ) -> Optional[ReviewResult]:
+        """执行 Claude CLI 子进程并返回解析后的审查结果。
+
+        Args:
+            prompt: 完整的审查提示词。
+            diff_bytes: 已截断的 UTF-8 编码 diff 字节串。
+            api_url: 已解析的 API 地址。
+            api_key: API 密钥。
+            model: 模型标识。
+            cwd: 子进程工作目录；None 表示简单模式（不切换目录）。
+            label: 用于日志的模式标签，如 "（简单模式）"。
+
+        Returns:
+            解析后的 ReviewResult，失败时返回 None。
+        """
+        proxy, effective_base_url = await self._prepare_usage_proxy(api_url)
+        try:
+            custom_env = self._build_env(effective_base_url, api_key, model)
+            subprocess_kwargs: Dict[str, Any] = dict(
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=custom_env,
+            )
+            if cwd is not None:
+                subprocess_kwargs["cwd"] = cwd
+
+            process = await asyncio.create_subprocess_exec(
+                self.cli_path,
+                "-p",
+                prompt,
+                "--output-format",
+                "text",
+                **subprocess_kwargs,
+            )
+
+            # P1: 添加超时，防止 CLI 挂起导致请求永久阻塞
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(input=diff_bytes),
+                    timeout=300.0,
+                )
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+                self._set_last_error(self._build_timeout_error(proxy, label))
+                return None
+        finally:
+            if proxy is not None:
+                await proxy.stop()
+
+        if process.returncode != 0:
+            stderr_text = stderr.decode(errors="ignore").strip()
+            stdout_text = stdout.decode(errors="ignore").strip()
+            actionable_error = self._extract_actionable_error(stderr_text, stdout_text)
+            logger.error(
+                "%s 执行失败 (返回码: %d)%s",
+                self.DISPLAY_NAME,
+                process.returncode,
+                label,
+            )
+            logger.error("Stdout: %s", self._redact_output(stdout_text))
+            logger.error("Stderr: %s", self._redact_output(stderr_text))
+            self._set_last_error(
+                actionable_error
+                or f"{self.DISPLAY_NAME} 执行失败，返回码 {process.returncode}"
+            )
+            return None
+
+        result_text = stdout.decode()
+        if self.debug:
+            logger.debug("[%s Response%s]\n%s", self.PROVIDER_NAME, label, result_text)
+            if stderr:
+                logger.debug(
+                    "[%s Stderr%s]\n%s", self.PROVIDER_NAME, label, stderr.decode()
+                )
+
+        parsed = self._parse_output(result_text)
+        if not parsed:
+            logger.error("%s 返回结果为空%s", self.DISPLAY_NAME, label)
+            self._set_last_error(f"{self.DISPLAY_NAME} 返回结果为空{label}")
+            return None
+
+        if proxy is not None and proxy.usage:
+            parsed.usage_metadata.update(proxy.usage)
+
+        return parsed
 
     async def analyze_pr(
         self,
@@ -211,10 +351,10 @@ JSON结构示例：
         model: Optional[str] = None,
         wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
-        """分析pr。
+        """使用完整仓库上下文分析 PR。
 
         Args:
-            repo_path: 本地仓库路径。
+            repo_path: 本地仓库路径（作为 CLI 工作目录）。
             diff_content: PR 的差异内容。
             focus_areas: 审查关注点列表。
             pr_info: PR 基本信息。
@@ -222,27 +362,19 @@ JSON结构示例：
             api_key: API 密钥。
             custom_prompt: 自定义提示词。
             model: 模型名称。
-            wire_api: 底层 API 协议标识。
+            wire_api: 底层 API 协议标识（保留参数，暂未使用）。
 
         Returns:
             可能为空的结果。
         """
         self._clear_last_error()
         try:
-            # P5: 截断过长 diff，防止内存溢出和 token 炸弹
-            if len(diff_content) > self.MAX_DIFF_CHARS:
-                diff_content = (
-                    diff_content[: self.MAX_DIFF_CHARS]
-                    + "\n\n... (diff 内容过长，已截断)"
-                )
-
+            diff_bytes = self._truncate_diff(diff_content)
             prompt = self._build_review_prompt(focus_areas, pr_info, custom_prompt)
-
-            logger.info(f"开始使用 {self.DISPLAY_NAME} 分析PR，仓库路径: {repo_path}")
-
+            logger.info("开始使用 %s 分析PR，仓库路径: %s", self.DISPLAY_NAME, repo_path)
             if self.debug:
-                logger.debug(f"[{self.PROVIDER_NAME} Prompt]\n{prompt}")
-                logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
+                logger.debug("[%s Prompt]\n%s", self.PROVIDER_NAME, prompt)
+                logger.debug("[Diff Content Length] %d bytes", len(diff_bytes))
 
             resolved_api_url = self._resolve_api_url(api_url)
             if not resolved_api_url:
@@ -251,82 +383,17 @@ JSON结构示例：
                 )
                 return None
 
-            proxy, effective_base_url = await self._prepare_usage_proxy(
-                resolved_api_url
+            result = await self._run_cli(
+                prompt, diff_bytes, resolved_api_url, api_key, model,
+                cwd=str(repo_path), label="",
             )
-
-            try:
-                custom_env = self._build_env(effective_base_url, api_key, model)
-
-                process = await asyncio.create_subprocess_exec(
-                    self.cli_path,
-                    "-p",
-                    prompt,
-                    "--output-format",
-                    "text",
-                    stdin=asyncio.subprocess.PIPE,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    cwd=str(repo_path),
-                    env=custom_env,
-                )
-
-                # P1: 添加超时，防止 CLI 挂起导致请求永久阻塞
-                try:
-                    stdout, stderr = await asyncio.wait_for(
-                        process.communicate(input=diff_content.encode("utf-8")),
-                        timeout=300.0,
-                    )
-                except asyncio.TimeoutError:
-                    process.kill()
-                    await process.wait()
-                    self._set_last_error(self._build_timeout_error(proxy))
-                    return None
-            finally:
-                if proxy is not None:
-                    await proxy.stop()
-
-            if process.returncode != 0:
-                stderr_text = stderr.decode(errors="ignore").strip()
-                stdout_text = stdout.decode(errors="ignore").strip()
-                actionable_error = self._extract_actionable_error(
-                    stderr_text, stdout_text
-                )
-                logger.error(
-                    f"{self.DISPLAY_NAME} 执行失败 (返回码: {process.returncode})"
-                )
-                logger.error(f"Stdout: {stdout_text}")
-                logger.error(f"Stderr: {stderr_text}")
-                self._set_last_error(
-                    actionable_error
-                    or f"{self.DISPLAY_NAME} 执行失败，返回码 {process.returncode}"
-                )
-                return None
-
-            result = stdout.decode()
-
-            if self.debug:
-                logger.debug(f"[{self.PROVIDER_NAME} Response]\n{result}")
-                if stderr:
-                    logger.debug(f"[{self.PROVIDER_NAME} Stderr]\n{stderr.decode()}")
-
-            parsed_result = self._parse_output(result)
-            if not parsed_result:
-                logger.error(f"{self.DISPLAY_NAME} 返回结果为空")
-                self._set_last_error(f"{self.DISPLAY_NAME} 返回结果为空")
-                return None
-
-            # 写入代理捕获的真实 token 用量
-            if proxy is not None and proxy.usage:
-                parsed_result.usage_metadata.update(proxy.usage)
-
-            self._set_model_metadata(parsed_result, model)
-
-            logger.info(f"{self.DISPLAY_NAME} 分析完成")
-            return parsed_result
+            if result:
+                self._set_model_metadata(result, model)
+                logger.info("%s 分析完成", self.DISPLAY_NAME)
+            return result
 
         except Exception as e:
-            logger.error(f"{self.DISPLAY_NAME} 分析异常: {e}", exc_info=True)
+            logger.error("%s 分析异常: %s", self.DISPLAY_NAME, e, exc_info=True)
             self._set_last_error(f"{self.DISPLAY_NAME} 分析异常: {e}")
             return None
 
@@ -341,7 +408,7 @@ JSON结构示例：
         model: Optional[str] = None,
         wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
-        """分析pr simple。
+        """仅基于 diff 分析 PR（降级模式，不需要本地仓库）。
 
         Args:
             diff_content: PR 的差异内容。
@@ -351,27 +418,19 @@ JSON结构示例：
             api_key: API 密钥。
             custom_prompt: 自定义提示词。
             model: 模型名称。
-            wire_api: 底层 API 协议标识。
+            wire_api: 底层 API 协议标识（保留参数，暂未使用）。
 
         Returns:
             可能为空的结果。
         """
         self._clear_last_error()
         try:
-            # P5: 截断过长 diff，防止内存溢出和 token 炸弹
-            if len(diff_content) > self.MAX_DIFF_CHARS:
-                diff_content = (
-                    diff_content[: self.MAX_DIFF_CHARS]
-                    + "\n\n... (diff 内容过长，已截断)"
-                )
-
+            diff_bytes = self._truncate_diff(diff_content)
             prompt = self._build_review_prompt(focus_areas, pr_info, custom_prompt)
-
-            logger.info(f"开始使用 {self.DISPLAY_NAME} 分析PR（简单模式）")
-
+            logger.info("开始使用 %s 分析PR（简单模式）", self.DISPLAY_NAME)
             if self.debug:
-                logger.debug(f"[{self.PROVIDER_NAME} Prompt - Simple Mode]\n{prompt}")
-                logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
+                logger.debug("[%s Prompt - Simple Mode]\n%s", self.PROVIDER_NAME, prompt)
+                logger.debug("[Diff Content Length] %d bytes", len(diff_bytes))
 
             resolved_api_url = self._resolve_api_url(api_url)
             if not resolved_api_url:
@@ -380,86 +439,17 @@ JSON结构示例：
                 )
                 return None
 
-            proxy, effective_base_url = await self._prepare_usage_proxy(
-                resolved_api_url
+            result = await self._run_cli(
+                prompt, diff_bytes, resolved_api_url, api_key, model,
+                cwd=None, label="（简单模式）",
             )
-
-            try:
-                custom_env = self._build_env(effective_base_url, api_key, model)
-
-                process = await asyncio.create_subprocess_exec(
-                    self.cli_path,
-                    "-p",
-                    prompt,
-                    "--output-format",
-                    "text",
-                    stdin=asyncio.subprocess.PIPE,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=custom_env,
-                )
-
-                # P1: 添加超时，防止 CLI 挂起导致请求永久阻塞
-                try:
-                    stdout, stderr = await asyncio.wait_for(
-                        process.communicate(input=diff_content.encode("utf-8")),
-                        timeout=300.0,
-                    )
-                except asyncio.TimeoutError:
-                    process.kill()
-                    await process.wait()
-                    self._set_last_error(
-                        self._build_timeout_error(proxy, simple_mode=True)
-                    )
-                    return None
-            finally:
-                if proxy is not None:
-                    await proxy.stop()
-
-            if process.returncode != 0:
-                stderr_text = stderr.decode(errors="ignore").strip()
-                stdout_text = stdout.decode(errors="ignore").strip()
-                actionable_error = self._extract_actionable_error(
-                    stderr_text, stdout_text
-                )
-                logger.error(
-                    f"{self.DISPLAY_NAME} 执行失败 (返回码: {process.returncode})"
-                )
-                logger.error(f"Stdout: {stdout_text}")
-                logger.error(f"Stderr: {stderr_text}")
-                self._set_last_error(
-                    actionable_error
-                    or f"{self.DISPLAY_NAME} 执行失败，返回码 {process.returncode}"
-                )
-                return None
-
-            result = stdout.decode()
-
-            if self.debug:
-                logger.debug(f"[{self.PROVIDER_NAME} Response - Simple Mode]\n{result}")
-                if stderr:
-                    logger.debug(
-                        f"[{self.PROVIDER_NAME} Stderr - Simple Mode]\n"
-                        f"{stderr.decode()}"
-                    )
-
-            parsed_result = self._parse_output(result)
-            if not parsed_result:
-                logger.error(f"{self.DISPLAY_NAME} 返回结果为空（简单模式）")
-                self._set_last_error(f"{self.DISPLAY_NAME} 返回结果为空（简单模式）")
-                return None
-
-            # 写入代理捕获的真实 token 用量
-            if proxy is not None and proxy.usage:
-                parsed_result.usage_metadata.update(proxy.usage)
-
-            self._set_model_metadata(parsed_result, model)
-
-            logger.info(f"{self.DISPLAY_NAME} 分析完成（简单模式）")
-            return parsed_result
+            if result:
+                self._set_model_metadata(result, model)
+                logger.info("%s 分析完成（简单模式）", self.DISPLAY_NAME)
+            return result
 
         except Exception as e:
-            logger.error(f"{self.DISPLAY_NAME} 分析异常: {e}", exc_info=True)
+            logger.error("%s 分析异常: %s", self.DISPLAY_NAME, e, exc_info=True)
             self._set_last_error(f"{self.DISPLAY_NAME} 分析异常: {e}")
             return None
 
@@ -479,11 +469,9 @@ JSON结构示例：
         Returns:
             字典结果。
         """
-        # 从父进程环境变量中去除已知凭证 key，避免泄露给 CLI 子进程
+        # 白名单策略：只保留明确安全的系统变量，防止 DATABASE_URL / SECRET_KEY 等泄露
         custom_env = {
-            k: v
-            for k, v in os.environ.items()
-            if k not in self._SENSITIVE_ENV_KEYS
+            k: v for k, v in os.environ.items() if k in self._SAFE_ENV_KEYS
         }
         if api_url:
             custom_env["ANTHROPIC_BASE_URL"] = api_url
@@ -620,45 +608,53 @@ JSON结构示例：
             pass
 
         # 尝试从 markdown 代码块中提取 JSON
-        for code_block_match in re.finditer(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.S):
-            candidate = code_block_match.group(1)
-            try:
-                return json.loads(candidate)
-            except json.JSONDecodeError:
+        # 先提取代码块内容，再用 brace scanner 处理，避免非贪婪 regex 在嵌套 JSON 中提前截断
+        for code_block_match in re.finditer(r"```(?:json)?\s*([\s\S]*?)\s*```", text):
+            block_text = code_block_match.group(1).strip()
+            if not block_text.startswith("{"):
                 continue
+            parsed = self._scan_json_object(block_text)
+            if parsed is not None:
+                return parsed
         logger.debug("JSON解析失败（code block）")
 
         # 使用深度追踪找到最外层完整 JSON 对象，避免 find/rfind 的括号错位问题
         start = text.find("{")
         if start != -1:
-            depth = 0
-            in_string = False
-            escape_next = False
-            for i in range(start, len(text)):
-                ch = text[i]
-                if escape_next:
-                    escape_next = False
-                    continue
-                if ch == "\\" and in_string:
-                    escape_next = True
-                    continue
-                if ch == '"':
-                    in_string = not in_string
-                    continue
-                if in_string:
-                    continue
-                if ch == "{":
-                    depth += 1
-                elif ch == "}":
-                    depth -= 1
-                    if depth == 0:
-                        candidate = text[start : i + 1]
-                        try:
-                            return json.loads(candidate)
-                        except json.JSONDecodeError:
-                            logger.debug("JSON解析失败（brace scan）")
-                        break
+            parsed = self._scan_json_object(text[start:])
+            if parsed is not None:
+                return parsed
 
+        return None
+
+    @staticmethod
+    def _scan_json_object(text: str) -> Optional[Dict[str, Any]]:
+        """从文本开头扫描并解析第一个完整的 JSON 对象（正确处理嵌套括号和字符串）。"""
+        depth = 0
+        in_string = False
+        escape_next = False
+        for i, ch in enumerate(text):
+            if escape_next:
+                escape_next = False
+                continue
+            if ch == "\\" and in_string:
+                escape_next = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(text[: i + 1])
+                    except json.JSONDecodeError:
+                        logger.debug("JSON解析失败（brace scan）")
+                    break
         return None
 
     @staticmethod
