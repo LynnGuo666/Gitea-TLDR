@@ -111,13 +111,18 @@ class ClaudeCodeProvider(ReviewProvider):
         return self.DISPLAY_NAME
 
     def _build_review_prompt(
-        self, focus_areas: List[str], pr_info: dict, custom_prompt: Optional[str] = None
+        self,
+        focus_areas: List[str],
+        pr_info: dict,
+        diff_content: str,
+        custom_prompt: Optional[str] = None,
     ) -> str:
         """处理审查prompt相关逻辑。
 
         Args:
             focus_areas: 审查关注点列表。
             pr_info: PR 基本信息。
+            diff_content: PR 差异内容。
             custom_prompt: 自定义提示词。
 
         Returns:
@@ -132,7 +137,7 @@ class ClaudeCodeProvider(ReviewProvider):
 
         focus_text = "、".join([focus_map.get(f, f) for f in focus_areas])
 
-        prompt = f"""请审查以下Pull Request的代码变更（diff内容已通过stdin提供）。
+        prompt = f"""请审查以下Pull Request的代码变更。
 
 **PR信息：**
 - 标题: {pr_info.get("title", "N/A")}
@@ -141,6 +146,11 @@ class ClaudeCodeProvider(ReviewProvider):
 
 **审查重点：**
 {focus_text}
+
+**代码变更（diff）：**
+```diff
+{diff_content}
+```
 
 请完成以下审查任务：
 1. **总体评价**：描述本次变更的整体风险、积极影响
@@ -269,7 +279,6 @@ JSON结构示例：
     async def _run_cli(
         self,
         prompt: str,
-        diff_bytes: bytes,
         api_url: str,
         api_key: Optional[str],
         model: Optional[str],
@@ -279,8 +288,7 @@ JSON结构示例：
         """执行 Claude CLI 子进程并返回解析后的审查结果。
 
         Args:
-            prompt: 完整的审查提示词。
-            diff_bytes: 已截断的 UTF-8 编码 diff 字节串。
+            prompt: 完整的审查提示词（含 diff 内容）。
             api_url: 已解析的 API 地址。
             api_key: API 密钥。
             model: 模型标识。
@@ -294,7 +302,6 @@ JSON结构示例：
         try:
             custom_env = self._build_env(effective_base_url, api_key, model)
             subprocess_kwargs: Dict[str, Any] = dict(
-                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=custom_env,
@@ -314,7 +321,7 @@ JSON结构示例：
             # P1: 添加超时，防止 CLI 挂起导致请求永久阻塞
             try:
                 stdout, stderr = await asyncio.wait_for(
-                    process.communicate(input=diff_bytes),
+                    process.communicate(),
                     timeout=300.0,
                 )
             except asyncio.TimeoutError:
@@ -396,12 +403,11 @@ JSON结构示例：
         """
         self._clear_last_error()
         try:
-            diff_bytes = self._truncate_diff(diff_content)
-            prompt = self._build_review_prompt(focus_areas, pr_info, custom_prompt)
+            truncated_diff = self._truncate_diff(diff_content).decode("utf-8", errors="ignore")
+            prompt = self._build_review_prompt(focus_areas, pr_info, truncated_diff, custom_prompt)
             logger.info("开始使用 %s 分析PR，仓库路径: %s", self.DISPLAY_NAME, repo_path)
             if self.debug:
                 logger.debug("[%s Prompt]\n%s", self.PROVIDER_NAME, prompt)
-                logger.debug("[Diff Content Length] %d bytes", len(diff_bytes))
 
             resolved_api_url = self._resolve_api_url(api_url)
             if not resolved_api_url:
@@ -411,7 +417,7 @@ JSON结构示例：
                 return None
 
             result = await self._run_cli(
-                prompt, diff_bytes, resolved_api_url, api_key, model,
+                prompt, resolved_api_url, api_key, model,
                 cwd=str(repo_path), label="",
             )
             if result:
@@ -452,12 +458,11 @@ JSON结构示例：
         """
         self._clear_last_error()
         try:
-            diff_bytes = self._truncate_diff(diff_content)
-            prompt = self._build_review_prompt(focus_areas, pr_info, custom_prompt)
+            truncated_diff = self._truncate_diff(diff_content).decode("utf-8", errors="ignore")
+            prompt = self._build_review_prompt(focus_areas, pr_info, truncated_diff, custom_prompt)
             logger.info("开始使用 %s 分析PR（简单模式）", self.DISPLAY_NAME)
             if self.debug:
                 logger.debug("[%s Prompt - Simple Mode]\n%s", self.PROVIDER_NAME, prompt)
-                logger.debug("[Diff Content Length] %d bytes", len(diff_bytes))
 
             resolved_api_url = self._resolve_api_url(api_url)
             if not resolved_api_url:
@@ -467,7 +472,7 @@ JSON结构示例：
                 return None
 
             result = await self._run_cli(
-                prompt, diff_bytes, resolved_api_url, api_key, model,
+                prompt, resolved_api_url, api_key, model,
                 cwd=None, label="（简单模式）",
             )
             if result:
