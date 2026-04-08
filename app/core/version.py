@@ -2,12 +2,28 @@
 版本信息模块
 """
 
-__version__ = "1.23.0"
+__version__ = "1.23.1"
 __release_date__ = "2026-04-08"
 __author__ = "LynnGuo666"
 
+
+def _semver_key(v: str) -> tuple[int, ...]:
+    """将 'x.y.z' 转为整数元组，用于语义化版本排序"""
+    try:
+        return tuple(int(x) for x in v.split("."))
+    except ValueError:
+        return (0,)
+
 # 版本历史
 VERSION_HISTORY = {
+    "1.23.1": {
+        "date": "2026-04-08",
+        "changes": [
+            "修复：更新日志时间线最后一个版本卡片底部悬线问题，时间线现在正确截止",
+            "修复：版本历史排序改为语义化版本排序（semver），修复 1.9.x 排在 1.10.x 之后的顺序错误",
+            "维护：同步更新后端与前端版本号到 1.23.1",
+        ],
+    },
     "1.23.0": {
         "date": "2026-04-08",
         "changes": [
@@ -587,7 +603,7 @@ def get_all_changelogs_json() -> list[dict]:
     Returns:
         按版本号倒序排列的列表，每项含 version / date / changes
     """
-    sorted_versions = sorted(VERSION_HISTORY.keys(), reverse=True)
+    sorted_versions = sorted(VERSION_HISTORY.keys(), key=_semver_key, reverse=True)
     return [
         {
             "version": v,
@@ -608,7 +624,7 @@ def get_all_changelogs() -> str:
     all_logs = "\n更新日志\n" + "=" * 60 + "\n"
 
     # 按版本号倒序排列
-    sorted_versions = sorted(VERSION_HISTORY.keys(), reverse=True)
+    sorted_versions = sorted(VERSION_HISTORY.keys(), key=_semver_key, reverse=True)
 
     for version in sorted_versions:
         info = VERSION_HISTORY[version]

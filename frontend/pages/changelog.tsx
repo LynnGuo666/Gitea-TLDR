@@ -31,7 +31,7 @@ function parseChange(change: string): { label: string; color: ChipColor; text: s
   return { label: '其他', color: 'default', text: change };
 }
 
-function VersionCard({ entry, isLatest }: { entry: ChangelogEntry; isLatest: boolean }) {
+function VersionCard({ entry, isLatest, isLast }: { entry: ChangelogEntry; isLatest: boolean; isLast: boolean }) {
   return (
     <div className="flex gap-4 sm:gap-6">
       {/* 时间线轴 */}
@@ -41,7 +41,7 @@ function VersionCard({ entry, isLatest }: { entry: ChangelogEntry; isLatest: boo
             isLatest ? 'bg-primary ring-primary' : 'bg-default-300 ring-default-300'
           }`}
         />
-        <div className="w-px flex-1 bg-default-200 mt-1" />
+        {!isLast && <div className="w-px flex-1 bg-default-200 mt-1" />}
       </div>
 
       {/* 内容卡片 */}
@@ -131,7 +131,12 @@ export default function ChangelogPage() {
         ) : data && data.history.length > 0 ? (
           <div className="flex flex-col">
             {data.history.map((entry, idx) => (
-              <VersionCard key={entry.version} entry={entry} isLatest={idx === 0} />
+              <VersionCard
+                key={entry.version}
+                entry={entry}
+                isLatest={idx === 0}
+                isLast={idx === data.history.length - 1}
+              />
             ))}
           </div>
         ) : !error ? (
