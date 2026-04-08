@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "1.23.2"
+__version__ = "1.23.3"
 __release_date__ = "2026-04-08"
 __author__ = "LynnGuo666"
 
@@ -16,6 +16,15 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.23.3": {
+        "date": "2026-04-08",
+        "changes": [
+            "修复：UsageCapturingProxy 在保留原始 SSE 字节透传的同时，新增对 gzip/deflate 压缩流的旁路解压解析，恢复 Anthropic usage 提取能力",
+            "优化：Claude usage 缺失诊断日志补充 content_encoding，并优先输出解压后的可读响应体，便于定位上游兼容层返回格式",
+            "测试：新增 gzip SSE usage 捕获回归测试，覆盖压缩流解析与诊断日志输出",
+            "维护：同步更新后端与前端版本号到 1.23.3",
+        ],
+    },
     "1.23.2": {
         "date": "2026-04-08",
         "changes": [

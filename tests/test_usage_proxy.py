@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import gzip
 import json
 import logging
 import sys
@@ -68,11 +69,12 @@ class FakeWriter:
 
 
 class FakeStreamingResponse:
-    def __init__(self, chunks: list[bytes]):
+    def __init__(self, chunks: list[bytes], headers: dict[str, str] | None = None):
         self.status_code = 200
-        self.headers = httpx.Headers(
-            {"content-type": "text/event-stream", "cache-control": "no-cache"}
-        )
+        merged_headers = {"content-type": "text/event-stream", "cache-control": "no-cache"}
+        if headers:
+            merged_headers.update(headers)
+        self.headers = httpx.Headers(merged_headers)
         self._chunks = chunks
 
     async def aiter_raw(self):
@@ -323,6 +325,60 @@ def test_usage_proxy_captures_non_streaming_response_body_for_diagnostics():
     asyncio.run(scenario())
 
 
+def test_usage_proxy_extracts_usage_from_gzip_sse_stream():
+    async def scenario() -> None:
+        sse_payload = (
+            b"event: message_start\r\n"
+            b'data: {"type":"message_start","message":{"usage":{"input_tokens":12}}}\r\n'
+            b"\r\n"
+            b"event: message_delta\r\n"
+            b'data: {"type":"message_delta","usage":{"output_tokens":5}}\r\n'
+            b"\r\n"
+            b"event: message_stop\r\n"
+            b'data: {"type":"message_stop"}\r\n'
+            b"\r\n"
+        )
+        compressed_payload = gzip.compress(sse_payload)
+        proxy = UsageCapturingProxy("https://api.example.com", debug=True)
+        proxy._client = FakeClient(
+            FakeStreamingResponse(
+                [compressed_payload[:40], compressed_payload[40:]],
+                headers={
+                    "content-type": "text/event-stream",
+                    "content-encoding": "gzip",
+                },
+            )
+        )
+        writer = FakeWriter()
+
+        should_close = await proxy._proxy_sse(
+            method="POST",
+            url="https://api.example.com/v1/messages",
+            headers={"content-type": "application/json"},
+            body=json.dumps({"stream": True}).encode("utf-8"),
+            writer=writer,
+            conn_id=1,
+            request_count=1,
+        )
+
+        head, body = bytes(writer.buffer).split(b"\r\n\r\n", 1)
+        header_lines = head.decode("utf-8").split("\r\n")
+        headers = {
+            line.split(": ", 1)[0].lower(): line.split(": ", 1)[1]
+            for line in header_lines[1:]
+            if ": " in line
+        }
+
+        assert should_close is True
+        assert headers["content-encoding"] == "gzip"
+        assert body == compressed_payload
+        assert proxy.usage == {"input_tokens": 12, "output_tokens": 5}
+        assert proxy.captured_response_content_encoding == "gzip"
+        assert proxy.get_captured_response_text() == sse_payload.decode("utf-8")
+
+    asyncio.run(scenario())
+
+
 def test_claude_provider_respects_usage_proxy_toggle(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -394,6 +450,7 @@ def test_claude_provider_logs_raw_response_when_usage_is_missing(
     provider = ClaudeCodeProvider()
     proxy = UsageCapturingProxy("https://api.example.com", debug=True)
     proxy._captured_response_content_type = "application/json"
+    proxy._captured_response_content_encoding = "identity"
     proxy._capture_response_bytes(
         b'{"id":"msg_123","type":"message","content":[{"type":"text","text":"hello"}]}'
     )
@@ -404,4 +461,5 @@ def test_claude_provider_logs_raw_response_when_usage_is_missing(
         )
 
     assert "Claude usage 未提取到（简单模式）" in caplog.text
+    assert "content_encoding=identity" in caplog.text
     assert '"id":"msg_123"' in caplog.text

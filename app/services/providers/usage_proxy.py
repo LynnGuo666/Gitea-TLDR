@@ -9,6 +9,7 @@
 import asyncio
 import json
 import logging
+import zlib
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -60,6 +61,7 @@ class UsageCapturingProxy:
         self._captured_response_bytes = bytearray()
         self._captured_response_truncated: bool = False
         self._captured_response_content_type: Optional[str] = None
+        self._captured_response_content_encoding: Optional[str] = None
 
     @property
     def port(self) -> int:
@@ -73,13 +75,21 @@ class UsageCapturingProxy:
     def captured_response_content_type(self) -> Optional[str]:
         return self._captured_response_content_type
 
+    @property
+    def captured_response_content_encoding(self) -> Optional[str]:
+        return self._captured_response_content_encoding
+
     def has_captured_response_body(self) -> bool:
         return bool(self._captured_response_bytes)
 
     def get_captured_response_text(self) -> str:
         if not self._captured_response_bytes:
             return ""
-        return self._captured_response_bytes.decode("utf-8", errors="replace")
+        payload = bytes(self._captured_response_bytes)
+        decoded_payload = self._decode_captured_response_bytes(payload)
+        if decoded_payload is None:
+            return payload.decode("utf-8", errors="replace")
+        return decoded_payload.decode("utf-8", errors="replace")
 
     async def start(self) -> int:
         """启动代理，返回监听端口。"""
@@ -260,7 +270,8 @@ class UsageCapturingProxy:
 
         try:
             async with client.stream(method, url, headers=headers, content=body) as resp:
-                self._set_captured_response_content_type(resp.headers)
+                self._set_captured_response_headers(resp.headers)
+                sse_decoder = self._create_sse_decoder()
                 self._write_status_and_headers(
                     writer,
                     resp.status_code,
@@ -281,7 +292,12 @@ class UsageCapturingProxy:
                         self._capture_response_bytes(chunk)
                         writer.write(chunk)
                         await writer.drain()
-                        self._consume_sse_bytes(parser_buffer, chunk, event_state)
+                        self._consume_sse_chunk(
+                            parser_buffer, chunk, event_state, sse_decoder
+                        )
+                    self._flush_sse_decoder(
+                        parser_buffer, event_state, sse_decoder
+                    )
                     return True
 
                 chunk_iter = resp.aiter_raw().__aiter__()
@@ -313,7 +329,9 @@ class UsageCapturingProxy:
                     self._capture_response_bytes(chunk)
                     writer.write(chunk)
                     await writer.drain()
-                    self._consume_sse_bytes(parser_buffer, chunk, event_state)
+                    self._consume_sse_chunk(
+                        parser_buffer, chunk, event_state, sse_decoder
+                    )
                     if (
                         chunk_count == 1
                         or chunk_count % _SSE_CHUNK_LOG_EVERY == 0
@@ -327,6 +345,7 @@ class UsageCapturingProxy:
                             response_bytes,
                             gap_ms,
                         )
+                self._flush_sse_decoder(parser_buffer, event_state, sse_decoder)
         except Exception as exc:
             self.last_error = (
                 f"SSE 转发失败: {type(exc).__name__}: {exc}"
@@ -367,7 +386,7 @@ class UsageCapturingProxy:
 
         content = resp.content
         if capture_usage:
-            self._set_captured_response_content_type(resp.headers)
+            self._set_captured_response_headers(resp.headers)
             self._capture_response_bytes(content)
             self._extract_usage_from_json_body(content)
 
@@ -625,10 +644,15 @@ class UsageCapturingProxy:
                     event_name=event_state.get("event"),
                 )
 
-    def _set_captured_response_content_type(self, headers: httpx.Headers) -> None:
+    def _set_captured_response_headers(self, headers: httpx.Headers) -> None:
         if self._captured_response_content_type:
+            pass
+        else:
+            self._captured_response_content_type = headers.get("content-type")
+
+        if self._captured_response_content_encoding:
             return
-        self._captured_response_content_type = headers.get("content-type")
+        self._captured_response_content_encoding = headers.get("content-encoding")
 
     def _capture_response_bytes(self, chunk: bytes) -> None:
         if not chunk or self._captured_response_truncated:
@@ -647,6 +671,76 @@ class UsageCapturingProxy:
             return
 
         self._captured_response_bytes.extend(chunk)
+
+    def _consume_sse_chunk(
+        self,
+        parser_buffer: bytearray,
+        chunk: bytes,
+        event_state: Dict[str, Optional[str]],
+        decoder: Optional[zlib.decompressobj],
+    ) -> None:
+        parsed_chunk = self._decode_sse_chunk(chunk, decoder)
+        if parsed_chunk:
+            self._consume_sse_bytes(parser_buffer, parsed_chunk, event_state)
+
+    def _flush_sse_decoder(
+        self,
+        parser_buffer: bytearray,
+        event_state: Dict[str, Optional[str]],
+        decoder: Optional[zlib.decompressobj],
+    ) -> None:
+        if decoder is None:
+            return
+        try:
+            flushed = decoder.flush()
+        except zlib.error:
+            return
+        if flushed:
+            self._consume_sse_bytes(parser_buffer, flushed, event_state)
+
+    def _decode_sse_chunk(
+        self, chunk: bytes, decoder: Optional[zlib.decompressobj]
+    ) -> bytes:
+        if decoder is None:
+            return chunk
+        try:
+            return decoder.decompress(chunk)
+        except zlib.error as exc:
+            if self._debug:
+                logger.warning(
+                    "Usage proxy SSE 解压失败 content_encoding=%s: %s",
+                    self.captured_response_content_encoding or "-",
+                    exc,
+                )
+            return b""
+
+    def _create_sse_decoder(self) -> Optional[zlib.decompressobj]:
+        content_encoding = self._normalized_content_encoding()
+        if content_encoding in {"gzip", "x-gzip"}:
+            return zlib.decompressobj(zlib.MAX_WBITS | 16)
+        if content_encoding == "deflate":
+            return zlib.decompressobj()
+        return None
+
+    def _decode_captured_response_bytes(self, payload: bytes) -> Optional[bytes]:
+        content_encoding = self._normalized_content_encoding()
+        if not content_encoding:
+            return payload
+
+        try:
+            if content_encoding in {"gzip", "x-gzip"}:
+                return zlib.decompress(payload, zlib.MAX_WBITS | 16)
+            if content_encoding == "deflate":
+                return zlib.decompress(payload)
+        except zlib.error:
+            return None
+        return payload
+
+    def _normalized_content_encoding(self) -> str:
+        raw_value = (self._captured_response_content_encoding or "").strip().lower()
+        if not raw_value:
+            return ""
+        return raw_value.split(",", 1)[0].strip()
 
     @staticmethod
     def _should_keep_alive(version: str, headers: Dict[str, str]) -> bool:

@@ -4,6 +4,24 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.23.3] - 2026-04-08
+
+### 修复 (Fixed)
+
+- **压缩 SSE usage 提取**: `UsageCapturingProxy` 现在会在保留原始 SSE 字节透传给 Claude CLI 的同时，对 `gzip` / `deflate` 压缩流做旁路解压解析，修复上游返回压缩 `text/event-stream` 时 `usage` 始终为空的问题
+
+### 优化 (Improved)
+
+- **诊断日志可读性**: Claude usage 缺失 warning 现补充 `content_encoding` 字段，并优先输出解压后的响应体内容，便于直接观察上游实际返回的 Anthropic 事件序列
+
+### 测试 (Testing)
+
+- **压缩流回归测试**: 新增 gzip SSE usage 捕获测试，覆盖压缩流解析、原始字节透传与诊断日志输出行为
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.23.3`
+
 ## [1.22.10] - 2026-04-08
 
 ### 优化 (Improved)

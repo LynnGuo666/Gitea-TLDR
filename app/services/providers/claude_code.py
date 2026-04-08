@@ -242,19 +242,22 @@ JSON结构示例：
         """当 usage 未提取到时，输出上游原始响应日志以便排查。"""
         if not proxy.has_captured_response_body():
             logger.warning(
-                "Claude usage 未提取到%s，且代理未捕获到可诊断的上游响应内容: base_url=%s content_type=%s",
+                "Claude usage 未提取到%s，且代理未捕获到可诊断的上游响应内容: "
+                "base_url=%s content_type=%s content_encoding=%s",
                 label,
                 api_url,
                 proxy.captured_response_content_type or "-",
+                proxy.captured_response_content_encoding or "-",
             )
             return
 
         logger.warning(
             "Claude usage 未提取到%s，记录上游原始响应内容供排查: "
-            "base_url=%s content_type=%s truncated=%s body=%s",
+            "base_url=%s content_type=%s content_encoding=%s truncated=%s body=%s",
             label,
             api_url,
             proxy.captured_response_content_type or "-",
+            proxy.captured_response_content_encoding or "-",
             proxy.captured_response_truncated,
             proxy.get_captured_response_text(),
         )
