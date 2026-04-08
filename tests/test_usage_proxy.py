@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -96,6 +97,22 @@ class FakeClient:
 
     def stream(self, method: str, url: str, headers=None, content=None):
         return FakeStreamContext(self._response)
+
+
+class FakeJSONResponse:
+    def __init__(self, payload: dict):
+        self.status_code = 200
+        self.headers = httpx.Headers({"content-type": "application/json"})
+        self.content = json.dumps(payload).encode("utf-8")
+
+
+class FakeRequestClient:
+    def __init__(self, response: FakeJSONResponse):
+        self._response = response
+
+    async def request(self, method: str, url: str, headers=None, content=None):
+        del method, url, headers, content
+        return self._response
 
 
 async def _read_http_request(
@@ -269,6 +286,39 @@ def test_usage_proxy_streams_sse_without_rewriting_and_collects_usage():
         assert headers["connection"] == "close"
         assert body == sse_payload
         assert proxy.usage == {"input_tokens": 10, "output_tokens": 7}
+        assert proxy.get_captured_response_text() == sse_payload.decode("utf-8")
+        assert proxy.captured_response_content_type == "text/event-stream"
+
+    asyncio.run(scenario())
+
+
+def test_usage_proxy_captures_non_streaming_response_body_for_diagnostics():
+    async def scenario() -> None:
+        payload = {
+            "id": "msg_123",
+            "type": "message",
+            "content": [{"type": "text", "text": "hello"}],
+        }
+        proxy = UsageCapturingProxy("https://api.example.com", debug=True)
+        proxy._client = FakeRequestClient(FakeJSONResponse(payload))
+        writer = FakeWriter()
+
+        should_close = await proxy._proxy_non_streaming(
+            method="POST",
+            url="https://api.example.com/v1/messages",
+            headers={"content-type": "application/json"},
+            body=b"{}",
+            writer=writer,
+            keep_alive=False,
+            conn_id=1,
+            request_count=1,
+            capture_usage=True,
+        )
+
+        assert should_close is True
+        assert proxy.usage == {}
+        assert proxy.captured_response_content_type == "application/json"
+        assert '"id": "msg_123"' in proxy.get_captured_response_text()
 
     asyncio.run(scenario())
 
@@ -336,3 +386,22 @@ def test_claude_provider_does_not_inherit_parent_env_base_url_or_auth_token(
 
     assert custom_env["ANTHROPIC_BASE_URL"] == "https://api.example.com"
     assert "ANTHROPIC_AUTH_TOKEN" not in custom_env
+
+
+def test_claude_provider_logs_raw_response_when_usage_is_missing(
+    caplog: pytest.LogCaptureFixture,
+):
+    provider = ClaudeCodeProvider()
+    proxy = UsageCapturingProxy("https://api.example.com", debug=True)
+    proxy._captured_response_content_type = "application/json"
+    proxy._capture_response_bytes(
+        b'{"id":"msg_123","type":"message","content":[{"type":"text","text":"hello"}]}'
+    )
+
+    with caplog.at_level(logging.WARNING):
+        provider._log_missing_usage_warning(
+            proxy, "https://api.example.com", "（简单模式）"
+        )
+
+    assert "Claude usage 未提取到（简单模式）" in caplog.text
+    assert '"id":"msg_123"' in caplog.text

@@ -225,6 +225,30 @@ JSON结构示例：
             message = f"{message}；代理异常：{proxy.last_error}"
         return message
 
+    @staticmethod
+    def _log_missing_usage_warning(
+        proxy: UsageCapturingProxy, api_url: str, label: str = ""
+    ) -> None:
+        """当 usage 未提取到时，输出上游原始响应日志以便排查。"""
+        if not proxy.has_captured_response_body():
+            logger.warning(
+                "Claude usage 未提取到%s，且代理未捕获到可诊断的上游响应内容: base_url=%s content_type=%s",
+                label,
+                api_url,
+                proxy.captured_response_content_type or "-",
+            )
+            return
+
+        logger.warning(
+            "Claude usage 未提取到%s，记录上游原始响应内容供排查: "
+            "base_url=%s content_type=%s truncated=%s body=%s",
+            label,
+            api_url,
+            proxy.captured_response_content_type or "-",
+            proxy.captured_response_truncated,
+            proxy.get_captured_response_text(),
+        )
+
     @classmethod
     def _redact_output(cls, text: str) -> str:
         """在写入日志前对输出文本脱敏，防止 API key 等凭证信息进入日志。"""
@@ -334,8 +358,11 @@ JSON结构示例：
             self._set_last_error(f"{self.DISPLAY_NAME} 返回结果为空{label}")
             return None
 
-        if proxy is not None and proxy.usage:
-            parsed.usage_metadata.update(proxy.usage)
+        if proxy is not None:
+            if proxy.usage:
+                parsed.usage_metadata.update(proxy.usage)
+            else:
+                self._log_missing_usage_warning(proxy, api_url, label)
 
         return parsed
 

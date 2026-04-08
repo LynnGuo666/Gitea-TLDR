@@ -2,12 +2,32 @@
 版本信息模块
 """
 
-__version__ = "1.22.8"
-__release_date__ = "2026-04-03"
+__version__ = "1.22.10"
+__release_date__ = "2026-04-08"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.22.10": {
+        "date": "2026-04-08",
+        "changes": [
+            "优化：UsageCapturingProxy 在 /v1/messages 请求中额外缓存上游原始响应内容，支持流式 SSE 与非流式 JSON 两种场景",
+            "优化：当 Claude usage 未提取到时，ClaudeCodeProvider 自动输出包含 base_url、content_type、截断状态与原始响应体的 warning 日志，便于定位上游返回结构异常",
+            "测试：新增 usage 缺失诊断日志回归测试，覆盖原始响应缓存与 warning 输出行为",
+            "维护：同步更新后端与前端版本号到 1.22.10",
+        ],
+    },
+    "1.22.9": {
+        "date": "2026-04-08",
+        "changes": [
+            "修复：仓库级配置存在但未设置 api_url 时，自动从全局配置继承 api_url 和 api_key，解决已有全局配置仍报错'未配置 api_url'的问题",
+            "安全：ClaudeCodeProvider 环境变量传递策略改为白名单，防止 DATABASE_URL/SECRET_KEY 等应用敏感配置泄露给 CLI 子进程",
+            "安全：CLI 子进程的 stdout/stderr 写入日志前进行脱敏处理，防止 API key 等凭证信息进入日志",
+            "重构：提取 _run_cli 私有方法消除 analyze_pr 与 analyze_pr_simple 约 90% 重复代码",
+            "修复：diff 截断改为按 UTF-8 字节数计算（MAX_DIFF_BYTES），避免中文内容超限 3 倍",
+            "修复：JSON 提取的 markdown 代码块解析改用 brace scanner，避免非贪婪 regex 在嵌套结构中提前截断",
+        ],
+    },
     "1.22.8": {
         "date": "2026-04-03",
         "changes": [

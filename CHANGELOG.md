@@ -4,6 +4,20 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.22.10] - 2026-04-08
+
+### 优化 (Improved)
+
+- **usage 缺失诊断日志**: `UsageCapturingProxy` 现在会为 `/v1/messages` 额外缓存上游原始响应内容，覆盖流式 SSE 与非流式 JSON 两种场景；当 Claude usage 未提取到时，`ClaudeCodeProvider` 会输出包含 `base_url`、`content_type`、截断状态与原始响应体的 warning 日志，方便直接定位上游返回结构异常
+
+### 测试 (Testing)
+
+- **诊断日志回归测试**: 新增测试覆盖原始响应缓存与 usage 缺失时 warning 日志输出，确保后续排查链路稳定可用
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.22.10`
+
 ## [1.22.8] - 2026-04-03
 
 ### 修复 (Fixed)

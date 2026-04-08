@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 _SSE_IDLE_LOG_INTERVAL_SECONDS = 15.0
 _SSE_CHUNK_LOG_EVERY = 20
+_RAW_RESPONSE_CAPTURE_LIMIT_BYTES = 128 * 1024
 
 _HOP_BY_HOP = frozenset(
     h.lower()
@@ -56,10 +57,29 @@ class UsageCapturingProxy:
         self._serve_task: Optional[asyncio.Task] = None
         self._client: Optional[httpx.AsyncClient] = None
         self._connection_counter: int = 0
+        self._captured_response_bytes = bytearray()
+        self._captured_response_truncated: bool = False
+        self._captured_response_content_type: Optional[str] = None
 
     @property
     def port(self) -> int:
         return self._port
+
+    @property
+    def captured_response_truncated(self) -> bool:
+        return self._captured_response_truncated
+
+    @property
+    def captured_response_content_type(self) -> Optional[str]:
+        return self._captured_response_content_type
+
+    def has_captured_response_body(self) -> bool:
+        return bool(self._captured_response_bytes)
+
+    def get_captured_response_text(self) -> str:
+        if not self._captured_response_bytes:
+            return ""
+        return self._captured_response_bytes.decode("utf-8", errors="replace")
 
     async def start(self) -> int:
         """启动代理，返回监听端口。"""
@@ -240,6 +260,7 @@ class UsageCapturingProxy:
 
         try:
             async with client.stream(method, url, headers=headers, content=body) as resp:
+                self._set_captured_response_content_type(resp.headers)
                 self._write_status_and_headers(
                     writer,
                     resp.status_code,
@@ -257,6 +278,7 @@ class UsageCapturingProxy:
                 if not self._debug:
                     async for chunk in resp.aiter_raw():
                         response_bytes += len(chunk)
+                        self._capture_response_bytes(chunk)
                         writer.write(chunk)
                         await writer.drain()
                         self._consume_sse_bytes(parser_buffer, chunk, event_state)
@@ -288,6 +310,7 @@ class UsageCapturingProxy:
                     gap_ms = int((now - last_chunk_at) * 1000)
                     last_chunk_at = now
                     response_bytes += len(chunk)
+                    self._capture_response_bytes(chunk)
                     writer.write(chunk)
                     await writer.drain()
                     self._consume_sse_bytes(parser_buffer, chunk, event_state)
@@ -344,6 +367,8 @@ class UsageCapturingProxy:
 
         content = resp.content
         if capture_usage:
+            self._set_captured_response_content_type(resp.headers)
+            self._capture_response_bytes(content)
             self._extract_usage_from_json_body(content)
 
         self._write_status_and_headers(
@@ -599,6 +624,29 @@ class UsageCapturingProxy:
                     line[6:].decode("utf-8", errors="ignore"),
                     event_name=event_state.get("event"),
                 )
+
+    def _set_captured_response_content_type(self, headers: httpx.Headers) -> None:
+        if self._captured_response_content_type:
+            return
+        self._captured_response_content_type = headers.get("content-type")
+
+    def _capture_response_bytes(self, chunk: bytes) -> None:
+        if not chunk or self._captured_response_truncated:
+            return
+
+        remaining = _RAW_RESPONSE_CAPTURE_LIMIT_BYTES - len(
+            self._captured_response_bytes
+        )
+        if remaining <= 0:
+            self._captured_response_truncated = True
+            return
+
+        if len(chunk) > remaining:
+            self._captured_response_bytes.extend(chunk[:remaining])
+            self._captured_response_truncated = True
+            return
+
+        self._captured_response_bytes.extend(chunk)
 
     @staticmethod
     def _should_keep_alive(version: str, headers: Dict[str, str]) -> bool:
