@@ -352,12 +352,12 @@ JSON结构示例：
             return None
 
         result_text = stdout.decode()
-        if self.debug:
-            logger.debug("[%s Response%s]\n%s", self.PROVIDER_NAME, label, result_text)
-            if stderr:
-                logger.debug(
-                    "[%s Stderr%s]\n%s", self.PROVIDER_NAME, label, stderr.decode()
-                )
+        logger.info("[%s Input%s]\n%s", self.PROVIDER_NAME, label, prompt)
+        logger.info("[%s Output%s]\n%s", self.PROVIDER_NAME, label, result_text)
+        if self.debug and stderr:
+            logger.debug(
+                "[%s Stderr%s]\n%s", self.PROVIDER_NAME, label, stderr.decode()
+            )
 
         parsed = self._parse_output(result_text)
         if not parsed:

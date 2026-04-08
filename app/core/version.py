@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "1.23.1"
+__version__ = "1.23.2"
 __release_date__ = "2026-04-08"
 __author__ = "LynnGuo666"
 
@@ -16,6 +16,14 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.23.2": {
+        "date": "2026-04-08",
+        "changes": [
+            "修复：ClaudeCodeProvider 将 diff 内容直接嵌入 prompt，不再依赖 stdin 传递，确保 Claude Code CLI 能读取到完整 diff",
+            "新增：Claude Code CLI 调用时以 INFO 级别记录完整输入 prompt 与输出内容，便于排查审查质量问题",
+            "维护：同步更新后端与前端版本号到 1.23.2",
+        ],
+    },
     "1.23.1": {
         "date": "2026-04-08",
         "changes": [
