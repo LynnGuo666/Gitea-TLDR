@@ -49,6 +49,17 @@ export type ProvidersResponse = {
   default: string;
 };
 
+export type ChangelogEntry = {
+  version: string;
+  date: string;
+  changes: string[];
+};
+
+export type ChangelogResponse = {
+  version: string;
+  history: ChangelogEntry[];
+};
+
 export type UsageSummary = {
   total_input_tokens: number;
   total_output_tokens: number;

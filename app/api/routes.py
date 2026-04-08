@@ -31,6 +31,7 @@ from app.core import (
     get_version_info,
     get_changelog,
     get_all_changelogs,
+    get_all_changelogs_json,
 )
 from app.core.context import AppContext
 from app.models import User
@@ -305,6 +306,14 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         return {
             "version": __version__,
             "changelog": get_all_changelogs(),
+        }
+
+    @public_router.get("/changelog/json")
+    async def changelog_json():
+        """结构化更新日志端点，供前端时间线页面消费"""
+        return {
+            "version": __version__,
+            "history": get_all_changelogs_json(),
         }
 
     @api_router.get("/config/public")

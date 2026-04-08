@@ -10,6 +10,7 @@ from .version import (
     get_version_info,
     get_changelog,
     get_all_changelogs,
+    get_all_changelogs_json,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "get_version_info",
     "get_changelog",
     "get_all_changelogs",
+    "get_all_changelogs_json",
 ]

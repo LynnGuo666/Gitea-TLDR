@@ -11,7 +11,7 @@ import {
   Avatar,
   addToast,
 } from '@heroui/react';
-import { BarChart3, User, Sun, Moon, Shield, LogOut, LayoutGrid, Menu, X, Settings2, BookOpen } from 'lucide-react';
+import { BarChart3, User, Sun, Moon, Shield, LogOut, LayoutGrid, Menu, X, Settings2, BookOpen, GitBranch } from 'lucide-react';
 import { VersionDisplay } from './VersionDisplay';
 import {
   AuthContext,
@@ -177,6 +177,7 @@ export default function Layout({ children }: LayoutProps) {
                     onAction={(key) => {
                       if (key === 'logout') logout();
                       if (key === 'login') beginLogin();
+                      if (key === 'changelog') void router.push('/changelog');
                     }}
                   >
                     <DropdownItem key="user-info" isReadOnly textValue="用户信息" className="h-14 gap-2 opacity-100 cursor-default">
@@ -189,6 +190,9 @@ export default function Layout({ children }: LayoutProps) {
                     </DropdownItem>
                     <DropdownItem key="version" isReadOnly textValue="版本信息" className="cursor-default">
                       <VersionDisplay inline />
+                    </DropdownItem>
+                    <DropdownItem key="changelog" startContent={<GitBranch size={16} />}>
+                      更新日志
                     </DropdownItem>
                     {authStatus.loggedIn ? (
                       <DropdownItem key="logout" startContent={<LogOut size={16} />}>
@@ -334,10 +338,14 @@ export default function Layout({ children }: LayoutProps) {
                   onAction={(key) => {
                     if (key === 'logout') logout();
                     if (key === 'login') beginLogin();
+                    if (key === 'changelog') void router.push('/changelog');
                   }}
                 >
                   <DropdownItem key="version" isReadOnly textValue="版本信息" className="cursor-default">
                     <VersionDisplay inline />
+                  </DropdownItem>
+                  <DropdownItem key="changelog" startContent={<GitBranch size={16} />}>
+                    更新日志
                   </DropdownItem>
                   {authStatus.loggedIn ? (
                     <DropdownItem key="logout" startContent={<LogOut size={16} />}>

@@ -2,12 +2,21 @@
 版本信息模块
 """
 
-__version__ = "1.22.10"
+__version__ = "1.23.0"
 __release_date__ = "2026-04-08"
 __author__ = "LynnGuo666"
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.23.0": {
+        "date": "2026-04-08",
+        "changes": [
+            "新增：更新日志时间线页面（/changelog），以版本卡片形式展示完整变更历史",
+            "新增：后端 /changelog/json 公开端点，返回结构化版本历史 JSON",
+            "优化：侧边栏/移动端头像下拉菜单新增「更新日志」入口，支持快速跳转",
+            "维护：同步更新后端与前端版本号到 1.23.0",
+        ],
+    },
     "1.22.10": {
         "date": "2026-04-08",
         "changes": [
@@ -569,6 +578,24 @@ def get_changelog(version: str | None = None) -> str:
         changelog += f"  • {change}\n"
 
     return changelog
+
+
+def get_all_changelogs_json() -> list[dict]:
+    """
+    获取所有版本的结构化更新日志（供 API JSON 返回）
+
+    Returns:
+        按版本号倒序排列的列表，每项含 version / date / changes
+    """
+    sorted_versions = sorted(VERSION_HISTORY.keys(), reverse=True)
+    return [
+        {
+            "version": v,
+            "date": VERSION_HISTORY[v]["date"],
+            "changes": VERSION_HISTORY[v]["changes"],
+        }
+        for v in sorted_versions
+    ]
 
 
 def get_all_changelogs() -> str:
