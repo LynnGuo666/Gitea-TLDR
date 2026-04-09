@@ -53,6 +53,7 @@ function isAuthStatusEqual(a: AuthStatus, b: AuthStatus): boolean {
 export default function Layout({ children }: LayoutProps) {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState(defaultAuthStatus);
+  const [backendReachable, setBackendReachable] = useState<boolean | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -68,6 +69,7 @@ export default function Layout({ children }: LayoutProps) {
 
     void fetchAuthStatus()
       .then(async (nextStatus) => {
+        setBackendReachable(true);
         setAuthStatus((prevStatus) =>
           isAuthStatusEqual(prevStatus, nextStatus) ? prevStatus : nextStatus
         );
@@ -85,6 +87,7 @@ export default function Layout({ children }: LayoutProps) {
         setIsAdmin(false);
       })
       .catch(() => {
+        setBackendReachable(false);
         setAuthStatus((prevStatus) =>
           isAuthStatusEqual(prevStatus, defaultAuthStatus) ? prevStatus : defaultAuthStatus
         );
@@ -359,13 +362,38 @@ export default function Layout({ children }: LayoutProps) {
                 </DropdownMenu>
               </Dropdown>
             ) : (
-              <p className="text-sm text-default-500 m-0">请配置 OAuth 登录</p>
+              <Dropdown placement="top-start">
+                <DropdownTrigger>
+                  <button className="w-full rounded-xl p-2.5 flex items-center gap-3 cursor-pointer transition-colors hover:bg-default-100 text-left">
+                    <Avatar name="?" size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <strong className="block text-sm text-foreground truncate">未登录</strong>
+                      <span className="block text-xs text-default-500 truncate">
+                        {backendReachable === true ? '请配置 OAuth' : '后端未连接'}
+                      </span>
+                    </div>
+                  </button>
+                </DropdownTrigger>
+                <DropdownMenu
+                  aria-label="用户菜单"
+                  onAction={(key) => {
+                    if (key === 'changelog') void router.push('/changelog');
+                  }}
+                >
+                  <DropdownItem key="version" isReadOnly textValue="版本信息" className="cursor-default">
+                    <VersionDisplay inline />
+                  </DropdownItem>
+                  <DropdownItem key="changelog" startContent={<GitBranch size={16} />}>
+                    更新日志
+                  </DropdownItem>
+                </DropdownMenu>
+              </Dropdown>
             )}
           </div>
         </aside>
 
         <main className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 sm:px-8 pb-12 bg-default-50">
-          {!authStatus.enabled ? (
+          {backendReachable === true && !authStatus.enabled ? (
             <section className="max-w-lg mx-auto mt-16 text-center flex flex-col gap-4">
               <h1 className="m-0">需要配置 OAuth</h1>
               <p className="m-0 text-default-500">

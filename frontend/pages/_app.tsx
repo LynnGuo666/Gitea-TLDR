@@ -19,8 +19,8 @@ export default function MyApp({ Component, pageProps }: AppProps) {
           <ToastProvider placement="bottom-right" />
           <Layout>
             <Component {...pageProps} />
-            {process.env.NODE_ENV === 'development' && <Agentation />}
           </Layout>
+          {process.env.NODE_ENV === 'development' && <Agentation />}
         </HeroUIProvider>
       </NextThemesProvider>
     </>
