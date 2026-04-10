@@ -369,68 +369,6 @@ JSON结构示例：
         finally:
             self._cleanup_codex_home(codex_home)
 
-    async def analyze_pr_simple(
-        self,
-        diff_content: str,
-        focus_areas: List[str],
-        pr_info: dict,
-        api_url: Optional[str] = None,
-        api_key: Optional[str] = None,
-        custom_prompt: Optional[str] = None,
-        model: Optional[str] = None,
-        wire_api: Optional[str] = None,
-    ) -> Optional[ReviewResult]:
-        """分析pr simple。
-
-        Args:
-            diff_content: PR 的差异内容。
-            focus_areas: 审查关注点列表。
-            pr_info: PR 基本信息。
-            api_url: API 地址。
-            api_key: API 密钥。
-            custom_prompt: 自定义提示词。
-            model: 模型名称。
-            wire_api: 底层 API 协议标识。
-
-        Returns:
-            可能为空的结果。
-        """
-        self._clear_last_error()
-        codex_home: Optional[str] = None
-        try:
-            prompt = self._build_review_prompt(
-                diff_content, focus_areas, pr_info, custom_prompt
-            )
-
-            logger.info(f"开始使用 {self.DISPLAY_NAME} 分析PR（简单模式）")
-
-            if self.debug:
-                logger.debug(f"[{self.PROVIDER_NAME} Prompt - Simple Mode]\n{prompt}")
-                logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
-
-            resolved_model = model or self.DEFAULT_MODEL
-            codex_home = self._build_codex_home(
-                api_url,
-                api_key,
-                model=resolved_model,
-                wire_api=wire_api,
-            )
-            env = self._build_env(codex_home, api_key)
-
-            return await self._run_codex_exec(
-                prompt,
-                env,
-                cwd=None,
-                model_name=resolved_model,
-            )
-
-        except Exception as e:
-            logger.error(f"{self.DISPLAY_NAME} 分析异常: {e}", exc_info=True)
-            self._set_last_error(f"{self.DISPLAY_NAME} 分析异常: {e}")
-            return None
-        finally:
-            self._cleanup_codex_home(codex_home)
-
     @staticmethod
     def _cleanup_codex_home(codex_home: Optional[str]) -> None:
         """处理Codex home相关逻辑。

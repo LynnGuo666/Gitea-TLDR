@@ -103,50 +103,6 @@ class ReviewEngine:
             self.last_error = provider.last_error
         return result
 
-    async def analyze_pr_simple(
-        self,
-        diff_content: str,
-        focus_areas: List[str],
-        pr_info: dict,
-        api_url: Optional[str] = None,
-        api_key: Optional[str] = None,
-        engine: Optional[str] = None,
-        custom_prompt: Optional[str] = None,
-        model: Optional[str] = None,
-        wire_api: Optional[str] = None,
-    ) -> Optional[ReviewResult]:
-        """分析pr simple。
-
-        Args:
-            diff_content: PR 的差异内容。
-            focus_areas: 审查关注点列表。
-            pr_info: PR 基本信息。
-            api_url: API 地址。
-            api_key: API 密钥。
-            engine: 审查引擎名称。
-            custom_prompt: 自定义提示词。
-            model: 模型名称。
-            wire_api: 底层 API 协议标识。
-
-        Returns:
-            可能为空的结果。
-        """
-        provider = self._resolve_provider(engine)
-        self.last_error = None
-        result = await provider.analyze_pr_simple(
-            diff_content,
-            focus_areas,
-            pr_info,
-            api_url=api_url,
-            api_key=api_key,
-            custom_prompt=custom_prompt,
-            model=model,
-            wire_api=wire_api,
-        )
-        if result is None:
-            self.last_error = provider.last_error
-        return result
-
     def _resolve_provider(self, name: Optional[str] = None) -> ReviewProvider:
         """处理提供方相关逻辑。
 

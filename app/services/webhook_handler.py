@@ -446,41 +446,56 @@ class WebhookHandler:
                 head_branch,
                 auth_token=self.gitea_client.token,
             )
-            if repo_path:
-                clone_operations += 1
-
             if not repo_path:
-                logger.error("无法克隆仓库")
-                # 降级到简单模式
-                logger.info("降级到简单模式（仅分析diff）")
-                analysis_mode = "simple"
-                analysis_result = await self.review_engine.analyze_pr_simple(
-                    diff_content,
-                    focus_areas,
-                    pr_data,
-                    api_url=api_url,
-                    api_key=api_key,
-                    engine=engine,
-                    model=model,
-                    wire_api=wire_api,
-                )
-            else:
-                # 使用完整代码库分析
-                analysis_mode = "full"
-                analysis_result = await self.review_engine.analyze_pr(
-                    repo_path,
-                    diff_content,
-                    focus_areas,
-                    pr_data,
-                    api_url=api_url,
-                    api_key=api_key,
-                    engine=engine,
-                    model=model,
-                    wire_api=wire_api,
-                )
+                logger.error("无法克隆仓库，跳过审查")
+                analysis_error = "无法克隆仓库，审查中止"
+                if comment_id:
+                    error_comment = f"## 自动代码审查\n\n审查失败：{analysis_error}"
+                    await self.gitea_client.update_issue_comment(
+                        owner, repo_name, comment_id, error_comment
+                    )
+                    gitea_api_calls += 1
+                if "status" in features:
+                    await self.gitea_client.create_commit_status(
+                        owner,
+                        repo_name,
+                        head_sha,
+                        "error",
+                        description=analysis_error,
+                    )
+                    gitea_api_calls += 1
 
-                # 清理仓库
-                self.repo_manager.cleanup_repository(owner, repo_name, pr_number)
+                # 更新数据库记录
+                if self.database and review_session_id:
+                    async with self.database.session() as session:
+                        db_service = DBService(session)
+                        await db_service.update_review_session(
+                            review_session_id,
+                            engine=engine,
+                            model=model,
+                            config_source=config_source,
+                            overall_success=False,
+                            error_message=analysis_error,
+                            completed=True,
+                        )
+                return False
+
+            clone_operations += 1
+            analysis_mode = "full"
+            analysis_result = await self.review_engine.analyze_pr(
+                repo_path,
+                diff_content,
+                focus_areas,
+                pr_data,
+                api_url=api_url,
+                api_key=api_key,
+                engine=engine,
+                model=model,
+                wire_api=wire_api,
+            )
+
+            # 清理仓库
+            self.repo_manager.cleanup_repository(owner, repo_name, pr_number)
 
             if analysis_result is None:
                 analysis_error = self.review_engine.last_error or "审查分析过程出错"

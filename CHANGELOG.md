@@ -4,6 +4,16 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.24.0] - 2026-04-10
+
+### 重构 (Refactored)
+
+- **移除 simple 降级模式**: 仓库克隆失败时直接报错中止审查，不再静默降级为仅 diff 分析。移除 `analyze_pr_simple` 方法及其在 `ReviewProvider`、`ReviewEngine`、`ClaudeAnalyzer`、`ClaudeCodeProvider`、`CodexProvider` 中的全部实现
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.24.0`
+
 ## [1.23.4] - 2026-04-09
 
 ### 优化 (Improved)

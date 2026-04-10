@@ -63,31 +63,3 @@ class ClaudeAnalyzer:
             api_url=api_url,
             api_key=api_key,
         )
-
-    async def analyze_pr_simple(
-        self,
-        diff_content: str,
-        focus_areas: List[str],
-        pr_info: dict,
-        api_url: Optional[str] = None,
-        api_key: Optional[str] = None,
-    ) -> Optional[ClaudeReviewResult]:
-        """分析pr simple。
-
-        Args:
-            diff_content: PR 的差异内容。
-            focus_areas: 审查关注点列表。
-            pr_info: PR 基本信息。
-            api_url: API 地址。
-            api_key: API 密钥。
-
-        Returns:
-            可能为空的结果。
-        """
-        return await self._provider.analyze_pr_simple(
-            diff_content,
-            focus_areas,
-            pr_info,
-            api_url=api_url,
-            api_key=api_key,
-        )

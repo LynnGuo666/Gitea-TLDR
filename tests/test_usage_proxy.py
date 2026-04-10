@@ -71,7 +71,10 @@ class FakeWriter:
 class FakeStreamingResponse:
     def __init__(self, chunks: list[bytes], headers: dict[str, str] | None = None):
         self.status_code = 200
-        merged_headers = {"content-type": "text/event-stream", "cache-control": "no-cache"}
+        merged_headers = {
+            "content-type": "text/event-stream",
+            "cache-control": "no-cache",
+        }
         if headers:
             merged_headers.update(headers)
         self.headers = httpx.Headers(merged_headers)
@@ -398,35 +401,6 @@ def test_claude_provider_respects_usage_proxy_toggle(
 def test_usage_proxy_requires_explicit_real_api_url():
     with pytest.raises(ValueError, match="real_api_url"):
         UsageCapturingProxy("")
-
-
-def test_claude_provider_requires_explicit_api_url_for_simple_analysis(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    provider = ClaudeCodeProvider()
-    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://env.example.com")
-    create_subprocess_called = False
-
-    async def fake_create_subprocess_exec(*args, **kwargs):
-        del args, kwargs
-        nonlocal create_subprocess_called
-        create_subprocess_called = True
-        raise AssertionError("不应在缺少 api_url 时启动 CLI")
-
-    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
-
-    async def scenario() -> None:
-        result = await provider.analyze_pr_simple(
-            diff_content="diff --git a/a b/a",
-            focus_areas=["quality"],
-            pr_info={"title": "Test PR", "user": {"login": "tester"}},
-            api_url=None,
-        )
-        assert result is None
-        assert provider.last_error == "Claude Code 未配置 api_url，无法发起审查请求"
-        assert create_subprocess_called is False
-
-    asyncio.run(scenario())
 
 
 def test_claude_provider_does_not_inherit_parent_env_base_url_or_auth_token(

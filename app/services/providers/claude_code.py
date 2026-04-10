@@ -205,9 +205,7 @@ JSON结构示例：
 
         if not settings.claude_usage_proxy_enabled:
             if self.debug or settings.claude_usage_proxy_debug:
-                logger.info(
-                    "Claude usage 代理已禁用，直连上游: %s", effective_base_url
-                )
+                logger.info("Claude usage 代理已禁用，直连上游: %s", effective_base_url)
             return None, effective_base_url
 
         proxy = UsageCapturingProxy(
@@ -223,7 +221,9 @@ JSON结构示例：
 
         proxy_url = f"http://127.0.0.1:{port}"
         if self.debug or settings.claude_usage_proxy_debug:
-            logger.info("Claude usage 代理已启用: %s -> %s", proxy_url, effective_base_url)
+            logger.info(
+                "Claude usage 代理已启用: %s -> %s", proxy_url, effective_base_url
+            )
         return proxy, proxy_url
 
     def _build_timeout_error(
@@ -406,9 +406,15 @@ JSON结构示例：
         """
         self._clear_last_error()
         try:
-            truncated_diff = self._truncate_diff(diff_content).decode("utf-8", errors="ignore")
-            prompt = self._build_review_prompt(focus_areas, pr_info, truncated_diff, custom_prompt)
-            logger.info("开始使用 %s 分析PR，仓库路径: %s", self.DISPLAY_NAME, repo_path)
+            truncated_diff = self._truncate_diff(diff_content).decode(
+                "utf-8", errors="ignore"
+            )
+            prompt = self._build_review_prompt(
+                focus_areas, pr_info, truncated_diff, custom_prompt
+            )
+            logger.info(
+                "开始使用 %s 分析PR，仓库路径: %s", self.DISPLAY_NAME, repo_path
+            )
             if self.debug:
                 logger.debug("[%s Prompt]\n%s", self.PROVIDER_NAME, prompt)
 
@@ -420,67 +426,16 @@ JSON结构示例：
                 return None
 
             result = await self._run_cli(
-                prompt, resolved_api_url, api_key, model,
-                cwd=str(repo_path), label="",
+                prompt,
+                resolved_api_url,
+                api_key,
+                model,
+                cwd=str(repo_path),
+                label="",
             )
             if result:
                 self._set_model_metadata(result, model)
                 logger.info("%s 分析完成", self.DISPLAY_NAME)
-            return result
-
-        except Exception as e:
-            logger.error("%s 分析异常: %s", self.DISPLAY_NAME, e, exc_info=True)
-            self._set_last_error(f"{self.DISPLAY_NAME} 分析异常: {e}")
-            return None
-
-    async def analyze_pr_simple(
-        self,
-        diff_content: str,
-        focus_areas: List[str],
-        pr_info: dict,
-        api_url: Optional[str] = None,
-        api_key: Optional[str] = None,
-        custom_prompt: Optional[str] = None,
-        model: Optional[str] = None,
-        wire_api: Optional[str] = None,
-    ) -> Optional[ReviewResult]:
-        """仅基于 diff 分析 PR（降级模式，不需要本地仓库）。
-
-        Args:
-            diff_content: PR 的差异内容。
-            focus_areas: 审查关注点列表。
-            pr_info: PR 基本信息。
-            api_url: API 地址。
-            api_key: API 密钥。
-            custom_prompt: 自定义提示词。
-            model: 模型名称。
-            wire_api: 底层 API 协议标识（保留参数，暂未使用）。
-
-        Returns:
-            可能为空的结果。
-        """
-        self._clear_last_error()
-        try:
-            truncated_diff = self._truncate_diff(diff_content).decode("utf-8", errors="ignore")
-            prompt = self._build_review_prompt(focus_areas, pr_info, truncated_diff, custom_prompt)
-            logger.info("开始使用 %s 分析PR（简单模式）", self.DISPLAY_NAME)
-            if self.debug:
-                logger.debug("[%s Prompt - Simple Mode]\n%s", self.PROVIDER_NAME, prompt)
-
-            resolved_api_url = self._resolve_api_url(api_url)
-            if not resolved_api_url:
-                self._set_last_error(
-                    f"{self.DISPLAY_NAME} 未配置 api_url，无法发起审查请求"
-                )
-                return None
-
-            result = await self._run_cli(
-                prompt, resolved_api_url, api_key, model,
-                cwd=None, label="（简单模式）",
-            )
-            if result:
-                self._set_model_metadata(result, model)
-                logger.info("%s 分析完成（简单模式）", self.DISPLAY_NAME)
             return result
 
         except Exception as e:
@@ -505,9 +460,7 @@ JSON结构示例：
             字典结果。
         """
         # 白名单策略：只保留明确安全的系统变量，防止 DATABASE_URL / SECRET_KEY 等泄露
-        custom_env = {
-            k: v for k, v in os.environ.items() if k in self._SAFE_ENV_KEYS
-        }
+        custom_env = {k: v for k, v in os.environ.items() if k in self._SAFE_ENV_KEYS}
         if api_url:
             custom_env["ANTHROPIC_BASE_URL"] = api_url
             if self.debug:

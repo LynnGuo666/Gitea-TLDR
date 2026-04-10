@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "1.23.4"
-__release_date__ = "2026-04-09"
+__version__ = "1.24.0"
+__release_date__ = "2026-04-10"
 __author__ = "LynnGuo666"
 
 
@@ -14,8 +14,18 @@ def _semver_key(v: str) -> tuple[int, ...]:
     except ValueError:
         return (0,)
 
+
 # 版本历史
 VERSION_HISTORY = {
+    "1.24.0": {
+        "date": "2026-04-10",
+        "changes": [
+            "重构：移除 analyze_pr_simple 降级模式，仓库克隆失败时直接报错中止审查，不再静默降级为仅 diff 分析",
+            "重构：ReviewProvider 基类移除 analyze_pr_simple 抽象方法，所有 Provider 仅保留 analyze_pr 入口",
+            "重构：ReviewEngine / ClaudeAnalyzer 移除 analyze_pr_simple 调用链",
+            "维护：同步更新后端与前端版本号到 1.24.0",
+        ],
+    },
     "1.23.4": {
         "date": "2026-04-09",
         "changes": [

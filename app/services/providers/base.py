@@ -2,7 +2,7 @@
 审查引擎 Provider 抽象基类与通用数据结构
 
 所有 Provider 实现（如 ClaudeCodeProvider）都需继承 ReviewProvider 并实现
-analyze_pr / analyze_pr_simple 两个抽象方法。
+analyze_pr 抽象方法。
 """
 
 import re
@@ -96,7 +96,6 @@ class ReviewProvider(ABC):
 
     每个 Provider（如 ClaudeCodeProvider）需要实现：
     - analyze_pr: 使用完整代码库上下文分析 PR
-    - analyze_pr_simple: 仅基于 diff 分析 PR（降级模式）
     """
 
     @property
@@ -173,35 +172,6 @@ class ReviewProvider(ABC):
 
         Args:
             repo_path: 本地仓库路径。
-            diff_content: PR 的差异内容。
-            focus_areas: 审查关注点列表。
-            pr_info: PR 基本信息。
-            api_url: API 地址。
-            api_key: API 密钥。
-            custom_prompt: 自定义提示词。
-            model: 模型名称。
-            wire_api: 底层 API 协议标识。
-
-        Returns:
-            可能为空的结果。
-        """
-        ...
-
-    @abstractmethod
-    async def analyze_pr_simple(
-        self,
-        diff_content: str,
-        focus_areas: List[str],
-        pr_info: dict,
-        api_url: Optional[str] = None,
-        api_key: Optional[str] = None,
-        custom_prompt: Optional[str] = None,
-        model: Optional[str] = None,
-        wire_api: Optional[str] = None,
-    ) -> Optional[ReviewResult]:
-        """分析PR简单模式。
-
-        Args:
             diff_content: PR 的差异内容。
             focus_areas: 审查关注点列表。
             pr_info: PR 基本信息。
