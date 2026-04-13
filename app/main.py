@@ -25,6 +25,7 @@ from app.core import (
     get_version_info,
 )
 from app.core.admin_auth import ensure_initial_admin
+from app.core import runtime_settings
 from app.core.context import AppContext
 from app.core.database import Database
 from app.services import (
@@ -152,6 +153,14 @@ def create_app() -> FastAPI:
                     logger.info(f"已从JSON迁移 {migrated} 条仓库记录到数据库")
             except Exception as e:
                 logger.warning(f"JSON数据迁移失败: {e}")
+
+            # 加载运行时配置缓存
+            try:
+                async with database.session() as session:
+                    await runtime_settings.seed(session)
+                logger.info("运行时配置缓存已加载")
+            except Exception as e:
+                logger.warning(f"运行时配置缓存加载失败: {e}")
 
             # 初始化管理员用户
             if settings.admin_enabled and settings.initial_admin_username:

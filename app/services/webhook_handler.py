@@ -5,7 +5,7 @@ Webhook处理模块
 import logging
 from typing import Any, Dict, List, Optional
 
-from app.core import settings
+from app.core import settings, runtime_settings
 from app.core.database import Database
 from app.services.providers.base import (
     InlineComment,
@@ -77,7 +77,7 @@ class WebhookHandler:
             审查重点列表
         """
         if not focus_header:
-            return settings.default_review_focus
+            return runtime_settings.get("default_review_focus", settings.default_review_focus)
 
         focus_areas = [f.strip().lower() for f in focus_header.split(",")]
         valid_areas = ["quality", "security", "performance", "logic"]
@@ -349,7 +349,7 @@ class WebhookHandler:
                             )
 
                     if focus_areas is None:
-                        focus_areas = settings.default_review_focus
+                        focus_areas = runtime_settings.get("default_review_focus", settings.default_review_focus)
                     if features is None:
                         features = ["comment"]
 
@@ -371,7 +371,7 @@ class WebhookHandler:
                     review_session_id = review_session.id
 
             if focus_areas is None:
-                focus_areas = settings.default_review_focus
+                focus_areas = runtime_settings.get("default_review_focus", settings.default_review_focus)
             if features is None:
                 features = ["comment"]
 
@@ -574,11 +574,11 @@ class WebhookHandler:
                 # 如果review创建成功且配置了bot_username且启用了auto_request_reviewer，则自动请求审查者
                 if (
                     review_success
-                    and settings.auto_request_reviewer
-                    and settings.bot_username
+                    and runtime_settings.get("auto_request_reviewer", settings.auto_request_reviewer)
+                    and runtime_settings.get("bot_username", settings.bot_username)
                 ):
                     await self.gitea_client.request_reviewer(
-                        owner, repo_name, pr_number, [settings.bot_username]
+                        owner, repo_name, pr_number, [runtime_settings.get("bot_username", settings.bot_username)]
                     )
                     gitea_api_calls += 1
 

@@ -26,6 +26,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from app.core.admin_auth import admin_required
 from app.core import (
     settings,
+    runtime_settings,
     __version__,
     __release_date__,
     get_version_info,
@@ -321,7 +322,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         """提供前端需要的只读配置"""
         return {
             "gitea_url": settings.gitea_url,
-            "bot_username": settings.bot_username,
+            "bot_username": runtime_settings.get("bot_username", settings.bot_username),
             "debug": settings.debug,
             "oauth_enabled": context.auth_manager.enabled,
         }
@@ -349,7 +350,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 }
                 for p in providers
             ],
-            "default": settings.default_provider,
+            "default": runtime_settings.get("default_provider", settings.default_provider),
         }
 
     @api_router.get("/config/claude-global")
@@ -370,7 +371,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             if not global_config:
                 return {
                     "configured": False,
-                    "engine": settings.default_provider,
+                    "engine": runtime_settings.get("default_provider", settings.default_provider),
                     "model": None,
                     "api_url": None,
                     "has_api_key": False,
@@ -378,7 +379,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
             return {
                 "configured": bool(global_config.api_url or global_config.api_key),
-                "engine": global_config.engine or settings.default_provider,
+                "engine": global_config.engine or runtime_settings.get("default_provider", settings.default_provider),
                 "model": global_config.model,
                 "api_url": global_config.api_url,
                 "has_api_key": bool(global_config.api_key),
@@ -621,9 +622,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             raise HTTPException(status_code=502, detail="创建或更新Webhook失败")
 
         bot_added = False
-        if payload.bring_bot and settings.bot_username:
+        if payload.bring_bot and runtime_settings.get("bot_username", settings.bot_username):
             bot_added = await client.add_collaborator(
-                owner, repo, settings.bot_username
+                owner, repo, runtime_settings.get("bot_username", settings.bot_username)
             )
 
         return {
@@ -1135,7 +1136,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                     "engine": (
                         effective_config.engine
                         if effective_config
-                        else settings.default_provider
+                        else runtime_settings.get("default_provider", settings.default_provider)
                     ),
                     "model": (effective_config.model if effective_config else None),
                     "api_url": (effective_config.api_url if effective_config else None),
@@ -1151,7 +1152,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                     "global_engine": (
                         global_config.engine
                         if global_config
-                        else settings.default_provider
+                        else runtime_settings.get("default_provider", settings.default_provider)
                     ),
                     "global_model": (global_config.model if global_config else None),
                 }
@@ -1172,7 +1173,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "engine": (
                     effective_config.engine
                     if effective_config
-                    else settings.default_provider
+                    else runtime_settings.get("default_provider", settings.default_provider)
                 ),
                 "model": (effective_config.model if effective_config else None),
                 "api_url": (effective_config.api_url if effective_config else None),
@@ -1184,7 +1185,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                     global_config.api_key if global_config else False
                 ),
                 "global_engine": (
-                    global_config.engine if global_config else settings.default_provider
+                    global_config.engine if global_config else runtime_settings.get("default_provider", settings.default_provider)
                 ),
                 "global_model": (global_config.model if global_config else None),
             }

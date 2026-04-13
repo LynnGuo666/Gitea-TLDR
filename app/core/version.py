@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "1.24.0"
-__release_date__ = "2026-04-10"
+__version__ = "1.25.0"
+__release_date__ = "2026-04-13"
 __author__ = "LynnGuo666"
 
 
@@ -17,6 +17,15 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.25.0": {
+        "date": "2026-04-13",
+        "changes": [
+            "新增：运行时配置热更新机制，8 个行为配置字段（default_provider、default_review_focus、auto_request_reviewer、bot_username、claude_usage_proxy_enabled/debug、webhook_log_retention_days[_failed]）现可在管理后台 /admin/config 直接修改，无需重启",
+            "新增：app/core/runtime_settings.py 模块级缓存，启动时从 DB 加载配置，前端写入后立即同步生效",
+            "新增：应用启动时自动将上述字段的 .env 默认值 seed 至 AdminSettings 表",
+            "维护：同步更新后端与前端版本号到 1.25.0",
+        ],
+    },
     "1.24.0": {
         "date": "2026-04-10",
         "changes": [

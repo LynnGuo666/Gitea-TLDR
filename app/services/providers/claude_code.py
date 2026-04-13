@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.core import settings
+from app.core import settings, runtime_settings
 from .base import InlineComment, ReviewProvider, ReviewResult
 from .usage_proxy import UsageCapturingProxy
 
@@ -203,14 +203,17 @@ JSON结构示例：
         """按配置决定是否启用 usage 代理，并返回有效 base URL。"""
         effective_base_url = api_url.rstrip("/")
 
-        if not settings.claude_usage_proxy_enabled:
-            if self.debug or settings.claude_usage_proxy_debug:
+        proxy_enabled = runtime_settings.get("claude_usage_proxy_enabled", settings.claude_usage_proxy_enabled)
+        proxy_debug = runtime_settings.get("claude_usage_proxy_debug", settings.claude_usage_proxy_debug)
+
+        if not proxy_enabled:
+            if self.debug or proxy_debug:
                 logger.info("Claude usage 代理已禁用，直连上游: %s", effective_base_url)
             return None, effective_base_url
 
         proxy = UsageCapturingProxy(
             effective_base_url,
-            debug=(self.debug or settings.claude_usage_proxy_debug),
+            debug=(self.debug or proxy_debug),
         )
         try:
             port = await proxy.start()
@@ -220,7 +223,7 @@ JSON结构示例：
             return None, effective_base_url
 
         proxy_url = f"http://127.0.0.1:{port}"
-        if self.debug or settings.claude_usage_proxy_debug:
+        if self.debug or proxy_debug:
             logger.info(
                 "Claude usage 代理已启用: %s -> %s", proxy_url, effective_base_url
             )

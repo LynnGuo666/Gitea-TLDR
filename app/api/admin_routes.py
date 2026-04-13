@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.core.admin_auth import admin_required
+from app.core import runtime_settings
 from app.core.context import AppContext
 from app.models import User
 from app.services.admin_service import AdminService
@@ -374,6 +375,7 @@ def create_admin_router(context: AppContext) -> APIRouter:
                 description=payload.description,
             )
             await session.commit()
+            runtime_settings.update(key, payload.value)
 
             return {
                 "key": setting.key,
