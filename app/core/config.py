@@ -39,6 +39,16 @@ class Settings(BaseSettings):
     # Codex CLI配置
     codex_cli_path: str = Field("codex", description="Codex CLI路径")
 
+    # Forge 引擎配置
+    forge_base_url: str = Field(
+        "https://api.anthropic.com", description="Forge 引擎 API Base URL"
+    )
+    forge_api_key: str = Field("", description="Forge 引擎 API Key")
+    forge_model: str = Field(
+        "claude-sonnet-4-20250514", description="Forge 引擎默认模型"
+    )
+    forge_max_turns: int = Field(5, description="Forge 引擎最大 agentic 轮次")
+
     # 审查引擎配置
     default_provider: str = Field("claude_code", description="默认审查引擎提供者")
 

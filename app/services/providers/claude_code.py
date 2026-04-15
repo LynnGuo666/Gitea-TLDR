@@ -12,6 +12,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from app.core import settings, runtime_settings
 from .base import InlineComment, ReviewProvider, ReviewResult
+from .parsing import (
+    extract_json_payload as _shared_extract_json,
+    parse_inline_comment as _shared_parse_inline,
+    coerce_int as _shared_coerce_int,
+    extract_actionable_error as _shared_extract_error,
+)
 from .usage_proxy import UsageCapturingProxy
 
 logger = logging.getLogger(__name__)
@@ -203,8 +209,12 @@ JSON结构示例：
         """按配置决定是否启用 usage 代理，并返回有效 base URL。"""
         effective_base_url = api_url.rstrip("/")
 
-        proxy_enabled = runtime_settings.get("claude_usage_proxy_enabled", settings.claude_usage_proxy_enabled)
-        proxy_debug = runtime_settings.get("claude_usage_proxy_debug", settings.claude_usage_proxy_debug)
+        proxy_enabled = runtime_settings.get(
+            "claude_usage_proxy_enabled", settings.claude_usage_proxy_enabled
+        )
+        proxy_debug = runtime_settings.get(
+            "claude_usage_proxy_debug", settings.claude_usage_proxy_debug
+        )
 
         if not proxy_enabled:
             if self.debug or proxy_debug:
@@ -540,161 +550,22 @@ JSON结构示例：
         )
 
     def _parse_inline_comment(self, item: Dict[str, Any]) -> Optional[InlineComment]:
-        """处理行内评论相关逻辑。
-
-        Args:
-            item: 单条解析项数据。
-
-        Returns:
-            可能为空的结果。
-        """
-        if not isinstance(item, dict):
-            return None
-
-        path = str(item.get("path") or "").strip()
-        comment = str(item.get("comment") or item.get("body") or "").strip()
-        if not path or not comment:
-            return None
-
-        line_type = (item.get("line_type") or "new").lower()
-        new_line = self._coerce_int(
-            item.get("new_line") or (item.get("line") if line_type == "new" else None)
-        )
-        old_line = self._coerce_int(
-            item.get("old_line") or (item.get("line") if line_type == "old" else None)
-        )
-
-        severity = (
-            str(item.get("severity")).strip()
-            if isinstance(item.get("severity"), str)
-            else item.get("severity")
-        )
-        suggestion = (
-            str(item.get("suggestion")).strip()
-            if isinstance(item.get("suggestion"), str)
-            else item.get("suggestion")
-        )
-
-        return InlineComment(
-            path=path,
-            comment=comment,
-            new_line=new_line,
-            old_line=old_line,
-            severity=severity,
-            suggestion=suggestion,
-        )
+        result = _shared_parse_inline(item)
+        return result
 
     def _extract_json_payload(self, text: str) -> Optional[Dict[str, Any]]:
-        """处理json请求体相关逻辑。
-
-        Args:
-            text: 待解析文本。
-
-        Returns:
-            字典结果。
-        """
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
-
-        # 尝试从 markdown 代码块中提取 JSON
-        # 先提取代码块内容，再用 brace scanner 处理，避免非贪婪 regex 在嵌套 JSON 中提前截断
-        for code_block_match in re.finditer(r"```(?:json)?\s*([\s\S]*?)\s*```", text):
-            block_text = code_block_match.group(1).strip()
-            if not block_text.startswith("{"):
-                continue
-            parsed = self._scan_json_object(block_text)
-            if parsed is not None:
-                return parsed
-        logger.debug("JSON解析失败（code block）")
-
-        # 使用深度追踪找到最外层完整 JSON 对象，避免 find/rfind 的括号错位问题
-        start = text.find("{")
-        if start != -1:
-            parsed = self._scan_json_object(text[start:])
-            if parsed is not None:
-                return parsed
-
-        return None
+        return _shared_extract_json(text)
 
     @staticmethod
     def _scan_json_object(text: str) -> Optional[Dict[str, Any]]:
-        """从文本开头扫描并解析第一个完整的 JSON 对象（正确处理嵌套括号和字符串）。"""
-        depth = 0
-        in_string = False
-        escape_next = False
-        for i, ch in enumerate(text):
-            if escape_next:
-                escape_next = False
-                continue
-            if ch == "\\" and in_string:
-                escape_next = True
-                continue
-            if ch == '"':
-                in_string = not in_string
-                continue
-            if in_string:
-                continue
-            if ch == "{":
-                depth += 1
-            elif ch == "}":
-                depth -= 1
-                if depth == 0:
-                    try:
-                        return json.loads(text[: i + 1])
-                    except json.JSONDecodeError:
-                        logger.debug("JSON解析失败（brace scan）")
-                    break
-        return None
+        from .parsing import scan_json_object
+
+        return scan_json_object(text)
 
     @staticmethod
     def _extract_actionable_error(stderr_text: str, stdout_text: str) -> str:
-        """处理actionable error相关逻辑。
-
-        Args:
-            stderr_text: 标准错误输出文本。
-            stdout_text: 标准输出文本。
-
-        Returns:
-            字符串结果。
-        """
-        combined = "\n".join(
-            part for part in [stderr_text.strip(), stdout_text.strip()] if part.strip()
-        )
-        if not combined:
-            return ""
-
-        combined = re.sub(r"\x1b\[[0-9;]*m", "", combined)
-
-        for pattern in [
-            r"ERROR:\s*[^\n]*",
-            r"unexpected status\s+\d{3}[^\n]*",
-            r"Error:\s*[^\n]*",
-        ]:
-            match = re.search(pattern, combined, flags=re.IGNORECASE)
-            if match:
-                return match.group(0).strip()
-
-        lines = [line.strip() for line in combined.splitlines() if line.strip()]
-        filtered = [line for line in lines if not line.startswith("Reconnecting...")]
-        if filtered:
-            return filtered[-1]
-        return lines[-1]
+        return _shared_extract_error(stderr_text, stdout_text)
 
     @staticmethod
     def _coerce_int(value: Any) -> Optional[int]:
-        """处理int相关逻辑。
-
-        Args:
-            value: 配置值。
-
-        Returns:
-            可能为空的结果。
-        """
-        if value is None or value == "":
-            return None
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return None
+        return _shared_coerce_int(value)

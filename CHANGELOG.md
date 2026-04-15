@@ -4,6 +4,25 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.26.0] - 2026-04-16
+
+### 新增 (Added)
+
+- **Forge 审查引擎**: 基于 Anthropic Messages API 的原生 agentic 审查引擎，支持工具调用循环（read_file / search_code / list_directory / submit_review），无需依赖 Claude Code CLI 或 Codex CLI 中间层
+- **结构化输出**: Forge 引擎通过 `submit_review` 工具调用实现结构化 JSON 输出，替代正则提取，消除自由文本解析的脆弱性
+- **三层结果提取**: Forge 引擎支持 submit_review 工具结果 → 文本 JSON 提取 → 内联 JSON 解析的三层降级，确保审查结果健壮输出
+- **安全机制**: Forge 引擎文件读取路径遍历防护、搜索范围限定在工作目录、API 密钥与敏感信息脱敏
+- **Forge 配置项**: `FORGE_BASE_URL` / `FORGE_API_KEY` / `FORGE_MODEL` / `FORGE_MAX_TURNS`，支持全局与仓库两级覆盖
+- **Provider 注册**: `ProviderRegistry` 注册 `forge` 引擎，`/api/providers` 端点现返回 `claude_code` / `codex_cli` / `forge` 三个引擎
+
+### 重构 (Refactored)
+
+- **共享解析模块**: 提取 `claude_code.py` 与 `codex_cli.py` 的共用解析逻辑至 `providers/parsing.py`（`extract_json_payload` / `scan_json_object` / `parse_inline_comment` / `coerce_int` / `extract_actionable_error`），两个现有 Provider 改为委托调用，行为不变
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.26.0`
+
 ## [1.24.0] - 2026-04-10
 
 ### 重构 (Refactored)

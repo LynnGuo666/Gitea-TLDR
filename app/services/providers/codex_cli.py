@@ -22,6 +22,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .base import InlineComment, ReviewProvider, ReviewResult
+from .parsing import (
+    extract_json_payload as _shared_extract_json,
+    parse_inline_comment as _shared_parse_inline,
+    coerce_int as _shared_coerce_int,
+    extract_actionable_error as _shared_extract_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -575,151 +581,16 @@ JSON结构示例：
         )
 
     def _parse_inline_comment(self, item: Dict[str, Any]) -> Optional[InlineComment]:
-        """处理行内评论相关逻辑。
-
-        Args:
-            item: 单条解析项数据。
-
-        Returns:
-            可能为空的结果。
-        """
-        if not isinstance(item, dict):
-            return None
-
-        path = str(item.get("path") or "").strip()
-        comment = str(item.get("comment") or item.get("body") or "").strip()
-        if not path or not comment:
-            return None
-
-        line_type = (item.get("line_type") or "new").lower()
-        new_line = self._coerce_int(
-            item.get("new_line") or (item.get("line") if line_type == "new" else None)
-        )
-        old_line = self._coerce_int(
-            item.get("old_line") or (item.get("line") if line_type == "old" else None)
-        )
-
-        severity = (
-            str(item.get("severity")).strip()
-            if isinstance(item.get("severity"), str)
-            else item.get("severity")
-        )
-        suggestion = (
-            str(item.get("suggestion")).strip()
-            if isinstance(item.get("suggestion"), str)
-            else item.get("suggestion")
-        )
-
-        return InlineComment(
-            path=path,
-            comment=comment,
-            new_line=new_line,
-            old_line=old_line,
-            severity=severity,
-            suggestion=suggestion,
-        )
+        result = _shared_parse_inline(item)
+        return result
 
     def _extract_json_payload(self, text: str) -> Optional[Dict[str, Any]]:
-        """处理json请求体相关逻辑。
-
-        Args:
-            text: 待解析文本。
-
-        Returns:
-            字典结果。
-        """
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
-
-        code_block_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.S)
-        if code_block_match:
-            candidate = code_block_match.group(1)
-            try:
-                return json.loads(candidate)
-            except json.JSONDecodeError:
-                logger.debug("JSON解析失败（code block）", exc_info=True)
-
-        first_brace = text.find("{")
-        last_brace = text.rfind("}")
-        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-            candidate = text[first_brace : last_brace + 1]
-            try:
-                return json.loads(candidate)
-            except json.JSONDecodeError:
-                logger.debug("JSON解析失败（brace scan）", exc_info=True)
-
-        return None
+        return _shared_extract_json(text)
 
     @staticmethod
     def _extract_actionable_error(stderr_text: str, stdout_text: str) -> str:
-        """处理actionable error相关逻辑。
-
-        Args:
-            stderr_text: 标准错误输出文本。
-            stdout_text: 标准输出文本。
-
-        Returns:
-            字符串结果。
-        """
-        combined = "\n".join(
-            part for part in [stderr_text.strip(), stdout_text.strip()] if part.strip()
-        )
-        if not combined:
-            return ""
-
-        combined = re.sub(r"\x1b\[[0-9;]*m", "", combined)
-
-        for pattern in [
-            r"ERROR:\s*unexpected status[^\n]*",
-            r"unexpected status\s+\d{3}[^\n]*",
-            r"Error:\s*[^\n]*",
-        ]:
-            match = re.search(pattern, combined, flags=re.IGNORECASE)
-            if match:
-                return match.group(0).strip()
-
-        lines = [line.strip() for line in combined.splitlines() if line.strip()]
-        for line in reversed(lines):
-            if line.startswith("ERROR:"):
-                return line
-
-        for line in reversed(lines):
-            if "unexpected status" in line.lower():
-                return line
-
-        for line in reversed(lines):
-            if line.startswith("Error:"):
-                return line
-
-        filtered = [
-            line
-            for line in lines
-            if "Warning: no last agent message" not in line
-            and not line.startswith("Reconnecting...")
-            and "OpenAI Codex" not in line
-            and "research preview" not in line
-            and line != "--------"
-            and "mcp startup: no servers" not in line
-        ]
-        if filtered:
-            return filtered[-1]
-        return lines[-1]
+        return _shared_extract_error(stderr_text, stdout_text)
 
     @staticmethod
     def _coerce_int(value: Any) -> Optional[int]:
-        """处理int相关逻辑。
-
-        Args:
-            value: 配置值。
-
-        Returns:
-            可能为空的结果。
-        """
-        if value is None or value == "":
-            return None
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return None
+        return _shared_coerce_int(value)

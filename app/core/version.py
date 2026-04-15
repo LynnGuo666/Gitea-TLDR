@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "1.25.0"
-__release_date__ = "2026-04-13"
+__version__ = "1.26.0"
+__release_date__ = "2026-04-16"
 __author__ = "LynnGuo666"
 
 
@@ -17,6 +17,19 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.26.0": {
+        "date": "2026-04-16",
+        "changes": [
+            "新增：Forge 审查引擎——基于 Anthropic Messages API 的原生 agentic 审查引擎，支持工具调用循环（read_file / search_code / list_directory / submit_review），无需依赖 Claude Code CLI 或 Codex CLI 中间层",
+            "新增：Forge 引擎通过 submit_review 工具调用实现结构化 JSON 输出，替代正则提取，消除自由文本解析的脆弱性",
+            "新增：Forge 引擎支持 3 层结果提取（submit_review 工具结果 → 文本 JSON 提取 → 内联 JSON 解析），确保健壮降级",
+            "新增：Forge 引擎安全机制——文件读取路径遍历防护、搜索范围限定在工作目录、API 密钥与敏感信息脱敏",
+            "重构：提取 claude_code.py 与 codex_cli.py 的共用解析逻辑至 providers/parsing.py 共享模块（extract_json_payload / scan_json_object / parse_inline_comment / coerce_int / extract_actionable_error）",
+            "新增：Forge 配置项（FORGE_BASE_URL / FORGE_API_KEY / FORGE_MODEL / FORGE_MAX_TURNS），支持按仓库与全局两级覆盖",
+            "新增：ProviderRegistry 注册 forge 引擎，/api/providers 端点现返回 claude_code / codex_cli / forge 三个引擎",
+            "维护：同步更新后端与前端版本号到 1.26.0",
+        ],
+    },
     "1.25.0": {
         "date": "2026-04-13",
         "changes": [

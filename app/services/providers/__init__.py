@@ -1,6 +1,7 @@
 from .base import InlineComment, ProviderConfig, ReviewProvider, ReviewResult
 from .claude_code import ClaudeCodeProvider
 from .codex_cli import CodexProvider
+from .forge.provider import ForgeProvider
 from .registry import ProviderRegistry
 
 __all__ = [
@@ -10,5 +11,6 @@ __all__ = [
     "ProviderConfig",
     "ClaudeCodeProvider",
     "CodexProvider",
+    "ForgeProvider",
     "ProviderRegistry",
 ]

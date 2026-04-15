@@ -36,9 +36,11 @@ class ProviderRegistry:
         """
         from .claude_code import ClaudeCodeProvider
         from .codex_cli import CodexProvider
+        from .forge.provider import ForgeProvider
 
         self.register("claude_code", ClaudeCodeProvider)
         self.register("codex_cli", CodexProvider)
+        self.register("forge", ForgeProvider)
 
     def register(self, name: str, provider_class: Type[ReviewProvider]) -> None:
         """注册相关内容。

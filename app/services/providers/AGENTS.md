@@ -20,14 +20,26 @@
 - Never leak API keys/tokens in logs, exceptions, or returned text.
 - Avoid mutating global CLI config; prefer isolated temp runtime config (like Codex `CODEX_HOME`).
 - Keep provider logic provider-specific; shared orchestration belongs in `review_engine.py` or higher service layer.
+- `parsing.py` contains shared utilities; prefer importing from there over duplicating in new providers.
+- `forge/` tools must validate file paths against repo_path to prevent path traversal.
 
 ## FILE RESPONSIBILITIES
 | File | Responsibility |
 |---|---|
 | `base.py` | contract + dataclasses (`ReviewProvider`, `ReviewResult`, `InlineComment`) |
 | `registry.py` | provider registration and lookup |
+| `parsing.py` | shared parsing utilities (`extract_json_payload`, `parse_inline_comment`, `coerce_int`, `extract_actionable_error`) |
 | `claude_code.py` | Claude CLI invocation + result normalization |
 | `codex_cli.py` | Codex CLI invocation + isolated config/runtime |
+| `forge/` | Agentic engine — direct Anthropic API with tool use |
+| `forge/provider.py` | `ForgeProvider` — ReviewProvider adapter for the forge engine |
+| `forge/engine.py` | `ForgeEngine` — agentic loop core (turn loop + tool execution) |
+| `forge/api_client.py` | `AnthropicClient` — direct Messages API calls |
+| `forge/types.py` | core data types (`ForgeResult`, `ForgeUsage`, `ToolDefinition`) |
+| `forge/system_prompts.py` | system prompt builders per scenario |
+| `forge/tools/` | tool definitions + executors (`read_file`, `search_code`, `list_directory`, `submit_review`) |
+| `forge/scenarios/` | scenario runners (`review.py`) |
+| `usage_proxy.py` | SSE proxy for capturing Claude CLI usage (only used by claude_code) |
 
 ## ANTI-PATTERNS
 - Do not add business policy decisions (webhook/event flow) in providers.
