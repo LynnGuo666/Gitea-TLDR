@@ -4,6 +4,21 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.26.4] - 2026-04-16
+
+### 修复 (Fixed)
+
+- **Forge 工具序列化运行时错误**: `ForgeEngine` 发起 API 调用时现兼容 `ForgeTool` 实例与 `ToolDefinition` 两种工具定义对象，修复 `list_directory` 等工具因缺少 `to_api_format` 而导致的运行时失败
+- **Forge 工具定义出口统一**: `ForgeTool` 基类补充 `to_api_format` 适配，统一工具定义序列化出口，降低后续新增工具时的接口不一致风险
+
+### 测试 (Testing)
+
+- **ForgeEngine 回归测试**: 新增工具序列化回归测试，覆盖 `get_tools_for_scenario()` 返回真实工具实例时的 API 请求构造
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.26.4`
+
 ## [1.26.3] - 2026-04-16
 
 ### 修复 (Fixed)

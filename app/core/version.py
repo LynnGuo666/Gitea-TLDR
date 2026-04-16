@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "1.26.3"
+__version__ = "1.26.4"
 __release_date__ = "2026-04-16"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,15 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.26.4": {
+        "date": "2026-04-16",
+        "changes": [
+            "修复：ForgeEngine 发起 API 调用时兼容 ForgeTool 实例与 ToolDefinition 两种工具定义对象，修复 list_directory 等工具因缺少 to_api_format 而导致的运行时失败",
+            "修复：ForgeTool 基类补充 to_api_format 适配，统一工具定义序列化出口，降低后续新增工具时的接口不一致风险",
+            "测试：新增 ForgeEngine 工具序列化回归测试，覆盖 get_tools_for_scenario 返回真实工具实例时的 API 请求构造",
+            "维护：同步更新后端与前端版本号到 1.26.4",
+        ],
+    },
     "1.26.3": {
         "date": "2026-04-16",
         "changes": [

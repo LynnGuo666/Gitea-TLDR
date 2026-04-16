@@ -11,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.services.providers.base import InlineComment
+from app.services.providers.forge.engine import ForgeEngine
 from app.services.providers.forge.provider import ForgeProvider
 from app.services.providers.forge.tools import get_tools_for_scenario
 from app.services.providers.forge.types import ForgeResult, ForgeUsage, Scenario
@@ -206,3 +207,41 @@ def test_forge_provider_prefers_explicit_api_over_settings(
     assert review is not None
     assert created["api_key"] == "override-key"
     assert created["base_url"] == "https://override.example.com"
+
+
+def test_forge_engine_serializes_forge_tool_instances_for_api():
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        async def create_message(self, **kwargs):
+            captured.update(kwargs)
+            return {"content": [], "stop_reason": "end_turn"}, ForgeUsage()
+
+        @staticmethod
+        def parse_text_content(content_blocks):
+            return ""
+
+        @staticmethod
+        def parse_tool_calls(content_blocks):
+            return []
+
+    async def fake_tool_executor(tool_call, repo_path):
+        raise AssertionError("本测试不应执行到工具调用")
+
+    engine = ForgeEngine(client=FakeClient(), model="claude-test", max_turns=1)
+    result = asyncio.run(
+        engine.run(
+            system_prompt="test",
+            initial_message="hello",
+            tools=get_tools_for_scenario(Scenario.REVIEW),
+            tool_executor=fake_tool_executor,
+            repo_path=PROJECT_ROOT,
+            scenario=Scenario.REVIEW,
+        )
+    )
+
+    assert result.success is True
+    serialized_tools = captured["tools"]
+    assert isinstance(serialized_tools, list)
+    assert serialized_tools[0]["name"] == "list_directory"
+    assert serialized_tools[-1]["name"] == "submit_review"

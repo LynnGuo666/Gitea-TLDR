@@ -39,6 +39,9 @@ class ForgeTool(ABC):
             input_schema=self.input_schema,
         )
 
+    def to_api_format(self) -> Dict[str, Any]:
+        return self.to_definition().to_api_format()
+
     @abstractmethod
     async def execute(self, arguments: Dict[str, Any], repo_path: Path) -> str: ...
 

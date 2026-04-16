@@ -12,7 +12,7 @@
 
 import logging
 from pathlib import Path
-from typing import Awaitable, Callable, List, Optional, Union
+from typing import Any, Awaitable, Callable, List, Optional
 
 from .api_client import AnthropicClient
 from .types import (
@@ -46,7 +46,7 @@ class ForgeEngine:
         self,
         system_prompt: str,
         initial_message: str,
-        tools: List[ToolDefinition],
+        tools: List[Any],
         tool_executor: ToolExecutor,
         repo_path: Path,
         *,
@@ -64,11 +64,12 @@ class ForgeEngine:
             turns = turn_index
 
             try:
+                serialized_tools = [self._tool_to_api_format(tool) for tool in tools]
                 response_data, turn_usage = await self.client.create_message(
                     model=self.model,
                     messages=messages,
                     system=system_prompt,
-                    tools=[t.to_api_format() for t in tools],
+                    tools=serialized_tools,
                     stop_sequences=stop_sequences,
                     temperature=temperature,
                 )
@@ -198,3 +199,11 @@ class ForgeEngine:
             if tc.name == target:
                 return tc.arguments
         return None
+
+    @staticmethod
+    def _tool_to_api_format(tool: Any) -> dict:
+        if hasattr(tool, "to_api_format"):
+            return tool.to_api_format()
+        if hasattr(tool, "to_definition"):
+            return tool.to_definition().to_api_format()
+        raise TypeError(f"不支持的 Forge 工具定义对象: {type(tool)!r}")
