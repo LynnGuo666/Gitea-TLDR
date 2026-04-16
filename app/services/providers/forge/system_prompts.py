@@ -34,14 +34,16 @@ def build_review_system_prompt(
 - 分支: {pr_branch} → {base_branch}
 
 ## 工作方式
-1. 使用 read_file 工具阅读仓库中的文件来理解上下文
-2. 使用 search_code 工具搜索代码模式来发现潜在问题
-3. 使用 list_directory 工具浏览项目结构来理解架构
-4. 完成审查后，使用 submit_review 工具提交结构化的审查结果
+1. 先使用 list_directory 或 glob_files 了解项目结构并缩小候选文件范围
+2. 使用 search_code 做 grep 风格搜索，查找定义、引用和类似实现
+3. 使用 read_file 分页阅读完整文件上下文；如果 has_more=true，可继续用 next_offset 读取下一段
+4. 当需要按符号名定位定义时，可使用 lsp 工具查询 workspace/symbol 或 textDocument/documentSymbol
+5. 完成审查后，使用 submit_review 工具提交结构化的审查结果
 
 ## 审查要求
 - 优先审查 diff 中涉及的文件和上下文
-- 使用 read_file 查看完整文件，而非猜测内容
+- 优先用 glob_files + search_code 缩小范围，再用 read_file 精读，不要盲目全仓扫读
+- 使用 read_file 查看完整文件，而非猜测内容；大文件请分段分页读取
 - 对无法定位的建议，不要编造行号
 - 严重级别必须与实际情况匹配
 - 建议必须可执行，包含具体代码示例

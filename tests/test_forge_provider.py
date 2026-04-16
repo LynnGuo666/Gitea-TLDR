@@ -20,9 +20,11 @@ def test_get_tools_for_review_scenario_includes_submit_review():
     tools = get_tools_for_scenario(Scenario.REVIEW)
 
     assert [tool.name for tool in tools] == [
-        "read_file",
-        "search_code",
         "list_directory",
+        "glob_files",
+        "search_code",
+        "read_file",
+        "lsp",
         "submit_review",
     ]
 
@@ -155,3 +157,52 @@ def test_forge_provider_analyze_pr_passes_configured_max_turns(
     assert review is not None
     assert captured["max_turns"] == 9
     assert captured["model"] == "claude-test"
+
+
+def test_forge_provider_prefers_explicit_api_over_settings(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    provider = ForgeProvider()
+    created: dict[str, object] = {}
+
+    class DummyClient:
+        def __init__(self, api_key: str, base_url: str):
+            created["api_key"] = api_key
+            created["base_url"] = base_url
+
+    async def fake_run_review(**kwargs):
+        created["client"] = kwargs["client"]
+        return ForgeResult(
+            success=True,
+            scenario=Scenario.REVIEW,
+            structured_data={
+                "summary_markdown": "ok",
+                "overall_severity": "low",
+                "inline_comments": [],
+            },
+        )
+
+    monkeypatch.setattr("app.services.providers.forge.provider.AnthropicClient", DummyClient)
+    monkeypatch.setattr("app.services.providers.forge.provider.run_review", fake_run_review)
+    monkeypatch.setattr(
+        "app.services.providers.forge.provider.settings.forge_api_key", "settings-key"
+    )
+    monkeypatch.setattr(
+        "app.services.providers.forge.provider.settings.forge_base_url",
+        "https://settings.example.com",
+    )
+
+    review = asyncio.run(
+        provider.analyze_pr(
+            repo_path=PROJECT_ROOT,
+            diff_content="diff --git a/a b/a",
+            focus_areas=["quality"],
+            pr_info={},
+            api_url="https://override.example.com",
+            api_key="override-key",
+        )
+    )
+
+    assert review is not None
+    assert created["api_key"] == "override-key"
+    assert created["base_url"] == "https://override.example.com"

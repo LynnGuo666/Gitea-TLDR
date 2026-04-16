@@ -4,6 +4,30 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.26.2] - 2026-04-16
+
+### 新增 (Added)
+
+- **Forge 文件筛选工具**: 新增 `glob_files`，可按 glob 模式快速收敛候选文件，并自动跳过 `node_modules` 等忽略目录
+- **Forge 符号查询工具**: 新增最小可用 `lsp` 工具，支持 `workspace/symbol` 与 `textDocument/documentSymbol`
+
+### 增强 (Improved)
+
+- **search_code 更贴近 grep**: 补充 `path`、`glob`、`output_mode`、`ignore_case`、`multiline`、`line_numbers`、`file_type`、`head_limit`、`offset` 参数，并返回 `next_offset` 分页元数据
+- **read_file 分页协议完善**: 支持 `offset` / `limit` / `has_more` / `next_offset`，同时修复空文件与越界分页场景下的返回协议稳定性
+
+### 测试 (Testing)
+
+- **Forge 工具覆盖扩展**: 新增回归测试覆盖 glob 忽略目录、多行搜索、空文件分页，以及 `Base URL` / `API Key` 显式覆盖 settings 的优先级
+
+### 文档 (Documentation)
+
+- **Forge 提示与设计文档同步**: 更新系统提示词与 Forge 设计文档，明确 `glob_files -> search_code -> read_file -> lsp` 的推荐使用顺序
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.26.2`
+
 ## [1.26.1] - 2026-04-16
 
 ### 修复 (Fixed)

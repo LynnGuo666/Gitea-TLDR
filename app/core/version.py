@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "1.26.1"
+__version__ = "1.26.2"
 __release_date__ = "2026-04-16"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,18 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.26.2": {
+        "date": "2026-04-16",
+        "changes": [
+            "新增：Forge 引入 glob_files 工具，可按 glob 模式在仓库内快速筛选候选文件，并自动跳过 node_modules 等忽略目录",
+            "新增：Forge 引入最小可用 lsp 工具，支持 workspace/symbol 与 textDocument/documentSymbol 两种只读符号查询",
+            "增强：search_code 向 grep 风格靠拢，补充 path/glob/output_mode/ignore_case/multiline/line_numbers/file_type/head_limit/offset 参数，并返回 next_offset 分页元数据",
+            "增强：read_file 升级为分页读取协议，支持 offset/limit/has_more/next_offset，并修复空文件与越界分页时元数据不稳定的问题",
+            "测试：新增 Forge 工具回归测试，覆盖 glob 忽略目录、多行搜索、空文件分页，以及 Base URL / API Key 显式覆盖 settings 的优先级",
+            "文档：同步更新 Forge 设计文档与系统提示词，明确 glob_files、search_code、read_file、lsp 的推荐使用顺序",
+            "维护：同步更新后端与前端版本号到 1.26.2",
+        ],
+    },
     "1.26.1": {
         "date": "2026-04-16",
         "changes": [
