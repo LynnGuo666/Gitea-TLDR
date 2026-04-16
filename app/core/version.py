@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "1.26.5"
+__version__ = "1.26.6"
 __release_date__ = "2026-04-16"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,15 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.26.6": {
+        "date": "2026-04-16",
+        "changes": [
+            "增强：审查记录列表与详情接口补充返回每次审查对应的 token 用量字段，包括 input/output/cache tokens 与 total_tokens",
+            "增强：前端“审查记录”和“管理后台审查历史”页面新增 Tokens 展示，列表可直接查看总 tokens，展开详情可查看输入、输出与缓存 token 明细",
+            "测试：新增审查历史接口回归覆盖，确保 review_sessions 序列化时稳定返回 token 用量字段",
+            "维护：同步更新后端与前端版本号到 1.26.6",
+        ],
+    },
     "1.26.5": {
         "date": "2026-04-16",
         "changes": [

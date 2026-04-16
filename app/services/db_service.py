@@ -335,7 +335,10 @@ class DBService:
         """获取审查会话"""
         stmt = (
             select(ReviewSession)
-            .options(selectinload(ReviewSession.repository))
+            .options(
+                selectinload(ReviewSession.repository),
+                selectinload(ReviewSession.usage_stat),
+            )
             .where(ReviewSession.id == session_id)
         )
         result = await self.session.execute(stmt)
@@ -352,7 +355,10 @@ class DBService:
         offset: int = 0,
     ) -> List[ReviewSession]:
         """获取审查会话列表"""
-        stmt = select(ReviewSession).options(selectinload(ReviewSession.repository))
+        stmt = select(ReviewSession).options(
+            selectinload(ReviewSession.repository),
+            selectinload(ReviewSession.usage_stat),
+        )
 
         if repository_ids:
             stmt = stmt.where(ReviewSession.repository_id.in_(repository_ids))

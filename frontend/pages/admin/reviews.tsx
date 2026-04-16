@@ -47,6 +47,11 @@ type ReviewItem = {
   started_at: string | null;
   completed_at: string | null;
   duration_seconds: number | null;
+  estimated_input_tokens: number;
+  estimated_output_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+  total_tokens: number;
 };
 
 type ReviewDetail = {
@@ -61,6 +66,11 @@ type ReviewDetail = {
   inline_comments_count: number;
   overall_success: boolean | null;
   error_message: string | null;
+  estimated_input_tokens: number;
+  estimated_output_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+  total_tokens: number;
   inline_comments: InlineComment[];
 };
 
@@ -131,6 +141,11 @@ function shortText(text: string | null, max = 36): string {
   if (!text) return '—';
   if (text.length <= max) return text;
   return `${text.slice(0, max)}...`;
+}
+
+function formatTokens(value: number | null | undefined): string {
+  if (!value) return '—';
+  return new Intl.NumberFormat('zh-CN').format(value);
 }
 
 export default function AdminReviewsPage() {
@@ -228,12 +243,35 @@ export default function AdminReviewsPage() {
             <span>{detail.model || '—'}</span>
           </div>
           <div>
+            <span className="text-default-500 mr-2">总 Tokens</span>
+            <span>{formatTokens(detail.total_tokens)}</span>
+          </div>
+          <div>
             <span className="text-default-500 mr-2">审查模式</span>
             <span>{detail.analysis_mode || '—'}</span>
           </div>
           <div>
             <span className="text-default-500 mr-2">审查功能</span>
             <span>{detail.enabled_features?.join(', ') || '—'}</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-sm">
+          <div>
+            <span className="text-default-500 mr-2">输入 Tokens</span>
+            <span>{formatTokens(detail.estimated_input_tokens)}</span>
+          </div>
+          <div>
+            <span className="text-default-500 mr-2">输出 Tokens</span>
+            <span>{formatTokens(detail.estimated_output_tokens)}</span>
+          </div>
+          <div>
+            <span className="text-default-500 mr-2">缓存写入</span>
+            <span>{formatTokens(detail.cache_creation_input_tokens)}</span>
+          </div>
+          <div>
+            <span className="text-default-500 mr-2">缓存读取</span>
+            <span>{formatTokens(detail.cache_read_input_tokens)}</span>
           </div>
         </div>
 
@@ -348,6 +386,7 @@ export default function AdminReviewsPage() {
                 <TableColumn>触发</TableColumn>
                 <TableColumn>引擎</TableColumn>
                 <TableColumn>审查方向</TableColumn>
+                <TableColumn>Tokens</TableColumn>
                 <TableColumn>耗时</TableColumn>
                 <TableColumn>状态</TableColumn>
                 <TableColumn>失败原因</TableColumn>
@@ -387,6 +426,7 @@ export default function AdminReviewsPage() {
                         </div>
                       </TableCell>
                       <TableCell>{renderFocusChips(review.focus_areas)}</TableCell>
+                      <TableCell>{formatTokens(review.total_tokens)}</TableCell>
                       <TableCell>{formatDuration(review.duration_seconds)}</TableCell>
                       <TableCell>{renderStatusChip(review.overall_success)}</TableCell>
                       <TableCell>
@@ -402,7 +442,7 @@ export default function AdminReviewsPage() {
                   if (isExpanded) {
                     rows.push(
                       <TableRow key={`${review.id}-detail`}>
-                        <TableCell colSpan={10} className="p-0">
+                        <TableCell colSpan={11} className="p-0">
                           {renderExpanded(review.id)}
                         </TableCell>
                       </TableRow>

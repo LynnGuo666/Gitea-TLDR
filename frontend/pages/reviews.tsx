@@ -28,6 +28,11 @@ type ReviewItem = {
   started_at: string | null;
   completed_at: string | null;
   duration_seconds: number | null;
+  estimated_input_tokens: number;
+  estimated_output_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+  total_tokens: number;
 };
 
 type ReviewDetail = ReviewItem & {
@@ -39,6 +44,11 @@ type ReviewDetail = ReviewItem & {
   base_branch: string | null;
   head_sha: string | null;
   diff_size_bytes: number | null;
+  estimated_input_tokens: number;
+  estimated_output_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+  total_tokens: number;
   inline_comments: InlineComment[];
 };
 
@@ -71,6 +81,11 @@ function formatTime(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
   return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatTokens(value: number | null | undefined): string {
+  if (!value) return '—';
+  return new Intl.NumberFormat('zh-CN').format(value);
 }
 
 function renderFocusChips(focusAreas: string[] | null | undefined) {
@@ -241,8 +256,31 @@ export default function ReviewsPage() {
             </span>
           </div>
           <div>
+            <span className="text-default-500 block text-xs mb-1">总 Tokens</span>
+            <span className="font-mono text-default-700">{formatTokens(detail.total_tokens)}</span>
+          </div>
+          <div>
             <span className="text-default-500 block text-xs mb-1">评论数</span>
             <span className="font-mono text-default-700">{detail.inline_comments_count}</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-3 bg-content1 rounded-md border border-default-200">
+          <div>
+            <span className="text-default-500 block text-xs mb-1">输入 Tokens</span>
+            <span className="font-mono text-default-700">{formatTokens(detail.estimated_input_tokens)}</span>
+          </div>
+          <div>
+            <span className="text-default-500 block text-xs mb-1">输出 Tokens</span>
+            <span className="font-mono text-default-700">{formatTokens(detail.estimated_output_tokens)}</span>
+          </div>
+          <div>
+            <span className="text-default-500 block text-xs mb-1">缓存写入</span>
+            <span className="font-mono text-default-700">{formatTokens(detail.cache_creation_input_tokens)}</span>
+          </div>
+          <div>
+            <span className="text-default-500 block text-xs mb-1">缓存读取</span>
+            <span className="font-mono text-default-700">{formatTokens(detail.cache_read_input_tokens)}</span>
           </div>
         </div>
 
@@ -387,6 +425,7 @@ export default function ReviewsPage() {
                 <TableColumn>PR</TableColumn>
                 <TableColumn>触发</TableColumn>
                 <TableColumn>引擎</TableColumn>
+                <TableColumn>Tokens</TableColumn>
                 <TableColumn>耗时</TableColumn>
                 <TableColumn>状态</TableColumn>
                 <TableColumn>时间</TableColumn>
@@ -422,6 +461,11 @@ export default function ReviewsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
+                        <div className="font-mono text-small text-default-700">
+                          {formatTokens(review.total_tokens)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-1 text-default-500">
                           <Timer size={14} />
                           <span className="font-mono">{formatDuration(review.duration_seconds)}</span>
@@ -446,7 +490,7 @@ export default function ReviewsPage() {
 
                   const detailRow = (
                     <TableRow key={`detail-${review.id}`} className="hover:none">
-                      <TableCell colSpan={8} className="p-0 border-t border-dashed border-default-200 bg-content2/30">
+                      <TableCell colSpan={9} className="p-0 border-t border-dashed border-default-200 bg-content2/30">
                         {renderDetailContent(review.id)}
                       </TableCell>
                     </TableRow>

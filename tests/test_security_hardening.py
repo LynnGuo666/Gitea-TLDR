@@ -203,6 +203,12 @@ def test_my_reviews_only_returns_accessible_repositories(monkeypatch: pytest.Mon
         id = 7
         repository_id = 1
         repository = FakeRepositoryRef()
+        usage_stat = SimpleNamespace(
+            estimated_input_tokens=120,
+            estimated_output_tokens=30,
+            cache_creation_input_tokens=10,
+            cache_read_input_tokens=5,
+        )
         pr_number = 10
         pr_title = "Fix bug"
         pr_author = "alice"
@@ -267,6 +273,9 @@ def test_my_reviews_only_returns_accessible_repositories(monkeypatch: pytest.Mon
     body = resp.json()
     assert body["total"] == 1
     assert body["reviews"][0]["repo_full_name"] == "alice/repo-a"
+    assert body["reviews"][0]["estimated_input_tokens"] == 120
+    assert body["reviews"][0]["estimated_output_tokens"] == 30
+    assert body["reviews"][0]["total_tokens"] == 150
 
 
 @pytest.mark.asyncio

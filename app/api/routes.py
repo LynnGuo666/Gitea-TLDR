@@ -144,6 +144,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         Returns:
             审查摘要字典。
         """
+        usage = getattr(review_session, "usage_stat", None)
         return {
             "id": review_session.id,
             "repository_id": review_session.repository_id,
@@ -175,6 +176,23 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 else None
             ),
             "duration_seconds": review_session.duration_seconds,
+            "estimated_input_tokens": (
+                usage.estimated_input_tokens if usage else 0
+            ),
+            "estimated_output_tokens": (
+                usage.estimated_output_tokens if usage else 0
+            ),
+            "cache_creation_input_tokens": (
+                usage.cache_creation_input_tokens if usage else 0
+            ),
+            "cache_read_input_tokens": (
+                usage.cache_read_input_tokens if usage else 0
+            ),
+            "total_tokens": (
+                (usage.estimated_input_tokens + usage.estimated_output_tokens)
+                if usage
+                else 0
+            ),
         }
 
     def _serialize_review_detail(review_session, inline_comments):
@@ -187,6 +205,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         Returns:
             审查详情字典。
         """
+        usage = getattr(review_session, "usage_stat", None)
         return {
             "id": review_session.id,
             "repository_id": review_session.repository_id,
@@ -223,6 +242,23 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 else None
             ),
             "duration_seconds": review_session.duration_seconds,
+            "estimated_input_tokens": (
+                usage.estimated_input_tokens if usage else 0
+            ),
+            "estimated_output_tokens": (
+                usage.estimated_output_tokens if usage else 0
+            ),
+            "cache_creation_input_tokens": (
+                usage.cache_creation_input_tokens if usage else 0
+            ),
+            "cache_read_input_tokens": (
+                usage.cache_read_input_tokens if usage else 0
+            ),
+            "total_tokens": (
+                (usage.estimated_input_tokens + usage.estimated_output_tokens)
+                if usage
+                else 0
+            ),
             "inline_comments": [
                 {
                     "id": c.id,
