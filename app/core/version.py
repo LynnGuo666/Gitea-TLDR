@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "1.26.4"
+__version__ = "1.26.5"
 __release_date__ = "2026-04-16"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,15 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.26.5": {
+        "date": "2026-04-16",
+        "changes": [
+            "增强：Forge 的 Anthropic API 客户端新增自动重试机制，对 429、5xx（含 529 overloaded_error）及瞬时网络异常按指数退避重试 3 次",
+            "增强：重试策略优先尊重 Retry-After 响应头，401 等明确鉴权错误继续快速失败，避免无意义重复请求",
+            "测试：新增 Forge API 客户端回归测试，覆盖 529 连续失败后重试成功与 401 不重试两类场景",
+            "维护：同步更新后端与前端版本号到 1.26.5",
+        ],
+    },
     "1.26.4": {
         "date": "2026-04-16",
         "changes": [
