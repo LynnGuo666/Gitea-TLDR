@@ -4,6 +4,27 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.26.1] - 2026-04-16
+
+### 修复 (Fixed)
+
+- **Forge 路径边界校验**: `read_file` 与 `list_directory` 改为基于 `resolve + relative_to` 的严格仓库路径校验，阻止通过 `../` 与同前缀兄弟目录绕过仓库范围限制
+- **Forge 轮次配置生效**: `ForgeProvider` 现会读取并透传 `FORGE_MAX_TURNS` 到 review 场景，修复配置存在但运行时始终固定 5 轮的问题
+- **场景工具绑定收紧**: Forge 非 `review` 场景不再静默复用 `submit_review`，而是显式报出“场景暂未实现”，避免未来扩展时误绑定错误工具
+- **测试执行兼容性**: 新增 `pytest.ini` 与最小 `asyncio` 适配层，修复未安装 `pytest-asyncio` 环境下 `async def` 测试无法执行的问题
+
+### 测试 (Testing)
+
+- **Forge 回归测试**: 新增 Forge 工具与 provider 测试，覆盖路径逃逸防护、结构化结果转换、文本降级与 `FORGE_MAX_TURNS` 配置生效
+
+### 文档 (Documentation)
+
+- **Forge 文档对齐**: 更新 `providers/AGENTS.md` 与 Forge 设计文档，修正 `analyze_pr_simple` 与 Forge “待实施” 等过期描述
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.26.1`
+
 ## [1.26.0] - 2026-04-16
 
 ### 新增 (Added)

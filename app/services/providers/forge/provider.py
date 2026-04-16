@@ -17,7 +17,7 @@ from ..base import InlineComment, ReviewProvider, ReviewResult
 from ..parsing import coerce_int, extract_json_payload, parse_inline_comment
 from .api_client import AnthropicClient
 from .scenarios.review import run_review
-from .types import ForgeResult, Scenario
+from .types import ForgeResult
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +55,7 @@ class ForgeProvider(ReviewProvider):
         wire_api: Optional[str] = None,
     ) -> Optional[ReviewResult]:
         self._clear_last_error()
+        del wire_api
 
         resolved_key = api_key or getattr(settings, "forge_api_key", "") or ""
         if not resolved_key:
@@ -67,6 +68,7 @@ class ForgeProvider(ReviewProvider):
             settings, "forge_base_url", DEFAULT_FORGE_BASE_URL
         )
         resolved_model = model or getattr(settings, "forge_model", DEFAULT_FORGE_MODEL)
+        resolved_max_turns = max(1, int(getattr(settings, "forge_max_turns", 5) or 5))
 
         client = AnthropicClient(api_key=resolved_key, base_url=resolved_url)
 
@@ -84,6 +86,7 @@ class ForgeProvider(ReviewProvider):
                 focus_areas=focus_areas,
                 pr_info=pr_info,
                 custom_prompt=custom_prompt,
+                max_turns=resolved_max_turns,
             )
         except Exception as e:
             logger.exception("Forge 审查运行异常")

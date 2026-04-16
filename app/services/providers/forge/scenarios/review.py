@@ -26,6 +26,8 @@ async def run_review(
     temperature: Optional[float] = None,
 ) -> ForgeResult:
     scenario = Scenario.REVIEW
+    if max_turns < 1:
+        raise ValueError("Forge max_turns 必须大于 0")
     system_prompt = build_review_system_prompt(
         focus_areas=focus_areas,
         pr_info=pr_info,

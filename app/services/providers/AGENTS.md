@@ -4,9 +4,7 @@
 - This directory implements pluggable review engines behind one contract (`ReviewProvider`).
 
 ## CORE CONTRACT
-- Implement both methods:
-  - `analyze_pr(...)` for full-repo/context mode.
-  - `analyze_pr_simple(...)` for diff-only fallback mode.
+- Implement `analyze_pr(...)` as the single provider entrypoint.
 - Return `ReviewResult` with normalized fields (`summary_markdown`, `inline_comments`, `usage_metadata`, `model`).
 - Register provider in `registry.py` so `ReviewEngine` can resolve it.
 
@@ -15,6 +13,7 @@
 - Failures should preserve actionable diagnostics but redact secrets.
 - Keep output schema stable for downstream persistence/UI rendering.
 - Ensure suggestion snippets are markdown code blocks when code is included.
+- Forge currently supports only the `review` scenario; declare future scenarios explicitly instead of silently reusing `submit_review`.
 
 ## SAFETY RULES
 - Never leak API keys/tokens in logs, exceptions, or returned text.

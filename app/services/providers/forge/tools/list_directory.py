@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any, Dict
 
-from . import ForgeTool
+from . import ForgeTool, resolve_repo_path
 
 MAX_ENTRIES = 100
 
@@ -32,10 +32,13 @@ class ListDirectoryTool(ForgeTool):
 
     async def execute(self, arguments: Dict[str, Any], repo_path: Path) -> str:
         dir_path = arguments.get("path", "")
-        target = (repo_path / dir_path).resolve()
+        if not isinstance(dir_path, str):
+            return "错误: 目录路径必须是字符串"
 
-        if not str(target).startswith(str(repo_path.resolve())):
-            return f"错误: 路径超出仓库范围: {dir_path}"
+        try:
+            _, target = resolve_repo_path(repo_path, dir_path)
+        except ValueError as e:
+            return f"错误: {e}"
         if not target.is_dir():
             return f"错误: 目录不存在: {dir_path}"
 

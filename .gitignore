@@ -77,3 +77,4 @@ agents/
 .ai/
 .claude/
 /frontend/tsconfig.tsbuildinfo
+.factory/

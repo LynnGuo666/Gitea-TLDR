@@ -2,8 +2,7 @@
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from pathlib import Path
-from typing import Any, Callable, Dict, Awaitable
+from typing import Any, Awaitable, Dict
 
 from ..types import ForgeToolResult, ForgeToolCall, Scenario, ToolDefinition
 
@@ -32,6 +31,19 @@ class ForgeTool(ABC):
     async def execute(self, arguments: Dict[str, Any], repo_path: Path) -> str: ...
 
 
+def resolve_repo_path(repo_path: Path, raw_path: str = "") -> tuple[Path, Path]:
+    """将用户输入路径解析到仓库内，并拒绝任何越界访问。"""
+    repo_root = repo_path.resolve()
+    target = (repo_root / (raw_path or ".")).resolve()
+
+    try:
+        target.relative_to(repo_root)
+    except ValueError as exc:
+        raise ValueError(f"路径超出仓库范围: {raw_path}") from exc
+
+    return repo_root, target
+
+
 from .read_file import ReadFileTool
 from .search_code import SearchCodeTool
 from .list_directory import ListDirectoryTool
@@ -50,11 +62,11 @@ _TOOL_MAP = {
 }
 
 
-def get_tools_for_scenario(scenario: Scenario) -> list:
+def get_tools_for_scenario(scenario: Scenario) -> list[ForgeTool]:
     base = [_READ_FILE, _SEARCH_CODE, _LIST_DIRECTORY]
     if scenario == Scenario.REVIEW:
         return base + [_SUBMIT_REVIEW]
-    return base + [_SUBMIT_REVIEW]
+    raise ValueError(f"Forge 场景暂未实现: {scenario.value}")
 
 
 def get_tool_executor():

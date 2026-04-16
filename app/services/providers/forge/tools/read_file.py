@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict
 
-from . import ForgeTool
+from . import ForgeTool, resolve_repo_path
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +42,13 @@ class ReadFileTool(ForgeTool):
         file_path = arguments.get("path", "")
         start_line = arguments.get("start_line")
         end_line = arguments.get("end_line")
-        target = (repo_path / file_path).resolve()
+        if not isinstance(file_path, str) or not file_path.strip():
+            return "错误: 文件路径不能为空"
 
-        if not str(target).startswith(str(repo_path.resolve())):
-            return f"错误: 路径超出仓库范围: {file_path}"
+        try:
+            _, target = resolve_repo_path(repo_path, file_path)
+        except ValueError as e:
+            return f"错误: {e}"
         if not target.is_file():
             return f"错误: 文件不存在: {file_path}"
         if target.stat().st_size > MAX_FILE_SIZE:
@@ -53,15 +56,16 @@ class ReadFileTool(ForgeTool):
 
         try:
             content = target.read_text(encoding="utf-8", errors="replace")
-            lines = content.splitlines()
+            all_lines = content.splitlines()
             if start_line or end_line:
-                s = max(1, (start_line or 1)) - 1
-                e = end_line or len(lines)
-                lines = lines[s:e]
-                header = (
-                    f"文件: {file_path} (行 {start_line or 1}-{end_line or len(lines)})"
-                )
+                actual_start = max(1, int(start_line or 1))
+                actual_end = min(int(end_line or len(all_lines)), len(all_lines))
+                if actual_end < actual_start:
+                    return "错误: 行号范围无效"
+                lines = all_lines[actual_start - 1 : actual_end]
+                header = f"文件: {file_path} (行 {actual_start}-{actual_end})"
             else:
+                lines = all_lines
                 header = f"文件: {file_path} ({len(lines)} 行)"
             return f"{header}\n```\n" + "\n".join(lines) + "\n```"
         except Exception as e:

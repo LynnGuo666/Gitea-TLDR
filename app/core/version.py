@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "1.26.0"
+__version__ = "1.26.1"
 __release_date__ = "2026-04-16"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,18 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.26.1": {
+        "date": "2026-04-16",
+        "changes": [
+            "修复：Forge read_file / list_directory 的仓库路径校验改为基于 resolve + relative_to 的严格边界判断，阻止通过 ../ 与同前缀兄弟目录绕过仓库沙箱",
+            "修复：ForgeProvider 正式接入 FORGE_MAX_TURNS 配置并透传到 review 场景，修复配置存在但运行时始终固定 5 轮的问题",
+            "修复：Forge 非 review 场景不再静默复用 submit_review，而是显式报出“场景暂未实现”，避免未来扩展时出现错误工具绑定",
+            "修复：补充 pytest.ini 与 tests/conftest.py，内置最小 asyncio 测试适配层，恢复未安装 pytest-asyncio 环境下的全量测试执行能力",
+            "测试：新增 Forge 工具与 provider 回归测试，覆盖路径逃逸防护、结构化结果转换、文本降级与 max_turns 配置生效",
+            "文档：同步更新 providers/AGENTS.md 与 forge-agent-design.md，修正文档中 analyze_pr_simple 与 Forge “待实施” 等过期描述",
+            "维护：同步更新后端与前端版本号到 1.26.1",
+        ],
+    },
     "1.26.0": {
         "date": "2026-04-16",
         "changes": [
