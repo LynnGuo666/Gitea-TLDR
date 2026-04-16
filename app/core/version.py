@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "1.26.2"
+__version__ = "1.26.3"
 __release_date__ = "2026-04-16"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,17 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.26.3": {
+        "date": "2026-04-16",
+        "changes": [
+            "修复：Provider 配置解析改为区分“仓库级 Provider 覆盖”和“仓库级审查设置”，仓库仅修改 focus/features 时不再错误覆盖全局 engine/model",
+            "修复：Webhook 审查执行链路改用统一的 Provider 配置解析规则，恢复全局模型选择在仓库级 review settings 场景下的实际生效",
+            "修复：仓库切回继承全局时不再直接删除整条 repo 配置，避免一并丢失仓库级 review settings",
+            "优化：/api/providers 补充 Forge 展示标签，前端引擎选择列表显示更完整",
+            "测试：新增配置解析与接口回归测试，覆盖全局模型继承、切回继承全局保留 review settings 等场景",
+            "维护：同步更新后端与前端版本号到 1.26.3",
+        ],
+    },
     "1.26.2": {
         "date": "2026-04-16",
         "changes": [

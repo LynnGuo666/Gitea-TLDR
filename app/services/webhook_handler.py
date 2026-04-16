@@ -15,6 +15,7 @@ from app.services.review_engine import ReviewEngine
 from app.services.command_parser import CommandParser
 from app.services.db_service import DBService
 from app.services.gitea_client import GiteaClient
+from app.services.provider_config_resolver import resolve_provider_config
 from app.services.repo_manager import RepoManager
 
 logger = logging.getLogger(__name__)
@@ -316,37 +317,38 @@ class WebhookHandler:
                         )
                         actor_user_id = actor_user.id
 
-                    # 查询仓库的 ModelConfig 获取 Provider 配置
-                    model_config = await db_service.get_model_config(repository_id)
-                    if model_config:
-                        api_url = model_config.api_url
-                        api_key = model_config.api_key
-                        wire_api = model_config.wire_api
-                        engine = model_config.engine or engine
-                        model = model_config.model or model
-                        if model_config.repository_id == repository_id:
-                            config_source = "repo_config"
-                        else:
-                            config_source = "global_default"
+                    repo_config = await db_service.get_repo_specific_model_config(
+                        repository_id
+                    )
+                    global_config = await db_service.get_global_model_config()
+                    resolved_provider = resolve_provider_config(
+                        repo_config,
+                        global_config,
+                        default_engine=self.review_engine.default_provider_name,
+                    )
 
+                    settings_config = repo_config or global_config
+                    api_url = resolved_provider.api_url
+                    api_key = resolved_provider.api_key
+                    wire_api = resolved_provider.wire_api
+                    engine = resolved_provider.engine or engine
+                    model = resolved_provider.model or model
+                    config_source = (
+                        "repo_config"
+                        if not resolved_provider.inherit_global and repo_config is not None
+                        else "global_default"
+                    )
+
+                    if settings_config:
                         if focus_areas is None:
-                            focus_areas = model_config.get_focus()
+                            focus_areas = settings_config.get_focus()
                         if features is None:
-                            features = model_config.get_features()
+                            features = settings_config.get_features()
 
-                        # 仓库级配置缺少 api_url/api_key 时，从全局配置补全
-                        if model_config.repository_id == repository_id and not (
-                            api_url or api_key
-                        ):
-                            global_config = await db_service.get_global_model_config()
-                            if global_config:
-                                api_url = api_url or global_config.api_url
-                                api_key = api_key or global_config.api_key
-
-                        if api_url or api_key:
-                            logger.info(
-                                f"使用仓库 {owner}/{repo_name} 的自定义 Anthropic 配置"
-                            )
+                    if api_url or api_key:
+                        logger.info(
+                            f"使用仓库 {owner}/{repo_name} 的自定义 Anthropic 配置"
+                        )
 
                     if focus_areas is None:
                         focus_areas = runtime_settings.get("default_review_focus", settings.default_review_focus)

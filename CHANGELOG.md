@@ -4,6 +4,26 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.26.3] - 2026-04-16
+
+### 修复 (Fixed)
+
+- **模型选择继承失效**: Provider 配置解析改为区分“仓库级 Provider 覆盖”和“仓库级审查设置”，仓库仅修改 `focus/features` 时不再错误遮住全局 `engine/model`
+- **Webhook 审查配置取值统一**: 审查执行链路改用统一的 Provider 配置解析规则，恢复全局模型选择在仓库级 `review-settings` 场景下的实际生效
+- **继承全局保留审查设置**: 仓库切回继承全局时不再直接删除整条 repo 配置，避免一并丢失仓库级 `review settings`
+
+### 优化 (Improved)
+
+- **Provider 列表标签补全**: `/api/providers` 现为 `forge` 返回友好的展示名称 `Forge`
+
+### 测试 (Testing)
+
+- **配置解析回归测试**: 新增测试覆盖全局模型继承、仓库仅有 review settings 时的模型回显，以及切回继承全局时保留仓库审查方向设置
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.26.3`
+
 ## [1.26.2] - 2026-04-16
 
 ### 新增 (Added)

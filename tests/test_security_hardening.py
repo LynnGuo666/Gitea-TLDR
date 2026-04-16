@@ -410,3 +410,163 @@ def test_stats_requires_login():
 
     resp = client.get("/api/stats")
     assert resp.status_code == 401
+
+
+def test_repo_provider_config_uses_global_model_when_repo_only_has_review_settings(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class FakeRepo:
+        id = 1
+
+    class FakeConfig:
+        def __init__(
+            self,
+            *,
+            repository_id,
+            engine,
+            model=None,
+            api_url=None,
+            api_key=None,
+            wire_api=None,
+            default_focus=None,
+            default_features=None,
+        ):
+            self.repository_id = repository_id
+            self.engine = engine
+            self.model = model
+            self.api_url = api_url
+            self.api_key = api_key
+            self.wire_api = wire_api
+            self.default_focus = default_focus
+            self.default_features = default_features
+            self.max_tokens = None
+            self.temperature = None
+            self.custom_prompt = None
+
+    repo_config = FakeConfig(
+        repository_id=1,
+        engine="claude_code",
+        default_focus='["security"]',
+    )
+    global_config = FakeConfig(
+        repository_id=None,
+        engine="forge",
+        model="claude-sonnet-4-20250514",
+        api_url="https://api.example.com",
+    )
+
+    class FakeDBService:
+        def __init__(self, session):
+            self.session = session
+
+        async def get_repository(self, owner: str, repo_name: str):
+            return FakeRepo()
+
+        async def get_global_model_config(self):
+            return global_config
+
+        async def get_repo_specific_model_config(self, repository_id: int):
+            assert repository_id == 1
+            return repo_config
+
+    monkeypatch.setattr("app.services.db_service.DBService", FakeDBService)
+
+    client = build_app(
+        auth_status={"loggedIn": True, "user": {"username": "alice"}},
+        auth_manager=DummyAuthManager(
+            session=DummySessionData("alice"),
+            user_client=DummyUserClient(
+                repos=[{"owner": {"login": "alice"}, "name": "repo-a"}]
+            ),
+        ),
+        database=DummyDatabase(),
+    )
+
+    resp = client.get("/api/repos/alice/repo-a/provider-config")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["inherit_global"] is True
+    assert body["engine"] == "forge"
+    assert body["model"] == "claude-sonnet-4-20250514"
+
+
+def test_inherit_global_preserves_repo_review_settings_instead_of_deleting_config(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class AdminClient:
+        async def check_repo_permissions(self, owner, repo):
+            return {"admin": True, "push": True, "pull": True}
+
+        async def is_organization(self, owner):
+            return False
+
+    class AdminAuthManager(DummyAuthManager):
+        def build_user_client(self, session):
+            return AdminClient()
+
+    class FakeSession:
+        async def flush(self):
+            return None
+
+    class FakeDatabase:
+        @asynccontextmanager
+        async def session(self):
+            yield FakeSession()
+
+    class FakeRepo:
+        id = 1
+
+    class FakeConfig:
+        def __init__(self):
+            self.repository_id = 1
+            self.engine = "forge"
+            self.model = "repo-model"
+            self.api_url = "https://repo.example.com"
+            self.api_key = None
+            self.wire_api = "responses"
+            self.default_focus = '["security"]'
+            self.default_features = '["comment"]'
+            self.max_tokens = None
+            self.temperature = None
+            self.custom_prompt = None
+
+    repo_config = FakeConfig()
+    deleted: list[int] = []
+
+    class FakeDBService:
+        def __init__(self, session):
+            self.session = session
+
+        async def get_repository(self, owner: str, repo_name: str):
+            return FakeRepo()
+
+        async def get_repo_specific_model_config(self, repository_id: int):
+            return repo_config
+
+        async def delete_repo_model_config(self, repository_id: int):
+            deleted.append(repository_id)
+            return True
+
+        async def get_global_model_config(self):
+            return None
+
+    monkeypatch.setattr("app.services.db_service.DBService", FakeDBService)
+
+    client = build_app(
+        auth_status={"loggedIn": True, "user": {"username": "alice"}},
+        auth_manager=AdminAuthManager(
+            session=DummySessionData("alice"),
+            user_client=None,
+        ),
+        database=FakeDatabase(),
+    )
+
+    resp = client.put(
+        "/api/repos/owner/repo/provider-config",
+        json={"inherit_global": True},
+    )
+    assert resp.status_code == 200
+    assert deleted == []
+    assert repo_config.default_focus == '["security"]'
+    assert repo_config.model is None
+    assert repo_config.api_url is None

@@ -36,6 +36,11 @@ from app.core import (
 )
 from app.core.context import AppContext
 from app.models import User
+from app.services.provider_config_resolver import (
+    clear_provider_overrides,
+    has_non_provider_settings,
+    resolve_provider_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -340,6 +345,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         provider_labels = {
             "claude_code": "Claude Code",
             "codex_cli": "Codex CLI",
+            "forge": "Forge",
         }
         providers = context.review_engine.registry.list_providers()
         return {
@@ -1120,29 +1126,29 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             db_service = DBService(session)
             repo_obj = await db_service.get_repository(owner, repo)
             global_config = await db_service.get_global_model_config()
+            default_engine = runtime_settings.get(
+                "default_provider", settings.default_provider
+            )
 
             if not repo_obj:
-                effective_config = global_config
+                resolved = resolve_provider_config(
+                    None,
+                    global_config,
+                    default_engine=default_engine,
+                )
                 return {
-                    "inherit_global": True,
+                    "inherit_global": resolved.inherit_global,
                     "has_global_config": bool(
                         global_config
                         and (global_config.api_url or global_config.api_key)
                     ),
                     "configured": bool(
-                        effective_config
-                        and (effective_config.api_url or effective_config.api_key)
+                        resolved.api_url or resolved.api_key or resolved.model
                     ),
-                    "engine": (
-                        effective_config.engine
-                        if effective_config
-                        else runtime_settings.get("default_provider", settings.default_provider)
-                    ),
-                    "model": (effective_config.model if effective_config else None),
-                    "api_url": (effective_config.api_url if effective_config else None),
-                    "has_api_key": bool(
-                        effective_config.api_key if effective_config else False
-                    ),
+                    "engine": resolved.engine,
+                    "model": resolved.model,
+                    "api_url": resolved.api_url,
+                    "has_api_key": bool(resolved.api_key),
                     "global_api_url": (
                         global_config.api_url if global_config else None
                     ),
@@ -1152,40 +1158,34 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                     "global_engine": (
                         global_config.engine
                         if global_config
-                        else runtime_settings.get("default_provider", settings.default_provider)
+                        else default_engine
                     ),
                     "global_model": (global_config.model if global_config else None),
                 }
 
             repo_config = await db_service.get_repo_specific_model_config(repo_obj.id)
-            inherit_global = repo_config is None
-            effective_config = repo_config or global_config
+            resolved = resolve_provider_config(
+                repo_config,
+                global_config,
+                default_engine=default_engine,
+            )
 
             return {
-                "inherit_global": inherit_global,
+                "inherit_global": resolved.inherit_global,
                 "has_global_config": bool(
                     global_config and (global_config.api_url or global_config.api_key)
                 ),
-                "configured": bool(
-                    effective_config
-                    and (effective_config.api_url or effective_config.api_key)
-                ),
-                "engine": (
-                    effective_config.engine
-                    if effective_config
-                    else runtime_settings.get("default_provider", settings.default_provider)
-                ),
-                "model": (effective_config.model if effective_config else None),
-                "api_url": (effective_config.api_url if effective_config else None),
-                "has_api_key": bool(
-                    effective_config.api_key if effective_config else False
-                ),
+                "configured": bool(resolved.api_url or resolved.api_key or resolved.model),
+                "engine": resolved.engine,
+                "model": resolved.model,
+                "api_url": resolved.api_url,
+                "has_api_key": bool(resolved.api_key),
                 "global_api_url": (global_config.api_url if global_config else None),
                 "global_has_api_key": bool(
                     global_config.api_key if global_config else False
                 ),
                 "global_engine": (
-                    global_config.engine if global_config else runtime_settings.get("default_provider", settings.default_provider)
+                    global_config.engine if global_config else default_engine
                 ),
                 "global_model": (global_config.model if global_config else None),
             }
@@ -1209,7 +1209,11 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             if payload.inherit_global:
                 repo_obj = await db_service.get_repository(owner, repo)
                 if repo_obj:
-                    await db_service.delete_repo_model_config(repo_obj.id)
+                    repo_config = await db_service.get_repo_specific_model_config(repo_obj.id)
+                    if repo_config:
+                        clear_provider_overrides(repo_config)
+                        if not has_non_provider_settings(repo_config):
+                            await db_service.delete_repo_model_config(repo_obj.id)
 
                 global_config = await db_service.get_global_model_config()
                 await session.flush()
@@ -1218,6 +1222,12 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                     "inherit_global": True,
                     "message": "已切换为继承全局 Claude 配置",
                     "api_url": (global_config.api_url if global_config else None),
+                    "engine": (
+                        global_config.engine
+                        if global_config
+                        else runtime_settings.get("default_provider", settings.default_provider)
+                    ),
+                    "model": (global_config.model if global_config else None),
                     "has_api_key": bool(
                         global_config.api_key if global_config else False
                     ),
