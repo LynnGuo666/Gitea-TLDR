@@ -16,6 +16,7 @@ from app.services.command_parser import CommandParser
 from app.services.db_service import DBService
 from app.services.gitea_client import GiteaClient
 from app.services.provider_config_resolver import resolve_provider_config
+from app.services.issue_analysis_service import IssueAnalysisService
 from app.services.repo_manager import RepoManager
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,11 @@ class WebhookHandler:
         self.review_engine = review_engine
         self.database = database
         self.command_parser = CommandParser(bot_username)
+        self.issue_analysis_service = IssueAnalysisService(
+            gitea_client=gitea_client,
+            repo_manager=repo_manager,
+            database=database,
+        )
 
     def parse_review_features(self, features_header: Optional[str]) -> List[str]:
         """
@@ -161,7 +167,7 @@ class WebhookHandler:
 
     async def handle_issue_comment(self, payload: Dict[str, Any]) -> bool:
         """
-        处理Issue评论事件（用于手动触发审查）
+        处理 Issue 评论事件（用于手动触发 PR 审查或 Issue 分析）
 
         Args:
             payload: Webhook payload
@@ -193,14 +199,53 @@ class WebhookHandler:
 
             # 检查是否是PR
             pull_request = issue_data.get("pull_request")
-            if not pull_request:
-                logger.info("评论不在PR中，忽略")
+            if pull_request:
+                if command.command != "review":
+                    logger.info("PR 评论中的命令不是 /review，忽略")
+                    return True
+
+                # 提取PR信息
+                owner = repo_data.get("owner", {}).get("login")
+                repo_name = repo_data.get("name")
+                pr_number = issue_data.get("number")
+                actor_username = (
+                    comment_data.get("user", {}).get("login")
+                    or comment_data.get("user", {}).get("username")
+                    or payload.get("sender", {}).get("login")
+                    or payload.get("sender", {}).get("username")
+                )
+
+                logger.info(
+                    f"手动触发PR审查: {owner}/{repo_name}#{pr_number} "
+                    f"features={command.features}, focus={command.focus_areas}"
+                )
+
+                # 获取完整的PR信息
+                pr_data = await self.gitea_client.get_pull_request(
+                    owner, repo_name, pr_number
+                )
+                if not pr_data:
+                    logger.error("无法获取PR详情")
+                    return False
+
+                # 执行审查
+                return await self._perform_review(
+                    owner=owner,
+                    repo_name=repo_name,
+                    pr_number=pr_number,
+                    pr_data=pr_data,
+                    features=command.features,
+                    focus_areas=command.focus_areas,
+                    trigger_type="manual",
+                    actor_username=actor_username,
+                )
+
+            if command.command != "issue":
+                logger.info("普通 Issue 评论中的命令不是 /issue，忽略")
                 return True
 
-            # 提取PR信息
             owner = repo_data.get("owner", {}).get("login")
             repo_name = repo_data.get("name")
-            pr_number = issue_data.get("number")
             actor_username = (
                 comment_data.get("user", {}).get("login")
                 or comment_data.get("user", {}).get("username")
@@ -208,33 +253,66 @@ class WebhookHandler:
                 or payload.get("sender", {}).get("username")
             )
 
-            logger.info(
-                f"手动触发PR审查: {owner}/{repo_name}#{pr_number} "
-                f"features={command.features}, focus={command.focus_areas}"
-            )
+            if not await self._is_issue_manual_enabled(owner, repo_name):
+                logger.info("仓库未启用手动 /issue 命令，忽略")
+                return True
 
-            # 获取完整的PR信息
-            pr_data = await self.gitea_client.get_pull_request(
-                owner, repo_name, pr_number
-            )
-            if not pr_data:
-                logger.error("无法获取PR详情")
-                return False
-
-            # 执行审查
-            return await self._perform_review(
-                owner=owner,
-                repo_name=repo_name,
-                pr_number=pr_number,
-                pr_data=pr_data,
-                features=command.features,
-                focus_areas=command.focus_areas,
+            self.issue_analysis_service.database = self.database
+            return await self.issue_analysis_service.analyze_issue(
+                payload,
                 trigger_type="manual",
+                source_comment_id=comment_data.get("id"),
                 actor_username=actor_username,
             )
 
         except Exception as e:
             logger.error(f"处理评论异常: {e}", exc_info=True)
+            return False
+
+    async def handle_issue(self, payload: Dict[str, Any]) -> bool:
+        """
+        处理普通 Issue 事件。
+
+        Args:
+            payload: Webhook payload
+
+        Returns:
+            是否处理成功
+        """
+        try:
+            action = payload.get("action")
+            issue_data = payload.get("issue", {})
+            repo_data = payload.get("repository", {})
+
+            if issue_data.get("pull_request"):
+                logger.info("issues webhook 对应的是 PR，忽略")
+                return True
+
+            if action not in ["opened", "reopened"]:
+                logger.info(f"忽略 Issue 事件: {action}")
+                return True
+
+            owner = repo_data.get("owner", {}).get("login")
+            repo_name = repo_data.get("name")
+            actor_username = (
+                payload.get("sender", {}).get("login")
+                or payload.get("sender", {}).get("username")
+                or issue_data.get("user", {}).get("login")
+                or issue_data.get("user", {}).get("username")
+            )
+
+            if not await self._is_issue_auto_enabled(owner, repo_name):
+                logger.info("仓库未启用自动 Issue 分析，忽略")
+                return True
+
+            self.issue_analysis_service.database = self.database
+            return await self.issue_analysis_service.analyze_issue(
+                payload,
+                trigger_type="auto",
+                actor_username=actor_username,
+            )
+        except Exception as e:
+            logger.error(f"处理 Issue 异常: {e}", exc_info=True)
             return False
 
     async def _perform_review(
@@ -696,6 +774,15 @@ class WebhookHandler:
         except Exception as e:
             logger.error(f"异步处理评论异常: {e}", exc_info=True)
 
+    async def process_issue_async(self, payload: Dict[str, Any]):
+        """
+        异步处理普通 Issue webhook（后台任务）
+        """
+        try:
+            await self.handle_issue(payload)
+        except Exception as e:
+            logger.error(f"异步处理 Issue 异常: {e}", exc_info=True)
+
     def _build_review_comments(
         self, analysis_result: ReviewResult
     ) -> List[Dict[str, Any]]:
@@ -728,3 +815,31 @@ class WebhookHandler:
             "new_position": new_position,
             "old_position": old_position,
         }
+
+    async def _is_issue_auto_enabled(
+        self, owner: Optional[str], repo_name: Optional[str]
+    ) -> bool:
+        """判断仓库是否启用自动 Issue 分析。"""
+        if not self.database or not owner or not repo_name:
+            return True
+
+        async with self.database.session() as session:
+            db_service = DBService(session)
+            repo = await db_service.get_repository(owner, repo_name)
+            if not repo:
+                return True
+            return bool(repo.issue_enabled and repo.issue_auto_on_open)
+
+    async def _is_issue_manual_enabled(
+        self, owner: Optional[str], repo_name: Optional[str]
+    ) -> bool:
+        """判断仓库是否启用手动 /issue 分析。"""
+        if not self.database or not owner or not repo_name:
+            return True
+
+        async with self.database.session() as session:
+            db_service = DBService(session)
+            repo = await db_service.get_repository(owner, repo_name)
+            if not repo:
+                return True
+            return bool(repo.issue_enabled and repo.issue_manual_command_enabled)

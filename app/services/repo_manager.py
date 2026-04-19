@@ -27,6 +27,27 @@ class RepoManager:
         self.work_dir = Path(work_dir).expanduser().resolve()
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
+    def get_workspace_path(
+        self,
+        owner: str,
+        repo: str,
+        workspace_kind: str,
+        workspace_id: int,
+    ) -> Path:
+        """
+        获取仓库工作区路径。
+
+        Args:
+            owner: 仓库所有者
+            repo: 仓库名称
+            workspace_kind: 工作区类型，如 pr / issue
+            workspace_id: 工作区编号
+
+        Returns:
+            工作区路径
+        """
+        return self.work_dir / f"{owner}_{repo}_{workspace_kind}{workspace_id}"
+
     def get_repo_path(self, owner: str, repo: str, pr_number: int) -> Path:
         """
         获取仓库的本地路径
@@ -39,7 +60,7 @@ class RepoManager:
         Returns:
             仓库本地路径
         """
-        return self.work_dir / f"{owner}_{repo}_pr{pr_number}"
+        return self.get_workspace_path(owner, repo, "pr", pr_number)
 
     async def clone_repository(
         self,
@@ -64,7 +85,7 @@ class RepoManager:
         Returns:
             仓库本地路径，失败返回None
         """
-        repo_path = self.get_repo_path(owner, repo, pr_number)
+        repo_path = self.get_workspace_path(owner, repo, "pr", pr_number)
 
         # 如果目录已存在，先删除
         if repo_path.exists():
@@ -102,6 +123,78 @@ class RepoManager:
 
         except Exception as e:
             logger.error(f"克隆仓库异常: {e}")
+            return None
+        finally:
+            if askpass_script and askpass_script.exists():
+                try:
+                    askpass_script.unlink()
+                except OSError:
+                    pass
+
+    async def clone_workspace(
+        self,
+        clone_url: str,
+        owner: str,
+        repo: str,
+        workspace_kind: str,
+        workspace_id: int,
+        branch: str,
+        auth_token: Optional[str] = None,
+    ) -> Optional[Path]:
+        """
+        克隆通用仓库工作区到本地。
+
+        Args:
+            clone_url: 克隆 URL（不带认证）
+            owner: 仓库所有者
+            repo: 仓库名称
+            workspace_kind: 工作区类型
+            workspace_id: 工作区编号
+            branch: 要检出的分支
+            auth_token: 可选访问令牌
+
+        Returns:
+            工作区路径，失败返回 None
+        """
+        repo_path = self.get_workspace_path(owner, repo, workspace_kind, workspace_id)
+
+        if repo_path.exists():
+            logger.info(f"删除已存在的仓库目录: {repo_path}")
+            shutil.rmtree(repo_path)
+
+        askpass_script: Optional[Path] = None
+        try:
+            logger.info(
+                "开始克隆工作区: %s/%s kind=%s id=%s branch=%s",
+                owner,
+                repo,
+                workspace_kind,
+                workspace_id,
+                branch,
+            )
+            env, askpass_script = self._build_git_env(auth_token)
+            process = await asyncio.create_subprocess_exec(
+                "git",
+                "clone",
+                "--depth=1",
+                "--single-branch",
+                "--branch",
+                branch,
+                clone_url,
+                str(repo_path),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+            )
+            _, stderr = await process.communicate()
+            if process.returncode != 0:
+                stderr_text = stderr.decode(errors="ignore")
+                logger.error("克隆工作区失败: %s", self._classify_clone_error(stderr_text))
+                return None
+            logger.info("成功克隆工作区到: %s", repo_path)
+            return repo_path
+        except Exception as e:
+            logger.error(f"克隆工作区异常: {e}")
             return None
         finally:
             if askpass_script and askpass_script.exists():
@@ -161,7 +254,7 @@ class RepoManager:
         Returns:
             是否成功
         """
-        repo_path = self.get_repo_path(owner, repo, pr_number)
+        repo_path = self.get_workspace_path(owner, repo, "pr", pr_number)
 
         if not repo_path.exists():
             return True
@@ -172,6 +265,29 @@ class RepoManager:
             return True
         except Exception as e:
             logger.error(f"清理仓库目录失败: {e}")
+            return False
+
+    def cleanup_workspace(
+        self,
+        owner: str,
+        repo: str,
+        workspace_kind: str,
+        workspace_id: int,
+    ) -> bool:
+        """
+        清理指定工作区目录。
+        """
+        repo_path = self.get_workspace_path(owner, repo, workspace_kind, workspace_id)
+
+        if not repo_path.exists():
+            return True
+
+        try:
+            logger.info(f"清理工作区目录: {repo_path}")
+            shutil.rmtree(repo_path)
+            return True
+        except Exception as e:
+            logger.error(f"清理工作区目录失败: {e}")
             return False
 
     def cleanup_all(self) -> bool:

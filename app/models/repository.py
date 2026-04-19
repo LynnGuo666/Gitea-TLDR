@@ -11,6 +11,7 @@ from app.core.encryption import encryption_service
 from .base import Base, TimestampMixin
 
 if TYPE_CHECKING:
+    from .issue_session import IssueSession
     from .model_config import ModelConfig
     from .review_session import ReviewSession
 
@@ -30,6 +31,15 @@ class Repository(Base, TimestampMixin):
         "webhook_secret", Text, nullable=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    issue_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+    issue_auto_on_open: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+    issue_manual_command_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
 
     # 关系
     model_config: Mapped[Optional["ModelConfig"]] = relationship(
@@ -42,6 +52,11 @@ class Repository(Base, TimestampMixin):
         "ReviewSession",
         back_populates="repository",
         cascade="all, delete-orphan"
+    )
+    issue_sessions: Mapped[List["IssueSession"]] = relationship(
+        "IssueSession",
+        back_populates="repository",
+        cascade="all, delete-orphan",
     )
 
     @property

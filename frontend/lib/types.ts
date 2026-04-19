@@ -69,3 +69,56 @@ export type UsageSummary = {
   total_clones: number;
   record_count: number;
 };
+
+export type IssueAnalysisItem = {
+  id: number;
+  repository_id: number;
+  repo_full_name: string | null;
+  issue_number: number;
+  issue_title: string | null;
+  issue_author: string | null;
+  issue_state: string | null;
+  trigger_type: string;
+  engine: string | null;
+  model: string | null;
+  config_source: string | null;
+  overall_severity: string | null;
+  overall_success: boolean | null;
+  error_message: string | null;
+  related_issue_count: number;
+  solution_count: number;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  estimated_input_tokens: number;
+  estimated_output_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+  total_tokens: number;
+};
+
+export type RelatedIssue = {
+  number: number;
+  title: string;
+  state: string;
+  url: string;
+  similarity_reason: string;
+  suggested_reference: string;
+};
+
+export type SolutionSuggestion = {
+  title: string;
+  summary: string;
+  steps: string[];
+};
+
+export type IssueAnalysisDetail = IssueAnalysisItem & {
+  source_comment_id: number | null;
+  bot_comment_id: number | null;
+  summary_markdown: string | null;
+  analysis_payload: Record<string, unknown>;
+  related_issues: RelatedIssue[];
+  solution_suggestions: SolutionSuggestion[];
+  related_files: string[];
+  next_actions: string[];
+};

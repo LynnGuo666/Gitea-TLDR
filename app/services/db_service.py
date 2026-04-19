@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models import (
+    IssueSession,
     InlineComment,
     ModelConfig,
     Repository,
@@ -103,6 +104,26 @@ class DBService:
         stmt = stmt.order_by(Repository.updated_at.desc())
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def update_issue_settings(
+        self,
+        owner: str,
+        repo_name: str,
+        *,
+        issue_enabled: Optional[bool] = None,
+        issue_auto_on_open: Optional[bool] = None,
+        issue_manual_command_enabled: Optional[bool] = None,
+    ) -> Repository:
+        """更新仓库级 Issue 分析设置。"""
+        repo = await self.get_or_create_repository(owner, repo_name)
+        if issue_enabled is not None:
+            repo.issue_enabled = issue_enabled
+        if issue_auto_on_open is not None:
+            repo.issue_auto_on_open = issue_auto_on_open
+        if issue_manual_command_enabled is not None:
+            repo.issue_manual_command_enabled = issue_manual_command_enabled
+        await self.session.flush()
+        return repo
 
     # ==================== ModelConfig 操作 ====================
 
@@ -393,6 +414,168 @@ class DBService:
             offset=offset,
         )
 
+    # ==================== IssueSession 操作 ====================
+
+    async def create_issue_session(
+        self,
+        repository_id: int,
+        issue_number: int,
+        trigger_type: str,
+        engine: Optional[str] = None,
+        model: Optional[str] = None,
+        config_source: Optional[str] = None,
+        issue_title: Optional[str] = None,
+        issue_author: Optional[str] = None,
+        issue_state: Optional[str] = None,
+        source_comment_id: Optional[int] = None,
+        bot_comment_id: Optional[int] = None,
+    ) -> IssueSession:
+        """创建 Issue 分析会话。"""
+        session = IssueSession(
+            repository_id=repository_id,
+            issue_number=issue_number,
+            trigger_type=trigger_type,
+            engine=engine,
+            model=model,
+            config_source=config_source,
+            issue_title=issue_title,
+            issue_author=issue_author,
+            issue_state=issue_state,
+            source_comment_id=source_comment_id,
+            bot_comment_id=bot_comment_id,
+            started_at=datetime.now(timezone.utc),
+        )
+        self.session.add(session)
+        await self.session.flush()
+        logger.info(
+            "创建 Issue 会话: repository_id=%s, issue_number=%s",
+            repository_id,
+            issue_number,
+        )
+        return session
+
+    async def update_issue_session(
+        self,
+        session_id: int,
+        *,
+        engine: Optional[str] = None,
+        model: Optional[str] = None,
+        config_source: Optional[str] = None,
+        issue_state: Optional[str] = None,
+        bot_comment_id: Optional[int] = None,
+        overall_severity: Optional[str] = None,
+        summary_markdown: Optional[str] = None,
+        analysis_payload: Optional[Dict[str, Any]] = None,
+        overall_success: Optional[bool] = None,
+        error_message: Optional[str] = None,
+        completed: bool = False,
+    ) -> Optional[IssueSession]:
+        """更新 Issue 分析会话。"""
+        stmt = select(IssueSession).where(IssueSession.id == session_id)
+        result = await self.session.execute(stmt)
+        issue_session = result.scalar_one_or_none()
+
+        if not issue_session:
+            return None
+
+        if engine is not None:
+            issue_session.engine = engine
+        if model is not None:
+            issue_session.model = model
+        if config_source is not None:
+            issue_session.config_source = config_source
+        if issue_state is not None:
+            issue_session.issue_state = issue_state
+        if bot_comment_id is not None:
+            issue_session.bot_comment_id = bot_comment_id
+        if overall_severity is not None:
+            issue_session.overall_severity = overall_severity
+        if summary_markdown is not None:
+            issue_session.summary_markdown = summary_markdown
+        if analysis_payload is not None:
+            issue_session.set_analysis_payload(analysis_payload)
+        if overall_success is not None:
+            issue_session.overall_success = overall_success
+        if error_message is not None:
+            issue_session.error_message = error_message
+
+        if completed:
+            completed_at = datetime.now(timezone.utc)
+            issue_session.completed_at = completed_at
+            if issue_session.started_at:
+                started_naive = (
+                    issue_session.started_at.replace(tzinfo=None)
+                    if issue_session.started_at.tzinfo
+                    else issue_session.started_at
+                )
+                delta = completed_at.replace(tzinfo=None) - started_naive
+                issue_session.duration_seconds = delta.total_seconds()
+
+        await self.session.flush()
+        return issue_session
+
+    async def get_issue_session(self, session_id: int) -> Optional[IssueSession]:
+        """获取单条 Issue 分析会话。"""
+        stmt = (
+            select(IssueSession)
+            .options(
+                selectinload(IssueSession.repository),
+                selectinload(IssueSession.usage_stats),
+            )
+            .where(IssueSession.id == session_id)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def list_issue_sessions(
+        self,
+        repository_id: Optional[int] = None,
+        repository_ids: Optional[List[int]] = None,
+        owner: Optional[str] = None,
+        repo_name: Optional[str] = None,
+        success: Optional[bool] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[IssueSession]:
+        """获取 Issue 分析会话列表。"""
+        stmt = select(IssueSession).options(
+            selectinload(IssueSession.repository),
+            selectinload(IssueSession.usage_stats),
+        )
+
+        if repository_ids:
+            stmt = stmt.where(IssueSession.repository_id.in_(repository_ids))
+        elif repository_id:
+            stmt = stmt.where(IssueSession.repository_id == repository_id)
+        elif owner and repo_name:
+            stmt = stmt.join(Repository).where(
+                Repository.owner == owner, Repository.repo_name == repo_name
+            )
+
+        if success is not None:
+            stmt = stmt.where(IssueSession.overall_success == success)
+
+        stmt = stmt.order_by(IssueSession.started_at.desc())
+        stmt = stmt.limit(limit).offset(offset)
+
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def list_issue_sessions_by_repo_ids(
+        self,
+        repository_ids: List[int],
+        success: Optional[bool] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[IssueSession]:
+        """获取指定仓库集合的 Issue 分析会话列表。"""
+        return await self.list_issue_sessions(
+            repository_ids=repository_ids,
+            success=success,
+            limit=limit,
+            offset=offset,
+        )
+
     # ==================== InlineComment 操作 ====================
 
     async def save_inline_comments(
@@ -433,6 +616,7 @@ class DBService:
         self,
         repository_id: int,
         review_session_id: Optional[int] = None,
+        issue_session_id: Optional[int] = None,
         user_id: Optional[int] = None,
         estimated_input_tokens: int = 0,
         estimated_output_tokens: int = 0,
@@ -447,6 +631,7 @@ class DBService:
         stat = UsageStat(
             repository_id=repository_id,
             review_session_id=review_session_id,
+            issue_session_id=issue_session_id,
             user_id=user_id,
             stat_date=date.today(),
             estimated_input_tokens=estimated_input_tokens,

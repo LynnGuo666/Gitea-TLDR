@@ -145,6 +145,7 @@ def create_app() -> FastAPI:
             context.database = database
             context.repo_registry.database = database
             context.webhook_handler.database = database
+            context.webhook_handler.issue_analysis_service.database = database
 
             # 尝试迁移 JSON 数据到数据库
             try:

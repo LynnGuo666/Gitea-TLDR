@@ -120,6 +120,46 @@ class GiteaClient:
             logger.error(f"获取PR列表失败: {e}")
             return None
 
+    async def list_issues(
+        self, owner: str, repo: str, state: str = "all", limit: int = 100
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        获取仓库 Issue 列表，仅返回普通 Issue。
+
+        Args:
+            owner: 仓库所有者
+            repo: 仓库名称
+            state: Issue 状态 (open/closed/all)
+            limit: 返回数量
+
+        Returns:
+            Issue 列表
+        """
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/issues"
+        params: Dict[str, str | int] = {
+            "state": state,
+            "limit": limit,
+            "sort": "recentupdate",
+        }
+
+        try:
+            self._log_debug("GET", url)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=self.headers, params=params)
+                self._log_response(response)
+                response.raise_for_status()
+                data = response.json()
+                if not isinstance(data, list):
+                    return []
+                return [
+                    item
+                    for item in data
+                    if isinstance(item, dict) and not item.get("pull_request")
+                ]
+        except Exception as e:
+            logger.error(f"获取 Issue 列表失败: {e}")
+            return None
+
     async def get_pull_request(
         self, owner: str, repo: str, pr_number: int
     ) -> Optional[Dict[str, Any]]:

@@ -122,6 +122,7 @@ from .search_code import SearchCodeTool
 from .glob_tool import GlobTool
 from .list_directory import ListDirectoryTool
 from .lsp_tool import LSPTool
+from .submit_analysis import SubmitAnalysisTool
 from .submit_review import SubmitReviewTool
 
 _READ_FILE = ReadFileTool()
@@ -129,6 +130,7 @@ _SEARCH_CODE = SearchCodeTool()
 _GLOB = GlobTool()
 _LIST_DIRECTORY = ListDirectoryTool()
 _LSP = LSPTool()
+_SUBMIT_ANALYSIS = SubmitAnalysisTool()
 _SUBMIT_REVIEW = SubmitReviewTool()
 
 _TOOL_MAP = {
@@ -137,6 +139,7 @@ _TOOL_MAP = {
     _GLOB.name: _GLOB,
     _LIST_DIRECTORY.name: _LIST_DIRECTORY,
     _LSP.name: _LSP,
+    _SUBMIT_ANALYSIS.name: _SUBMIT_ANALYSIS,
     _SUBMIT_REVIEW.name: _SUBMIT_REVIEW,
 }
 
@@ -145,6 +148,8 @@ def get_tools_for_scenario(scenario: Scenario) -> list[ForgeTool]:
     base = [_LIST_DIRECTORY, _GLOB, _SEARCH_CODE, _READ_FILE, _LSP]
     if scenario == Scenario.REVIEW:
         return base + [_SUBMIT_REVIEW]
+    if scenario == Scenario.ISSUE:
+        return base + [_SUBMIT_ANALYSIS]
     raise ValueError(f"Forge 场景暂未实现: {scenario.value}")
 
 

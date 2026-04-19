@@ -1,6 +1,6 @@
 """Forge 系统提示词构建器"""
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 FOCUS_MAP = {
     "quality": "代码质量和最佳实践",
@@ -55,6 +55,70 @@ def build_review_system_prompt(
     return prompt
 
 
+def build_issue_system_prompt(
+    issue_info: Dict[str, Any],
+    similar_issue_candidates: List[Dict[str, Any]],
+    custom_prompt: Optional[str] = None,
+) -> str:
+    issue_title = issue_info.get("title", "N/A")
+    issue_body = (issue_info.get("body") or "无描述")[:3000]
+    issue_author = (issue_info.get("user") or {}).get("login", "未知")
+    labels = issue_info.get("labels") or []
+    label_names = [
+        label.get("name")
+        for label in labels
+        if isinstance(label, dict) and label.get("name")
+    ]
+    label_text = "、".join(label_names) if label_names else "无"
+
+    candidate_lines: List[str] = []
+    if similar_issue_candidates:
+        for item in similar_issue_candidates:
+            candidate_lines.append(
+                "- #{number} {title} [{state}] | 标签: {labels} | 初步相似原因: {reason}".format(
+                    number=item.get("number", "?"),
+                    title=item.get("title", "无标题"),
+                    state=item.get("state", "unknown"),
+                    labels="、".join(item.get("label_names", [])) or "无",
+                    reason=item.get("score_reason", "关键词重合"),
+                )
+            )
+    else:
+        candidate_lines.append("- 无候选相似 Issue")
+
+    prompt = f"""你是一位专业的问题分析工程师。你正在分析一个 Issue，并给出可执行的解决方案。
+
+## 当前 Issue
+- 标题: {issue_title}
+- 作者: {issue_author}
+- 标签: {label_text}
+- 描述:
+{issue_body}
+
+## 相似 Issue 候选
+{chr(10).join(candidate_lines)}
+
+## 工作方式
+1. 先用 list_directory / glob_files 了解项目结构
+2. 使用 search_code 查找与报错、关键字、模块名相关的实现
+3. 使用 read_file 分页阅读相关代码
+4. 需要按符号定位时使用 lsp
+5. 完成分析后，必须使用 submit_analysis 提交结构化结果
+
+## 输出要求
+- 先判断问题本身与可能根因
+- 只保留真正有参考价值的 related_issues
+- 给出 1 到 3 套可执行解决方案，每套都要有明确步骤
+- 输出 related_files，帮助人快速定位代码
+- 输出 next_actions，给出最推荐的下一步
+- 不要编造仓库中不存在的文件或 Issue 细节"""
+
+    if custom_prompt and custom_prompt.strip():
+        prompt += f"\n\n## 额外要求\n{custom_prompt.strip()}"
+
+    return prompt
+
+
 MAX_DIFF_BYTES = 200_000
 
 
@@ -62,3 +126,35 @@ def build_initial_message(diff_content: str) -> str:
     if len(diff_content.encode("utf-8")) > MAX_DIFF_BYTES:
         diff_content = diff_content[:MAX_DIFF_BYTES] + "\n\n... (diff 过长，已截断)"
     return f"请审查以下 PR 的代码变更：\n\n```diff\n{diff_content}\n```"
+
+
+def build_issue_initial_message(
+    issue_info: Dict[str, Any],
+    similar_issue_candidates: List[Dict[str, Any]],
+) -> str:
+    issue_number = issue_info.get("number", "N/A")
+    issue_title = issue_info.get("title", "无标题")
+    issue_body = issue_info.get("body") or "无描述"
+    if len(issue_body.encode("utf-8")) > MAX_DIFF_BYTES:
+        issue_body = issue_body[:MAX_DIFF_BYTES] + "\n\n... (Issue 描述过长，已截断)"
+
+    candidate_lines = []
+    for item in similar_issue_candidates:
+        candidate_lines.append(
+            "- #{number} {title}: {body}".format(
+                number=item.get("number", "?"),
+                title=item.get("title", "无标题"),
+                body=(item.get("body_excerpt") or "无描述")[:300],
+            )
+        )
+
+    candidate_text = "\n".join(candidate_lines) if candidate_lines else "- 无"
+
+    return (
+        f"请分析以下 Issue，并给出解决方案。\n\n"
+        f"## 当前 Issue\n"
+        f"- 编号: #{issue_number}\n"
+        f"- 标题: {issue_title}\n\n"
+        f"### 描述\n{issue_body}\n\n"
+        f"## 相似 Issue 候选\n{candidate_text}"
+    )

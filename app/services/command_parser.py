@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ReviewCommand:
-    """审查命令数据类"""
+    """Bot 命令数据类"""
 
-    command: str  # 命令类型，如 "review"
+    command: str  # 命令类型，如 "review" / "issue"
     features: Optional[List[str]] = None  # 功能列表：comment, review, status
     focus_areas: Optional[List[str]] = None  # 审查重点
 
@@ -38,7 +38,9 @@ class CommandParser:
 
         支持的格式：
         - /review
+        - /issue
         - @bot_username /review
+        - @bot_username /issue
         - @bot_username /review --features comment,status
         - @bot_username /review --focus security,performance
 
@@ -54,8 +56,8 @@ class CommandParser:
         # 清理多余空白
         comment = comment_body.strip()
 
-        # 检查是否包含 /review 命令
-        if "/review" not in comment:
+        # 检查是否包含受支持命令
+        if "/review" not in comment and "/issue" not in comment:
             return None
 
         # 如果配置了bot用户名，检查是否@了bot
@@ -65,8 +67,11 @@ class CommandParser:
                 logger.debug(f"评论中未提及bot用户名 @{self.bot_username}")
                 return None
 
-        # 解析命令
-        return self._parse_review_command(comment)
+        if "/review" in comment:
+            return self._parse_review_command(comment)
+        if "/issue" in comment:
+            return self._parse_issue_command(comment)
+        return None
 
     def _parse_review_command(self, comment: str) -> Optional[ReviewCommand]:
         """
@@ -108,6 +113,19 @@ class CommandParser:
         return ReviewCommand(
             command="review", features=features, focus_areas=focus_areas
         )
+
+    def _parse_issue_command(self, comment: str) -> Optional[ReviewCommand]:
+        """
+        解析 /issue 命令
+
+        Args:
+            comment: 评论内容
+
+        Returns:
+            ReviewCommand 对象
+        """
+        logger.info("解析到 /issue 命令")
+        return ReviewCommand(command="issue")
 
     def is_bot_command(self, comment_body: str) -> bool:
         """

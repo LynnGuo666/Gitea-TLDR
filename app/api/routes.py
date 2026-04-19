@@ -52,7 +52,7 @@ class WebhookSetupRequest(BaseModel):
         default=None, description="可选覆盖webhook回调URL"
     )
     events: list[str] = Field(
-        default_factory=lambda: ["pull_request", "issue_comment"],
+        default_factory=lambda: ["pull_request", "issues", "issue_comment"],
         description="需要监听的事件列表",
     )
     bring_bot: bool = Field(default=True, description="是否自动邀请bot账号协作")
@@ -107,6 +107,16 @@ class ReviewSettingsRequest(BaseModel):
 
     default_focus: Optional[List[str]] = Field(None, description="默认审查重点")
     default_features: Optional[List[str]] = Field(None, description="默认功能列表")
+
+
+class IssueSettingsRequest(BaseModel):
+    """Issue 设置请求体"""
+
+    issue_enabled: Optional[bool] = Field(None, description="是否启用 Issue 分析")
+    auto_on_open: Optional[bool] = Field(None, description="是否自动分析新建/重开 Issue")
+    manual_command_enabled: Optional[bool] = Field(
+        None, description="是否启用 /issue 手动命令"
+    )
 
 
 def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> bool:
@@ -272,6 +282,74 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 for c in inline_comments
             ],
         }
+
+    def _serialize_issue_summary(issue_session):
+        """序列化 Issue 会话摘要。"""
+        usage_stats = getattr(issue_session, "usage_stats", []) or []
+        total_input_tokens = sum(s.estimated_input_tokens for s in usage_stats)
+        total_output_tokens = sum(s.estimated_output_tokens for s in usage_stats)
+        cache_creation_input_tokens = sum(
+            s.cache_creation_input_tokens for s in usage_stats
+        )
+        cache_read_input_tokens = sum(s.cache_read_input_tokens for s in usage_stats)
+        analysis_payload = issue_session.get_analysis_payload()
+
+        return {
+            "id": issue_session.id,
+            "repository_id": issue_session.repository_id,
+            "repo_full_name": (
+                f"{issue_session.repository.owner}/{issue_session.repository.repo_name}"
+                if issue_session.repository
+                else None
+            ),
+            "issue_number": issue_session.issue_number,
+            "issue_title": issue_session.issue_title,
+            "issue_author": issue_session.issue_author,
+            "issue_state": issue_session.issue_state,
+            "trigger_type": issue_session.trigger_type,
+            "engine": issue_session.engine,
+            "model": issue_session.model,
+            "config_source": issue_session.config_source,
+            "overall_severity": issue_session.overall_severity,
+            "overall_success": issue_session.overall_success,
+            "error_message": issue_session.error_message,
+            "related_issue_count": len(analysis_payload.get("related_issues", [])),
+            "solution_count": len(analysis_payload.get("solution_suggestions", [])),
+            "started_at": (
+                issue_session.started_at.isoformat() if issue_session.started_at else None
+            ),
+            "completed_at": (
+                issue_session.completed_at.isoformat()
+                if issue_session.completed_at
+                else None
+            ),
+            "duration_seconds": issue_session.duration_seconds,
+            "estimated_input_tokens": total_input_tokens,
+            "estimated_output_tokens": total_output_tokens,
+            "cache_creation_input_tokens": cache_creation_input_tokens,
+            "cache_read_input_tokens": cache_read_input_tokens,
+            "total_tokens": total_input_tokens + total_output_tokens,
+        }
+
+    def _serialize_issue_detail(issue_session):
+        """序列化 Issue 会话详情。"""
+        summary = _serialize_issue_summary(issue_session)
+        analysis_payload = issue_session.get_analysis_payload()
+        summary.update(
+            {
+                "source_comment_id": issue_session.source_comment_id,
+                "bot_comment_id": issue_session.bot_comment_id,
+                "summary_markdown": issue_session.summary_markdown,
+                "analysis_payload": analysis_payload,
+                "related_issues": analysis_payload.get("related_issues", []),
+                "solution_suggestions": analysis_payload.get(
+                    "solution_suggestions", []
+                ),
+                "related_files": analysis_payload.get("related_files", []),
+                "next_actions": analysis_payload.get("next_actions", []),
+            }
+        )
+        return summary
 
     async def _resolve_accessible_repo_ids(db_service, user_repos):
         """解析当前用户可访问的仓库 ID 列表。
@@ -956,6 +1034,125 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             inline_comments = await db_service.get_inline_comments(review_id)
             return _serialize_review_detail(review_session, inline_comments)
 
+    @api_router.get("/issues")
+    async def list_issues(
+        request: Request,
+        owner: Optional[str] = Query(None, description="仓库所有者"),
+        repo: Optional[str] = Query(None, description="仓库名称"),
+        success: Optional[bool] = Query(None, description="是否成功"),
+        limit: int = Query(50, ge=1, le=200, description="返回数量"),
+        offset: int = Query(0, ge=0, description="偏移量"),
+        admin: User = Depends(admin_required()),
+    ):
+        """获取 Issue 分析历史列表。"""
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        async with database.session() as session:
+            db_service = DBService(session)
+            sessions = await db_service.list_issue_sessions(
+                owner=owner,
+                repo_name=repo,
+                success=success,
+                limit=limit,
+                offset=offset,
+            )
+            return {
+                "issues": [_serialize_issue_summary(s) for s in sessions],
+                "total": len(sessions),
+                "limit": limit,
+                "offset": offset,
+            }
+
+    @api_router.get("/issues/{issue_id}")
+    async def get_issue(
+        issue_id: int,
+        request: Request,
+        admin: User = Depends(admin_required()),
+    ):
+        """获取单条 Issue 分析详情。"""
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        async with database.session() as session:
+            db_service = DBService(session)
+            issue_session = await db_service.get_issue_session(issue_id)
+            if not issue_session:
+                raise HTTPException(status_code=404, detail="Issue 记录不存在")
+            return _serialize_issue_detail(issue_session)
+
+    @api_router.get("/my/issues")
+    async def list_my_issues(
+        request: Request,
+        success: Optional[bool] = Query(None, description="是否成功"),
+        limit: int = Query(50, ge=1, le=200, description="返回数量"),
+        offset: int = Query(0, ge=0, description="偏移量"),
+    ):
+        """获取当前用户可访问仓库的 Issue 分析历史。"""
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        session_data = context.auth_manager.require_session(request)
+        client = context.auth_manager.build_user_client(session_data)
+        user_repos = await client.list_user_repos()
+        if user_repos is None:
+            raise HTTPException(status_code=502, detail="无法从Gitea获取用户仓库列表")
+
+        async with database.session() as db_session:
+            db_service = DBService(db_session)
+            repo_ids = await _resolve_accessible_repo_ids(db_service, user_repos)
+            if not repo_ids:
+                return {"issues": [], "total": 0, "limit": limit, "offset": offset}
+
+            sessions = await db_service.list_issue_sessions_by_repo_ids(
+                repository_ids=repo_ids,
+                success=success,
+                limit=limit,
+                offset=offset,
+            )
+            return {
+                "issues": [_serialize_issue_summary(s) for s in sessions],
+                "total": len(sessions),
+                "limit": limit,
+                "offset": offset,
+            }
+
+    @api_router.get("/my/issues/{issue_id}")
+    async def get_my_issue(issue_id: int, request: Request):
+        """获取当前用户可见仓库的单条 Issue 分析详情。"""
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        session_data = context.auth_manager.require_session(request)
+        client = context.auth_manager.build_user_client(session_data)
+        user_repos = await client.list_user_repos()
+        if user_repos is None:
+            raise HTTPException(status_code=502, detail="无法从Gitea获取用户仓库列表")
+
+        async with database.session() as db_session:
+            db_service = DBService(db_session)
+            repo_ids = await _resolve_accessible_repo_ids(db_service, user_repos)
+            if not repo_ids:
+                raise HTTPException(status_code=404, detail="Issue 记录不存在")
+
+            issue_session = await db_service.get_issue_session(issue_id)
+            if not issue_session or issue_session.repository_id not in repo_ids:
+                raise HTTPException(status_code=404, detail="Issue 记录不存在")
+
+            return _serialize_issue_detail(issue_session)
+
     # ==================== 使用量统计 API ====================
 
     @api_router.get("/stats")
@@ -1035,6 +1232,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                         "id": s.id,
                         "repository_id": s.repository_id,
                         "review_session_id": s.review_session_id,
+                        "issue_session_id": s.issue_session_id,
                         "date": s.stat_date.isoformat() if s.stat_date else None,
                         "estimated_input_tokens": s.estimated_input_tokens,
                         "estimated_output_tokens": s.estimated_output_tokens,
@@ -1367,6 +1565,60 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "default_features": config.get_features(),
             }
 
+    @api_router.get("/repos/{owner}/{repo}/issue-settings")
+    async def get_issue_settings(owner: str, repo: str, request: Request):
+        """获取仓库的 Issue 分析设置。"""
+        context.auth_manager.require_session(request)
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        async with database.session() as session:
+            db_service = DBService(session)
+            repo_obj = await db_service.get_repository(owner, repo)
+            if not repo_obj:
+                return {
+                    "issue_enabled": True,
+                    "auto_on_open": True,
+                    "manual_command_enabled": True,
+                }
+
+            return {
+                "issue_enabled": repo_obj.issue_enabled,
+                "auto_on_open": repo_obj.issue_auto_on_open,
+                "manual_command_enabled": repo_obj.issue_manual_command_enabled,
+            }
+
+    @api_router.put("/repos/{owner}/{repo}/issue-settings")
+    async def update_issue_settings(
+        owner: str, repo: str, payload: IssueSettingsRequest, request: Request
+    ):
+        """更新仓库的 Issue 分析设置。"""
+        await _require_repo_setup_permission(owner, repo, request)
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        async with database.session() as session:
+            db_service = DBService(session)
+            repo_obj = await db_service.update_issue_settings(
+                owner,
+                repo,
+                issue_enabled=payload.issue_enabled,
+                issue_auto_on_open=payload.auto_on_open,
+                issue_manual_command_enabled=payload.manual_command_enabled,
+            )
+
+            return {
+                "issue_enabled": repo_obj.issue_enabled,
+                "auto_on_open": repo_obj.issue_auto_on_open,
+                "manual_command_enabled": repo_obj.issue_manual_command_enabled,
+            }
+
     @api_router.get("/repos/{owner}/{repo}/webhook-secret")
     async def get_webhook_secret(owner: str, repo: str, request: Request):
         """获取仓库的 Webhook Secret"""
@@ -1546,7 +1798,20 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                     },
                 )
 
-            # 处理Issue评论事件（用于手动触发）
+            if x_gitea_event == "issues":
+                logger.info("收到 issues webhook")
+                background_tasks.add_task(
+                    context.webhook_handler.process_issue_async,
+                    payload,
+                )
+                return JSONResponse(
+                    status_code=202,
+                    content={
+                        "message": "Issue webhook received, processing in background",
+                    },
+                )
+
+            # 处理 Issue 评论事件（用于手动触发）
             if x_gitea_event == "issue_comment":
                 logger.info("收到issue_comment webhook")
 

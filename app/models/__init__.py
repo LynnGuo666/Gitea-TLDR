@@ -1,6 +1,7 @@
 from .admin_settings import AdminSettings
 from .api_key import ApiKey, KeyRotationStrategy
 from .base import Base, TimestampMixin
+from .issue_session import IssueSession
 from .inline_comment import InlineComment
 from .model_config import ModelConfig
 from .repository import Repository
@@ -15,6 +16,7 @@ __all__ = [
     "TimestampMixin",
     "Repository",
     "ModelConfig",
+    "IssueSession",
     "ReviewSession",
     "InlineComment",
     "UsageStat",

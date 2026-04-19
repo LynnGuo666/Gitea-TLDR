@@ -25,7 +25,7 @@ import { RepoProviderConfig, ProviderInfo } from '../../../lib/types';
 import { AuthContext } from '../../../lib/auth';
 import { apiFetch } from '../../../lib/api';
 
-const defaultEvents = ['pull_request', 'issue_comment'];
+const defaultEvents = ['pull_request', 'issues', 'issue_comment'];
 const reviewCatalog = [
   {
     key: 'quality',
@@ -102,6 +102,12 @@ type PullRequest = {
   merged_at: string | null;
 };
 
+type IssueSettings = {
+  issue_enabled: boolean;
+  auto_on_open: boolean;
+  manual_command_enabled: boolean;
+};
+
 export default function RepoConfigPage() {
   const router = useRouter();
   const { owner, repo } = router.query;
@@ -135,6 +141,13 @@ export default function RepoConfigPage() {
   const [pullsLoading, setPullsLoading] = useState(true);
   const [focusLoading, setFocusLoading] = useState(true);
   const [focusSaving, setFocusSaving] = useState(false);
+  const [issueSettings, setIssueSettings] = useState<IssueSettings>({
+    issue_enabled: true,
+    auto_on_open: true,
+    manual_command_enabled: true,
+  });
+  const [issueSettingsLoading, setIssueSettingsLoading] = useState(true);
+  const [issueSettingsSaving, setIssueSettingsSaving] = useState(false);
 
   const { status: authStatus, beginLogin } = useContext(AuthContext);
   const requiresLogin = authStatus.enabled && !authStatus.loggedIn;
@@ -234,6 +247,22 @@ export default function RepoConfigPage() {
     }
   }, [owner, repo, requiresLogin]);
 
+  const fetchIssueSettings = useCallback(async () => {
+    if (!owner || !repo || requiresLogin) return;
+    setIssueSettingsLoading(true);
+    try {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/issue-settings`);
+      if (res.ok) {
+        const data = (await res.json()) as IssueSettings;
+        setIssueSettings(data);
+      }
+    } catch {
+      // Keep defaults on error
+    } finally {
+      setIssueSettingsLoading(false);
+    }
+  }, [owner, repo, requiresLogin]);
+
   const canEditRepo = webhookStatus?.can_setup_webhook ?? true;
 
   useEffect(() => {
@@ -242,6 +271,7 @@ export default function RepoConfigPage() {
       fetchProviderConfig();
       fetchPulls();
       fetchReviewSettings();
+      fetchIssueSettings();
       apiFetch('/api/providers').then(async (res) => {
         if (res.ok) {
           const data = await res.json();
@@ -253,6 +283,7 @@ export default function RepoConfigPage() {
       setProviderConfigLoading(false);
       setPullsLoading(false);
       setFocusLoading(false);
+      setIssueSettingsLoading(false);
     }
   }, [
     owner,
@@ -262,6 +293,7 @@ export default function RepoConfigPage() {
     fetchProviderConfig,
     fetchPulls,
     fetchReviewSettings,
+    fetchIssueSettings,
   ]);
 
   const refreshAll = async () => {
@@ -273,6 +305,7 @@ export default function RepoConfigPage() {
         fetchProviderConfig(),
         fetchPulls(),
         fetchReviewSettings(),
+        fetchIssueSettings(),
       ]);
     } finally {
       setRefreshingAll(false);
@@ -455,6 +488,36 @@ export default function RepoConfigPage() {
     }
   };
 
+  const updateIssueSettings = async (patch: Partial<IssueSettings>) => {
+    if (issueSettingsSaving || requiresLogin || !owner || !repo || !canEditRepo) return;
+
+    const previous = issueSettings;
+    const next = { ...issueSettings, ...patch };
+    setIssueSettings(next);
+    setIssueSettingsSaving(true);
+
+    try {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/issue-settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        setIssueSettings(previous);
+        addToast({ title: 'Issue 设置保存失败', color: 'danger' });
+        return;
+      }
+      const data = (await res.json()) as IssueSettings;
+      setIssueSettings(data);
+      addToast({ title: 'Issue 设置已保存', color: 'success' });
+    } catch {
+      setIssueSettings(previous);
+      addToast({ title: '无法连接后端', color: 'danger' });
+    } finally {
+      setIssueSettingsSaving(false);
+    }
+  };
+
   const toggleInheritGlobal = async (nextValue: boolean) => {
     if (requiresLogin || !owner || !repo || !canEditRepo || inheritSaving) return;
 
@@ -504,12 +567,17 @@ export default function RepoConfigPage() {
       baseUrl: 'https://api.openai.com (留空使用默认)',
       apiKey: 'sk-...',
     },
+    forge: {
+      baseUrl: 'https://api.anthropic.com (留空使用全局 FORGE_BASE_URL)',
+      apiKey: 'sk-ant-...',
+    },
   };
 
   const currentPlaceholders = providerPlaceholders[selectedProvider] || providerPlaceholders.claude_code;
   const modelPlaceholders: Record<string, string> = {
     claude_code: '例如: claude-3-7-sonnet-20250219',
     codex_cli: '例如: gpt-5.3-codex',
+    forge: '例如: claude-sonnet-4-20250514',
   };
   const currentModelPlaceholder = modelPlaceholders[selectedProvider] || '例如: gpt-5.3-codex';
   const providerLabel = (name: string) => providers.find((p) => p.name === name)?.label || name;
@@ -546,6 +614,7 @@ export default function RepoConfigPage() {
           >
             <Tab key="webhook" title="自动审查" />
             <Tab key="focus" title="审查方向" />
+            <Tab key="issues" title="Issue 分析" />
             <Tab key="claude" title="AI 审查配置" />
             <Tab key="pulls" title="最新 PR" />
           </Tabs>
@@ -684,6 +753,78 @@ export default function RepoConfigPage() {
                   })}
                 </div>
               </>
+            )}
+          </section>
+        )}
+
+        {activeTab === 'issues' && (
+          <section className="py-5">
+            {issueSettingsLoading ? (
+              <div className="flex flex-col gap-3">
+                <Skeleton width="100%" height={72} className="rounded-xl" />
+                <Skeleton width="100%" height={72} className="rounded-xl" />
+                <Skeleton width="100%" height={72} className="rounded-xl" />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div className="rounded-xl border border-divider bg-content1 px-4 py-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="m-0 text-base">启用 Issue 分析</h3>
+                      <p className="m-0 mt-1 text-sm text-default-500">
+                        打开后，仓库会接收 `issues` 事件并允许记录 Issue 分析结果。
+                      </p>
+                    </div>
+                    <Switch
+                      isSelected={issueSettings.issue_enabled}
+                      isDisabled={!canEditRepo || issueSettingsSaving}
+                      onValueChange={(value) => updateIssueSettings({ issue_enabled: value })}
+                      aria-label="启用 Issue 分析"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-divider bg-content1 px-4 py-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="m-0 text-base">自动分析新建 Issue</h3>
+                      <p className="m-0 mt-1 text-sm text-default-500">
+                        当 `issues/opened` 或 `issues/reopened` 到达时，自动生成分析与解决方案。
+                      </p>
+                    </div>
+                    <Switch
+                      isSelected={issueSettings.auto_on_open}
+                      isDisabled={!canEditRepo || issueSettingsSaving || !issueSettings.issue_enabled}
+                      onValueChange={(value) => updateIssueSettings({ auto_on_open: value })}
+                      aria-label="自动分析新建 Issue"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-divider bg-content1 px-4 py-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="m-0 text-base">启用 `/issue` 手动命令</h3>
+                      <p className="m-0 mt-1 text-sm text-default-500">
+                        在普通 Issue 评论中发送 `/issue`，或在配置了 bot 用户名时发送 `@bot /issue`。
+                      </p>
+                    </div>
+                    <Switch
+                      isSelected={issueSettings.manual_command_enabled}
+                      isDisabled={!canEditRepo || issueSettingsSaving || !issueSettings.issue_enabled}
+                      onValueChange={(value) => updateIssueSettings({ manual_command_enabled: value })}
+                      aria-label="启用 /issue 手动命令"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-default-100 px-4 py-3 text-sm text-default-600">
+                  <p className="m-0">
+                    当前默认建议的 Webhook 事件为：
+                    <span className="ml-2 font-mono text-foreground">pull_request, issues, issue_comment</span>
+                  </p>
+                </div>
+              </div>
             )}
           </section>
         )}

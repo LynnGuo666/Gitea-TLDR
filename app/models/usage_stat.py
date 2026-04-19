@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 
 if TYPE_CHECKING:
+    from .issue_session import IssueSession
     from .repository import Repository
     from .review_session import ReviewSession
     from .user import User
@@ -27,6 +28,9 @@ class UsageStat(Base):
     )
     review_session_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("review_sessions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    issue_session_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("issue_sessions.id", ondelete="SET NULL"), nullable=True, index=True
     )
     user_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
@@ -63,5 +67,8 @@ class UsageStat(Base):
     repository: Mapped["Repository"] = relationship("Repository")
     review_session: Mapped[Optional["ReviewSession"]] = relationship(
         "ReviewSession", back_populates="usage_stat"
+    )
+    issue_session: Mapped[Optional["IssueSession"]] = relationship(
+        "IssueSession", back_populates="usage_stats"
     )
     user: Mapped[Optional["User"]] = relationship("User")

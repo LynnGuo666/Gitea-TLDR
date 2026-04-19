@@ -30,9 +30,17 @@ def test_get_tools_for_review_scenario_includes_submit_review():
     ]
 
 
-def test_get_tools_for_non_review_scenario_raises():
-    with pytest.raises(ValueError, match="暂未实现"):
-        get_tools_for_scenario(Scenario.ISSUE)
+def test_get_tools_for_issue_scenario_includes_submit_analysis():
+    tools = get_tools_for_scenario(Scenario.ISSUE)
+
+    assert [tool.name for tool in tools] == [
+        "list_directory",
+        "glob_files",
+        "search_code",
+        "read_file",
+        "lsp",
+        "submit_analysis",
+    ]
 
 
 def test_forge_provider_convert_result_uses_structured_data():
