@@ -3,7 +3,7 @@
 """
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select
@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models import (
+    IssueConfig,
     IssueSession,
     InlineComment,
     ModelConfig,
@@ -503,12 +504,10 @@ class DBService:
             completed_at = datetime.now(timezone.utc)
             issue_session.completed_at = completed_at
             if issue_session.started_at:
-                started_naive = (
-                    issue_session.started_at.replace(tzinfo=None)
-                    if issue_session.started_at.tzinfo
-                    else issue_session.started_at
-                )
-                delta = completed_at.replace(tzinfo=None) - started_naive
+                started_at = issue_session.started_at
+                if started_at.tzinfo is None:
+                    started_at = started_at.replace(tzinfo=timezone.utc)
+                delta = completed_at - started_at
                 issue_session.duration_seconds = delta.total_seconds()
 
         await self.session.flush()
@@ -575,6 +574,140 @@ class DBService:
             limit=limit,
             offset=offset,
         )
+
+    async def get_in_flight_issue_session(
+        self, repository_id: int, issue_number: int
+    ) -> Optional[IssueSession]:
+        """查询是否存在尚未完成的同一 Issue 分析会话。"""
+        stmt = (
+            select(IssueSession)
+            .where(
+                IssueSession.repository_id == repository_id,
+                IssueSession.issue_number == issue_number,
+                IssueSession.completed_at.is_(None),
+            )
+            .order_by(IssueSession.started_at.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_recent_successful_issue_session(
+        self,
+        repository_id: int,
+        issue_number: int,
+        within_seconds: int,
+    ) -> Optional[IssueSession]:
+        """查询最近一段时间内是否已有成功完成的 Issue 分析。"""
+        threshold = datetime.now(timezone.utc) - timedelta(seconds=within_seconds)
+        stmt = (
+            select(IssueSession)
+            .where(
+                IssueSession.repository_id == repository_id,
+                IssueSession.issue_number == issue_number,
+                IssueSession.overall_success.is_(True),
+                IssueSession.completed_at.isnot(None),
+                IssueSession.completed_at >= threshold,
+            )
+            .order_by(IssueSession.completed_at.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    # ==================== IssueConfig 操作 ====================
+
+    async def get_repo_specific_issue_config(
+        self, repository_id: int
+    ) -> Optional[IssueConfig]:
+        """获取仓库级 Issue 配置（不回退到全局）"""
+        stmt = select(IssueConfig).where(IssueConfig.repository_id == repository_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_global_issue_config(self) -> Optional[IssueConfig]:
+        """获取全局默认 Issue 配置"""
+        stmt = select(IssueConfig).where(
+            IssueConfig.repository_id.is_(None), IssueConfig.is_default.is_(True)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def upsert_issue_config(
+        self,
+        *,
+        repository_id: Optional[int],
+        config_name: str,
+        engine: Optional[str] = None,
+        model: Optional[str] = None,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        wire_api: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        custom_prompt: Optional[str] = None,
+        default_focus: Optional[List[str]] = None,
+        is_default: Optional[bool] = None,
+        clear_api_key: bool = False,
+    ) -> IssueConfig:
+        """写入或更新 Issue 配置；字段为 None 表示不修改。"""
+        if repository_id is not None:
+            stmt = select(IssueConfig).where(
+                IssueConfig.repository_id == repository_id
+            )
+        else:
+            stmt = select(IssueConfig).where(
+                IssueConfig.repository_id.is_(None),
+                IssueConfig.is_default.is_(True),
+            )
+        result = await self.session.execute(stmt)
+        config = result.scalar_one_or_none()
+
+        if not config:
+            config = IssueConfig(
+                repository_id=repository_id,
+                config_name=config_name,
+                engine=engine or "forge",
+                is_default=bool(is_default) if is_default is not None else (repository_id is None),
+            )
+            self.session.add(config)
+        else:
+            config.config_name = config_name or config.config_name
+            if engine is not None:
+                config.engine = engine
+            if is_default is not None:
+                config.is_default = is_default
+
+        if model is not None:
+            config.model = model or None
+        if api_url is not None:
+            config.api_url = api_url or None
+        if clear_api_key:
+            config.api_key = None
+        elif api_key is not None:
+            config.api_key = api_key or None
+        if wire_api is not None:
+            config.wire_api = wire_api or None
+        if temperature is not None:
+            config.temperature = temperature
+        if max_tokens is not None:
+            config.max_tokens = max_tokens
+        if custom_prompt is not None:
+            config.custom_prompt = custom_prompt or None
+        if default_focus is not None:
+            config.set_focus(default_focus)
+
+        await self.session.flush()
+        return config
+
+    async def clear_repo_issue_config(self, repository_id: int) -> bool:
+        """删除仓库级 Issue 配置（回退到全局继承）"""
+        config = await self.get_repo_specific_issue_config(repository_id)
+        if not config:
+            return False
+        await self.session.delete(config)
+        await self.session.flush()
+        return True
 
     # ==================== InlineComment 操作 ====================
 

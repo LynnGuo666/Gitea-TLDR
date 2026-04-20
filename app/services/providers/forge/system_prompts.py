@@ -10,6 +10,16 @@ FOCUS_MAP = {
 }
 
 
+ISSUE_FOCUS_MAP = {
+    "bug": "根因定位、复现路径与影响范围",
+    "duplicate": "历史相似 Issue 去重、引用原 Issue 并解释差异",
+    "design": "设计缺陷、架构或 API 合约层面的评估",
+    "performance": "性能瓶颈、资源占用与优化思路",
+    "question": "为提问类 Issue 给出直接答案与可运行示例",
+}
+DEFAULT_ISSUE_FOCUS_TEXT = "、".join(ISSUE_FOCUS_MAP.values())
+
+
 def build_review_system_prompt(
     focus_areas: List[str],
     pr_info: dict,
@@ -59,6 +69,7 @@ def build_issue_system_prompt(
     issue_info: Dict[str, Any],
     similar_issue_candidates: List[Dict[str, Any]],
     custom_prompt: Optional[str] = None,
+    focus_areas: Optional[List[str]] = None,
 ) -> str:
     issue_title = issue_info.get("title", "N/A")
     issue_body = (issue_info.get("body") or "无描述")[:3000]
@@ -86,7 +97,16 @@ def build_issue_system_prompt(
     else:
         candidate_lines.append("- 无候选相似 Issue")
 
+    focus_text = DEFAULT_ISSUE_FOCUS_TEXT
+    if focus_areas:
+        mapped = [ISSUE_FOCUS_MAP.get(f, f) for f in focus_areas if f]
+        if mapped:
+            focus_text = "、".join(mapped)
+
     prompt = f"""你是一位专业的问题分析工程师。你正在分析一个 Issue，并给出可执行的解决方案。
+
+## 分析重点
+{focus_text}
 
 ## 当前 Issue
 - 标题: {issue_title}

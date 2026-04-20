@@ -53,6 +53,11 @@ export default function AdminIssuesPage() {
     setError(null);
     try {
       const res = await apiFetch('/api/issues?limit=50&offset=0');
+      if (res.status === 401 || res.status === 403) {
+        setError('需要管理员权限');
+        setIssues([]);
+        return;
+      }
       if (!res.ok) throw new Error('获取 Issue 分析记录失败');
       const data = (await res.json()) as IssueListResponse;
       setIssues(data.issues);

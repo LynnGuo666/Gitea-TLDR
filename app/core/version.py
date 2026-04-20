@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "1.26.6"
-__release_date__ = "2026-04-16"
+__version__ = "1.27.0"
+__release_date__ = "2026-04-20"
 __author__ = "LynnGuo666"
 
 
@@ -17,6 +17,22 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.27.0": {
+        "date": "2026-04-20",
+        "changes": [
+            "新增：Issue 分析拥有独立的 issue_configs 表与 /issue-config、/config/issue-global 端点，仓库可与 PR 审查配置解耦",
+            "新增：/issue 命令支持 --focus bug,duplicate,design,performance,question，仓库与全局均可设置默认分析重点",
+            "新增：Forge 引入 submit_analysis 三层降级（tool → text_json → raw_text），前端详情展示 fallback_mode 降级标签",
+            "新增：分析成功后自动打 ai-analyzed 标签；若识别到相似 Issue 额外打 possibly-duplicate",
+            "修复：Issue 分析链路接入幂等保护，同一 Issue 的 in-flight / 5 分钟内成功状态会被拒绝重复触发",
+            "修复：WebhookHandler 全面过滤 bot 自触发（PR/Issue/评论），避免机器人循环",
+            "修复：issue_sessions.started_at / completed_at 迁移为 timezone-aware，修正时长统计的时区黑魔法",
+            "优化：相似 Issue 关键词提取引入 jieba，支持中英文混合文本的命中",
+            "优化：RepoManager.clone_workspace 增加基于 (owner/repo/kind/id) 的并发锁，避免同一工作区并行克隆冲突",
+            "优化：日志脱敏——Issue 分析日志不再打印标题，仅输出 owner/repo#number",
+            "维护：同步更新后端与前端版本号到 1.27.0",
+        ],
+    },
     "1.26.6": {
         "date": "2026-04-16",
         "changes": [

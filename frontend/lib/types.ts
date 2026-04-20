@@ -121,4 +121,37 @@ export type IssueAnalysisDetail = IssueAnalysisItem & {
   solution_suggestions: SolutionSuggestion[];
   related_files: string[];
   next_actions: string[];
+  fallback_mode?: 'tool' | 'text_json' | 'raw_text';
+  focus_areas?: string[];
+};
+
+export type IssueConfigPayload = {
+  inherit_global: boolean;
+  has_global_config: boolean;
+  configured: boolean;
+  engine: string;
+  model: string | null;
+  api_url: string | null;
+  has_api_key: boolean;
+  temperature: number | null;
+  max_tokens: number | null;
+  custom_prompt: string | null;
+  default_focus: string[];
+  global_engine: string | null;
+  global_model: string | null;
+  global_api_url: string | null;
+  global_has_api_key: boolean;
+};
+
+export type IssueConfigUpdateRequest = {
+  engine?: string;
+  model?: string | null;
+  api_url?: string | null;
+  api_key?: string | null;
+  wire_api?: string | null;
+  temperature?: number | null;
+  max_tokens?: number | null;
+  custom_prompt?: string | null;
+  default_focus?: string[];
+  inherit_global?: boolean;
 };

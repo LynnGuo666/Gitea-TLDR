@@ -92,3 +92,15 @@ class ProviderRegistry:
             列表结果。
         """
         return list(self._providers.keys())
+
+    def list_issue_providers(self) -> List[str]:
+        """列出支持 Issue 分析的提供方。"""
+        supported: List[str] = []
+        for name, provider_class in self._providers.items():
+            try:
+                provider = provider_class()
+            except Exception:  # pragma: no cover - 安全兜底
+                continue
+            if getattr(provider, "supports_issue", lambda: False)():
+                supported.append(name)
+        return supported

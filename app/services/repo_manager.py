@@ -26,6 +26,33 @@ class RepoManager:
         """
         self.work_dir = Path(work_dir).expanduser().resolve()
         self.work_dir.mkdir(parents=True, exist_ok=True)
+        self._workspace_locks: dict[str, asyncio.Lock] = {}
+        self._workspace_locks_guard = asyncio.Lock()
+
+    def _workspace_lock_key(
+        self, owner: str, repo: str, workspace_kind: str, workspace_id: int
+    ) -> str:
+        return f"{owner}/{repo}/{workspace_kind}/{workspace_id}"
+
+    async def _acquire_workspace_lock(
+        self, owner: str, repo: str, workspace_kind: str, workspace_id: int
+    ) -> asyncio.Lock:
+        key = self._workspace_lock_key(owner, repo, workspace_kind, workspace_id)
+        async with self._workspace_locks_guard:
+            lock = self._workspace_locks.get(key)
+            if lock is None:
+                lock = asyncio.Lock()
+                self._workspace_locks[key] = lock
+        return lock
+
+    async def _release_workspace_lock(
+        self, owner: str, repo: str, workspace_kind: str, workspace_id: int
+    ) -> None:
+        key = self._workspace_lock_key(owner, repo, workspace_kind, workspace_id)
+        async with self._workspace_locks_guard:
+            lock = self._workspace_locks.get(key)
+            if lock is not None and not lock.locked():
+                self._workspace_locks.pop(key, None)
 
     def get_workspace_path(
         self,
@@ -157,42 +184,46 @@ class RepoManager:
             工作区路径，失败返回 None
         """
         repo_path = self.get_workspace_path(owner, repo, workspace_kind, workspace_id)
-
-        if repo_path.exists():
-            logger.info(f"删除已存在的仓库目录: {repo_path}")
-            shutil.rmtree(repo_path)
+        lock = await self._acquire_workspace_lock(owner, repo, workspace_kind, workspace_id)
 
         askpass_script: Optional[Path] = None
         try:
-            logger.info(
-                "开始克隆工作区: %s/%s kind=%s id=%s branch=%s",
-                owner,
-                repo,
-                workspace_kind,
-                workspace_id,
-                branch,
-            )
-            env, askpass_script = self._build_git_env(auth_token)
-            process = await asyncio.create_subprocess_exec(
-                "git",
-                "clone",
-                "--depth=1",
-                "--single-branch",
-                "--branch",
-                branch,
-                clone_url,
-                str(repo_path),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-            )
-            _, stderr = await process.communicate()
-            if process.returncode != 0:
-                stderr_text = stderr.decode(errors="ignore")
-                logger.error("克隆工作区失败: %s", self._classify_clone_error(stderr_text))
-                return None
-            logger.info("成功克隆工作区到: %s", repo_path)
-            return repo_path
+            async with lock:
+                if repo_path.exists():
+                    logger.info(f"删除已存在的仓库目录: {repo_path}")
+                    shutil.rmtree(repo_path)
+
+                logger.info(
+                    "开始克隆工作区: %s/%s kind=%s id=%s branch=%s",
+                    owner,
+                    repo,
+                    workspace_kind,
+                    workspace_id,
+                    branch,
+                )
+                env, askpass_script = self._build_git_env(auth_token)
+                process = await asyncio.create_subprocess_exec(
+                    "git",
+                    "clone",
+                    "--depth=1",
+                    "--single-branch",
+                    "--branch",
+                    branch,
+                    clone_url,
+                    str(repo_path),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                )
+                _, stderr = await process.communicate()
+                if process.returncode != 0:
+                    stderr_text = stderr.decode(errors="ignore")
+                    logger.error(
+                        "克隆工作区失败: %s", self._classify_clone_error(stderr_text)
+                    )
+                    return None
+                logger.info("成功克隆工作区到: %s", repo_path)
+                return repo_path
         except Exception as e:
             logger.error(f"克隆工作区异常: {e}")
             return None
@@ -202,6 +233,7 @@ class RepoManager:
                     askpass_script.unlink()
                 except OSError:
                     pass
+            await self._release_workspace_lock(owner, repo, workspace_kind, workspace_id)
 
     async def checkout_pr_branch(
         self, repo_path: Path, base_branch: str, head_branch: str

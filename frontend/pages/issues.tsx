@@ -40,6 +40,14 @@ function formatTokens(value: number | null | undefined): string {
   return new Intl.NumberFormat('zh-CN').format(value);
 }
 
+function formatDuration(seconds: number | null | undefined): string {
+  if (!seconds && seconds !== 0) return '—';
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const secs = Math.round(seconds - minutes * 60);
+  return `${minutes}m${secs.toString().padStart(2, '0')}s`;
+}
+
 function renderStatus(success: boolean | null) {
   if (success === true) {
     return (
@@ -66,6 +74,7 @@ export default function IssuesPage() {
   const [issues, setIssues] = useState<IssueAnalysisItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [needsLogin, setNeedsLogin] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [detailCache, setDetailCache] = useState<Record<number, IssueAnalysisDetail>>({});
   const [loadingDetailId, setLoadingDetailId] = useState<number | null>(null);
@@ -75,8 +84,14 @@ export default function IssuesPage() {
     if (showRefreshing) setRefreshing(true);
     else setLoading(true);
     setError(null);
+    setNeedsLogin(false);
     try {
       const res = await apiFetch('/api/my/issues?limit=50&offset=0');
+      if (res.status === 401) {
+        setNeedsLogin(true);
+        setIssues([]);
+        return;
+      }
       if (!res.ok) {
         throw new Error('获取 Issue 分析记录失败');
       }
@@ -136,6 +151,13 @@ export default function IssuesPage() {
       return <div className="p-4 text-danger">无法加载详情</div>;
     }
 
+    const fallbackLabel =
+      detail.fallback_mode === 'text_json'
+        ? 'JSON 降级'
+        : detail.fallback_mode === 'raw_text'
+          ? '纯文本降级'
+          : null;
+
     return (
       <div className="rounded-lg bg-content2/50 p-4 text-sm flex flex-col gap-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 rounded-md border border-default-200 bg-content1 p-3">
@@ -156,6 +178,21 @@ export default function IssuesPage() {
             <span>{detail.solution_count}</span>
           </div>
         </div>
+
+        {(fallbackLabel || (detail.focus_areas && detail.focus_areas.length > 0)) && (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {fallbackLabel ? (
+              <Chip color="warning" variant="flat" size="sm">
+                {fallbackLabel}
+              </Chip>
+            ) : null}
+            {detail.focus_areas?.map((focus) => (
+              <Chip key={focus} size="sm" variant="flat">
+                {focus}
+              </Chip>
+            ))}
+          </div>
+        )}
 
         <div>
           <p className="m-0 mb-2 text-sm font-medium">摘要</p>
@@ -264,7 +301,14 @@ export default function IssuesPage() {
           }
         />
 
-        {loading ? (
+        {needsLogin ? (
+          <div className="rounded-lg border border-warning bg-warning-50 p-4 text-warning-700 flex flex-wrap items-center gap-3">
+            <span>需要登录后才能查看 Issue 分析记录。</span>
+            <Button size="sm" color="primary" variant="flat" onPress={() => (window.location.href = '/api/auth/login-url')}>
+              去登录
+            </Button>
+          </div>
+        ) : loading ? (
           <div className="py-10 text-center text-default-500">加载中...</div>
         ) : error ? (
           <div className="rounded-lg border border-danger bg-danger-50 p-4 text-danger">
@@ -283,6 +327,7 @@ export default function IssuesPage() {
               <TableColumn>方案</TableColumn>
               <TableColumn>状态</TableColumn>
               <TableColumn>Tokens</TableColumn>
+              <TableColumn>用时</TableColumn>
               <TableColumn>开始时间</TableColumn>
             </TableHeader>
             <TableBody>
@@ -303,12 +348,13 @@ export default function IssuesPage() {
                     <TableCell>{item.solution_count}</TableCell>
                     <TableCell>{renderStatus(item.overall_success)}</TableCell>
                     <TableCell>{formatTokens(item.total_tokens)}</TableCell>
+                    <TableCell>{formatDuration(item.duration_seconds)}</TableCell>
                     <TableCell>{formatTime(item.started_at)}</TableCell>
                   </TableRow>,
                   ...(isExpanded
                     ? [
                         <TableRow key={`${item.id}-detail`}>
-                          <TableCell colSpan={9}>{renderExpanded(item.id)}</TableCell>
+                          <TableCell colSpan={10}>{renderExpanded(item.id)}</TableCell>
                         </TableRow>,
                       ]
                     : []),

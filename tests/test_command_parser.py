@@ -29,3 +29,28 @@ def test_parse_issue_command_requires_bot_mention_when_configured():
     command = parser.parse_comment("@review-bot /issue")
     assert command is not None
     assert command.command == "issue"
+
+
+def test_parse_issue_command_with_focus_areas():
+    parser = CommandParser()
+
+    command = parser.parse_comment("/issue --focus bug,duplicate,design")
+    assert command is not None
+    assert command.command == "issue"
+    assert command.focus_areas == ["bug", "duplicate", "design"]
+
+
+def test_parse_issue_command_drops_invalid_focus_values():
+    parser = CommandParser()
+
+    command = parser.parse_comment("/issue --focus nope,duplicate,whatever")
+    assert command is not None
+    assert command.focus_areas == ["duplicate"]
+
+
+def test_parse_issue_command_all_invalid_focus_returns_none():
+    parser = CommandParser()
+
+    command = parser.parse_comment("/issue --focus nope,whatever")
+    assert command is not None
+    assert command.focus_areas is None

@@ -13,7 +13,7 @@
 - Failures should preserve actionable diagnostics but redact secrets.
 - Keep output schema stable for downstream persistence/UI rendering.
 - Ensure suggestion snippets are markdown code blocks when code is included.
-- Forge currently supports only the `review` scenario; declare future scenarios explicitly instead of silently reusing `submit_review`.
+- Forge supports the `review` and `issue` scenarios today; `claude_code` and `codex_cli` only implement `review` — declare support via `supports_issue()` before routing Issue flows.
 
 ## SAFETY RULES
 - Never leak API keys/tokens in logs, exceptions, or returned text.
@@ -35,9 +35,9 @@
 | `forge/engine.py` | `ForgeEngine` — agentic loop core (turn loop + tool execution) |
 | `forge/api_client.py` | `AnthropicClient` — direct Messages API calls |
 | `forge/types.py` | core data types (`ForgeResult`, `ForgeUsage`, `ToolDefinition`) |
-| `forge/system_prompts.py` | system prompt builders per scenario |
-| `forge/tools/` | tool definitions + executors (`read_file`, `search_code`, `list_directory`, `submit_review`) |
-| `forge/scenarios/` | scenario runners (`review.py`) |
+| `forge/system_prompts.py` | system prompt builders per scenario (includes `ISSUE_FOCUS_MAP`) |
+| `forge/tools/` | tool definitions + executors (`read_file`, `search_code`, `list_directory`, `glob_files`, `lsp`, `submit_review`, `submit_analysis`) |
+| `forge/scenarios/` | scenario runners (`review.py`, `issue.py` — `run_issue` + `finalize_issue_payload` 三层降级) |
 | `usage_proxy.py` | SSE proxy for capturing Claude CLI usage (only used by claude_code) |
 
 ## ANTI-PATTERNS

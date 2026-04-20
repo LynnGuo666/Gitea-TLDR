@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import PageHeader from '../../../components/PageHeader';
 import { Skeleton } from '../../../components/ui';
-import { RepoProviderConfig, ProviderInfo } from '../../../lib/types';
+import { RepoProviderConfig, ProviderInfo, IssueConfigPayload, IssueConfigUpdateRequest } from '../../../lib/types';
 import { AuthContext } from '../../../lib/auth';
 import { apiFetch } from '../../../lib/api';
 
@@ -148,6 +148,15 @@ export default function RepoConfigPage() {
   });
   const [issueSettingsLoading, setIssueSettingsLoading] = useState(true);
   const [issueSettingsSaving, setIssueSettingsSaving] = useState(false);
+  const [issueConfig, setIssueConfig] = useState<IssueConfigPayload | null>(null);
+  const [issueConfigLoading, setIssueConfigLoading] = useState(true);
+  const [issueConfigSaving, setIssueConfigSaving] = useState(false);
+  const [issueInheritGlobal, setIssueInheritGlobal] = useState(true);
+  const [issueApiUrl, setIssueApiUrl] = useState('');
+  const [issueApiKey, setIssueApiKey] = useState('');
+  const [issueModel, setIssueModel] = useState('');
+  const [issueCustomPrompt, setIssueCustomPrompt] = useState('');
+  const [issueFocus, setIssueFocus] = useState<string[]>([]);
 
   const { status: authStatus, beginLogin } = useContext(AuthContext);
   const requiresLogin = authStatus.enabled && !authStatus.loggedIn;
@@ -263,6 +272,60 @@ export default function RepoConfigPage() {
     }
   }, [owner, repo, requiresLogin]);
 
+  const fetchIssueConfig = useCallback(async () => {
+    if (!owner || !repo || requiresLogin) return;
+    setIssueConfigLoading(true);
+    try {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/issue-config`);
+      if (!res.ok) {
+        setIssueConfig(null);
+        return;
+      }
+      const data = (await res.json()) as IssueConfigPayload;
+      setIssueConfig(data);
+      setIssueInheritGlobal(data.inherit_global);
+      setIssueApiUrl(data.api_url || '');
+      setIssueApiKey('');
+      setIssueModel(data.model || '');
+      setIssueCustomPrompt(data.custom_prompt || '');
+      setIssueFocus(data.default_focus || []);
+    } catch {
+      // keep defaults
+    } finally {
+      setIssueConfigLoading(false);
+    }
+  }, [owner, repo, requiresLogin]);
+
+  const saveIssueConfig = useCallback(
+    async (payload: IssueConfigUpdateRequest) => {
+      if (!owner || !repo || requiresLogin || !canEditRepo) return;
+      setIssueConfigSaving(true);
+      try {
+        const res = await apiFetch(`/api/repos/${owner}/${repo}/issue-config`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          addToast({ title: '保存失败', description: '请检查权限或参数', color: 'danger' });
+          return;
+        }
+        const data = (await res.json()) as IssueConfigPayload;
+        setIssueConfig(data);
+        setIssueInheritGlobal(data.inherit_global);
+        setIssueApiUrl(data.api_url || '');
+        setIssueApiKey('');
+        setIssueModel(data.model || '');
+        setIssueCustomPrompt(data.custom_prompt || '');
+        setIssueFocus(data.default_focus || []);
+        addToast({ title: 'Issue 分析配置已保存', color: 'success' });
+      } finally {
+        setIssueConfigSaving(false);
+      }
+    },
+    [owner, repo, requiresLogin],
+  );
+
   const canEditRepo = webhookStatus?.can_setup_webhook ?? true;
 
   useEffect(() => {
@@ -272,6 +335,7 @@ export default function RepoConfigPage() {
       fetchPulls();
       fetchReviewSettings();
       fetchIssueSettings();
+      fetchIssueConfig();
       apiFetch('/api/providers').then(async (res) => {
         if (res.ok) {
           const data = await res.json();
@@ -284,6 +348,7 @@ export default function RepoConfigPage() {
       setPullsLoading(false);
       setFocusLoading(false);
       setIssueSettingsLoading(false);
+      setIssueConfigLoading(false);
     }
   }, [
     owner,
@@ -294,6 +359,7 @@ export default function RepoConfigPage() {
     fetchPulls,
     fetchReviewSettings,
     fetchIssueSettings,
+    fetchIssueConfig,
   ]);
 
   const refreshAll = async () => {
@@ -823,6 +889,113 @@ export default function RepoConfigPage() {
                     当前默认建议的 Webhook 事件为：
                     <span className="ml-2 font-mono text-foreground">pull_request, issues, issue_comment</span>
                   </p>
+                </div>
+
+                <div className="rounded-xl border border-divider bg-content1 px-4 py-4 flex flex-col gap-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="m-0 text-base">Issue 专属引擎配置</h3>
+                      <p className="m-0 mt-1 text-sm text-default-500">
+                        可为 Issue 分析单独指定 API / 模型 / 自定义提示词；当前仅 Forge 支持 Issue 场景。
+                      </p>
+                    </div>
+                    {issueConfig?.has_api_key ? (
+                      <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
+                    ) : null}
+                  </div>
+
+                  {issueConfigLoading ? (
+                    <Skeleton width="100%" height={120} className="rounded-lg" />
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between gap-4 rounded-lg bg-default-100 px-3 py-2">
+                        <span className="text-sm">与全局 Issue 配置保持一致</span>
+                        <Switch
+                          isSelected={issueInheritGlobal}
+                          isDisabled={!canEditRepo || issueConfigSaving}
+                          onValueChange={(value) => {
+                            setIssueInheritGlobal(value);
+                            if (value) {
+                              void saveIssueConfig({ inherit_global: true });
+                            }
+                          }}
+                          aria-label="Issue 分析继承全局"
+                        />
+                      </div>
+
+                      {!issueInheritGlobal && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <Input
+                            label="Forge Base URL"
+                            size="sm"
+                            value={issueApiUrl}
+                            onValueChange={setIssueApiUrl}
+                            isDisabled={!canEditRepo || issueConfigSaving}
+                            placeholder="https://api.anthropic.com"
+                          />
+                          <Input
+                            label="API Key"
+                            type="password"
+                            size="sm"
+                            value={issueApiKey}
+                            onValueChange={setIssueApiKey}
+                            isDisabled={!canEditRepo || issueConfigSaving}
+                            placeholder={issueConfig?.has_api_key ? '已保存，留空保持不变' : '仅首次保存必填'}
+                          />
+                          <Input
+                            label="Model"
+                            size="sm"
+                            value={issueModel}
+                            onValueChange={setIssueModel}
+                            isDisabled={!canEditRepo || issueConfigSaving}
+                            placeholder="claude-sonnet-4-20250514"
+                          />
+                          <Input
+                            label="默认分析重点"
+                            size="sm"
+                            description="逗号分隔：bug,duplicate,design,performance,question"
+                            value={issueFocus.join(',')}
+                            onValueChange={(value) => setIssueFocus(
+                              value
+                                .split(',')
+                                .map((item) => item.trim().toLowerCase())
+                                .filter((item) => ['bug', 'duplicate', 'design', 'performance', 'question'].includes(item)),
+                            )}
+                            isDisabled={!canEditRepo || issueConfigSaving}
+                          />
+                          <Input
+                            label="自定义 Issue 提示词"
+                            size="sm"
+                            value={issueCustomPrompt}
+                            onValueChange={setIssueCustomPrompt}
+                            isDisabled={!canEditRepo || issueConfigSaving}
+                            className="md:col-span-2"
+                            placeholder="可选，追加在系统提示词末尾"
+                          />
+                          <div className="md:col-span-2 flex justify-end">
+                            <Button
+                              color="primary"
+                              size="sm"
+                              isDisabled={!canEditRepo || issueConfigSaving}
+                              onPress={() =>
+                                saveIssueConfig({
+                                  engine: 'forge',
+                                  api_url: issueApiUrl || null,
+                                  api_key: issueApiKey || undefined,
+                                  model: issueModel || null,
+                                  custom_prompt: issueCustomPrompt || null,
+                                  default_focus: issueFocus.length > 0 ? issueFocus : undefined,
+                                  inherit_global: false,
+                                })
+                              }
+                            >
+                              保存 Issue 配置
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             )}

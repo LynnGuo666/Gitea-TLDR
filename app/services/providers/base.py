@@ -9,7 +9,7 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 
 @dataclass
@@ -78,6 +78,22 @@ class ReviewResult:
                 return True
 
         return False
+
+
+IssueFallbackMode = Literal["tool", "text_json", "raw_text"]
+
+
+@dataclass
+class IssueResult:
+    """Issue 分析结果 (provider-agnostic)"""
+
+    structured_data: Dict[str, Any] = field(default_factory=dict)
+    final_text: str = ""
+    fallback_mode: IssueFallbackMode = "tool"
+    provider_name: str = ""
+    model: str = ""
+    usage_metadata: Dict[str, Any] = field(default_factory=dict)
+    error: Optional[str] = None
 
 
 @dataclass
@@ -185,3 +201,31 @@ class ReviewProvider(ABC):
             可能为空的结果。
         """
         ...
+
+    def supports_issue(self) -> bool:
+        """Provider 是否支持 Issue 分析场景；默认不支持。"""
+        return False
+
+    async def analyze_issue(
+        self,
+        repo_path: Path,
+        issue_info: Dict[str, Any],
+        similar_candidates: List[Dict[str, Any]],
+        *,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        custom_prompt: Optional[str] = None,
+        focus_areas: Optional[List[str]] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        max_turns: Optional[int] = None,
+    ) -> Optional[IssueResult]:
+        """分析 Issue（可选实现）。
+
+        默认实现抛出 NotImplementedError；实现此方法的 Provider 必须同时
+        让 supports_issue() 返回 True。
+        """
+        raise NotImplementedError(
+            f"Provider {self.name} 尚未实现 Issue 分析场景"
+        )

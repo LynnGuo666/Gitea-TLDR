@@ -10,12 +10,13 @@
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from app.core import settings
-from ..base import InlineComment, ReviewProvider, ReviewResult
+from ..base import InlineComment, IssueResult, ReviewProvider, ReviewResult
 from ..parsing import coerce_int, extract_json_payload, parse_inline_comment
 from .api_client import AnthropicClient
+from .scenarios.issue import finalize_issue_payload, run_issue
 from .scenarios.review import run_review
 from .types import ForgeResult
 
@@ -177,4 +178,86 @@ class ForgeProvider(ReviewProvider):
                 "model": model,
                 "turns": result.turns,
             },
+        )
+
+    def supports_issue(self) -> bool:
+        return True
+
+    async def analyze_issue(
+        self,
+        repo_path: Path,
+        issue_info: Dict[str, Any],
+        similar_candidates: List[Dict[str, Any]],
+        *,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        custom_prompt: Optional[str] = None,
+        focus_areas: Optional[List[str]] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        max_turns: Optional[int] = None,
+    ) -> Optional[IssueResult]:
+        self._clear_last_error()
+        del max_tokens  # Forge 的默认 max_tokens 在 api_client 处理
+
+        resolved_key = api_key or getattr(settings, "forge_api_key", "") or ""
+        if not resolved_key:
+            self._set_last_error(
+                "Forge: 未配置 API Key（FORGE_API_KEY 或 api_key 参数）"
+            )
+            return None
+
+        resolved_url = api_url or getattr(
+            settings, "forge_base_url", DEFAULT_FORGE_BASE_URL
+        )
+        resolved_model = model or getattr(settings, "forge_model", DEFAULT_FORGE_MODEL)
+        resolved_max_turns = max(
+            1,
+            int(
+                max_turns
+                if max_turns is not None
+                else getattr(settings, "forge_max_turns", 5) or 5
+            ),
+        )
+
+        client = AnthropicClient(api_key=resolved_key, base_url=resolved_url)
+
+        try:
+            forge_result = await run_issue(
+                client=client,
+                model=resolved_model,
+                repo_path=repo_path,
+                issue_info=issue_info,
+                similar_issue_candidates=similar_candidates,
+                custom_prompt=custom_prompt,
+                focus_areas=focus_areas,
+                max_turns=resolved_max_turns,
+                temperature=temperature,
+            )
+        except Exception as e:
+            logger.exception("Forge Issue 分析运行异常")
+            self._set_last_error(f"Forge 运行失败: {e}")
+            return None
+
+        payload, fallback_mode = finalize_issue_payload(forge_result)
+        error_message: Optional[str] = None
+        if fallback_mode == "raw_text" and forge_result.error:
+            error_message = forge_result.error
+
+        return IssueResult(
+            structured_data=payload,
+            final_text=forge_result.final_text,
+            fallback_mode=fallback_mode,
+            provider_name=self.PROVIDER_NAME,
+            model=forge_result.model or resolved_model,
+            usage_metadata={
+                "input_tokens": forge_result.usage.input_tokens,
+                "output_tokens": forge_result.usage.output_tokens,
+                "cache_creation_input_tokens": forge_result.usage.cache_creation_input_tokens,
+                "cache_read_input_tokens": forge_result.usage.cache_read_input_tokens,
+                "turns": forge_result.turns,
+                "tool_calls": forge_result.tool_calls,
+            },
+            error=error_message,
         )

@@ -136,6 +136,15 @@ def create_app() -> FastAPI:
         logger.info(f"可用引擎: {context.review_engine.registry.list_providers()}")
         logger.info(f"Debug模式: {'开启' if settings.debug else '关闭'}")
 
+        # 预热 jieba，避免首次 Issue 分析时卡顿
+        try:
+            import jieba  # type: ignore
+
+            jieba.initialize()
+            logger.info("jieba 中文分词已预热")
+        except Exception as exc:  # pragma: no cover
+            logger.info("jieba 预热跳过: %s", exc)
+
         # 初始化数据库
         try:
             database = await init_database()

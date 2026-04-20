@@ -11,6 +11,7 @@ from app.core.encryption import encryption_service
 from .base import Base, TimestampMixin
 
 if TYPE_CHECKING:
+    from .issue_config import IssueConfig
     from .issue_session import IssueSession
     from .model_config import ModelConfig
     from .review_session import ReviewSession
@@ -47,6 +48,12 @@ class Repository(Base, TimestampMixin):
         back_populates="repository",
         uselist=False,
         cascade="all, delete-orphan"
+    )
+    issue_config: Mapped[Optional["IssueConfig"]] = relationship(
+        "IssueConfig",
+        back_populates="repository",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
     review_sessions: Mapped[List["ReviewSession"]] = relationship(
         "ReviewSession",

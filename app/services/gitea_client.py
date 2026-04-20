@@ -721,3 +721,109 @@ class GiteaClient:
 
         # 构建不带token的克隆URL，凭据由调用方通过安全通道注入
         return f"{scheme}://{host}/{owner}/{repo}.git"
+
+    async def list_repo_labels(
+        self, owner: str, repo: str
+    ) -> Optional[List[Dict[str, Any]]]:
+        """列出仓库已有 label"""
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/labels"
+        try:
+            self._log_debug("GET", url)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=self.headers)
+                self._log_response(response)
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            logger.error(f"获取仓库 label 列表失败: {e}")
+            return None
+
+    async def create_repo_label(
+        self,
+        owner: str,
+        repo: str,
+        name: str,
+        color: str,
+        description: str = "",
+    ) -> bool:
+        """创建仓库 label"""
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/labels"
+        payload = {"name": name, "color": color, "description": description}
+        try:
+            self._log_debug("POST", url, json=payload)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, headers=self.headers, json=payload)
+                self._log_response(response)
+                if response.status_code in (409, 422):
+                    return True  # 已存在视为成功
+                response.raise_for_status()
+                return True
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (401, 403):
+                logger.warning(
+                    "权限不足，无法创建 label: %s/%s label=%s",
+                    owner,
+                    repo,
+                    name,
+                )
+            else:
+                logger.error(f"创建 label 失败: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"创建 label 失败: {e}")
+            return False
+
+    async def ensure_label_exists(
+        self,
+        owner: str,
+        repo: str,
+        name: str,
+        *,
+        color: str = "#94a3b8",
+        description: str = "",
+    ) -> bool:
+        """确保仓库存在指定 label，若缺失则懒创建"""
+        labels = await self.list_repo_labels(owner, repo)
+        if labels is None:
+            return False
+        target = name.strip().lower()
+        for label in labels:
+            if str(label.get("name", "")).strip().lower() == target:
+                return True
+        return await self.create_repo_label(
+            owner, repo, name, color=color, description=description
+        )
+
+    async def add_issue_labels(
+        self,
+        owner: str,
+        repo: str,
+        issue_number: int,
+        labels: List[str],
+    ) -> bool:
+        """为 Issue 追加 label（Gitea 会与现有 label 合并）"""
+        if not labels:
+            return True
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/issues/{issue_number}/labels"
+        payload = {"labels": labels}
+        try:
+            self._log_debug("POST", url, json=payload)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, headers=self.headers, json=payload)
+                self._log_response(response)
+                response.raise_for_status()
+                return True
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (401, 403):
+                logger.warning(
+                    "权限不足，无法打 Issue label: %s/%s#%s",
+                    owner,
+                    repo,
+                    issue_number,
+                )
+            else:
+                logger.error(f"打 Issue label 失败: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"打 Issue label 失败: {e}")
+            return False

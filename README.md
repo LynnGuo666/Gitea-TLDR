@@ -2,14 +2,14 @@
 
 基于多引擎（Forge / Claude Code / Codex CLI）的 Gitea Pull Request 自动审查 & Issue 分析工具。
 
-**当前版本**: v1.26.6 | **发布日期**: 2026-04-16
+**当前版本**: v1.27.0 | **发布日期**: 2026-04-20
 
 ## 功能特性
 
 - **PR 自动审查**: 接收 Gitea webhook，PR 创建/更新时自动触发
-- **Issue 智能分析**: 对 Issue 进行 AI 分析，自动归类和建议处理方案
-- **手动触发**: PR 评论中使用 `/review` 命令触发审查
-- **多审查引擎**: 支持 Forge、Claude Code、Codex CLI，可按仓库灵活配置
+- **Issue 智能分析**: 对 Issue 进行 AI 分析，自动归类、提供解决方案、支持 `/issue --focus bug,duplicate,design` 参数
+- **手动触发**: PR 评论中使用 `/review` 命令触发审查，Issue 评论中使用 `/issue` 触发分析
+- **多审查引擎**: 支持 Forge、Claude Code、Codex CLI，可按仓库灵活配置；Issue 分析目前仅 Forge 引擎支持
 - **完整上下文**: 克隆完整代码库，为 AI 提供充分的项目上下文
 - **多维度审查**: 代码质量、安全漏洞、性能问题、逻辑错误
 - **灵活输出**: PR 评论、PR 审查、提交状态（可通过标头或命令参数控制）

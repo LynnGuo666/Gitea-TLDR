@@ -36,6 +36,11 @@ from app.core import (
 )
 from app.core.context import AppContext
 from app.models import User
+from app.services.issue_config_resolver import (
+    clear_issue_provider_overrides,
+    has_non_provider_issue_settings,
+    resolve_issue_config,
+)
 from app.services.provider_config_resolver import (
     clear_provider_overrides,
     has_non_provider_settings,
@@ -117,6 +122,23 @@ class IssueSettingsRequest(BaseModel):
     manual_command_enabled: Optional[bool] = Field(
         None, description="是否启用 /issue 手动命令"
     )
+
+
+class IssueConfigRequest(BaseModel):
+    """Issue 配置请求体"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    engine: Optional[str] = Field(None, description="Issue 引擎名称，当前仅支持 forge")
+    model: Optional[str] = Field(None, description="实际 LLM 模型标识")
+    api_url: Optional[str] = Field(None, description="Provider API Base URL")
+    api_key: Optional[str] = Field(None, description="Provider Auth Token")
+    wire_api: Optional[str] = Field(None, description="Wire API 类型")
+    temperature: Optional[float] = Field(None, description="温度参数")
+    max_tokens: Optional[int] = Field(None, description="最大 token 数")
+    custom_prompt: Optional[str] = Field(None, description="自定义 Issue 提示词")
+    default_focus: Optional[List[str]] = Field(None, description="默认分析重点列表")
+    inherit_global: Optional[bool] = Field(None, description="是否切回继承全局配置")
 
 
 def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> bool:
@@ -347,6 +369,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 ),
                 "related_files": analysis_payload.get("related_files", []),
                 "next_actions": analysis_payload.get("next_actions", []),
+                "fallback_mode": analysis_payload.get("fallback_mode", "tool"),
+                "focus_areas": analysis_payload.get("focus_areas", []),
             }
         )
         return summary
@@ -462,15 +486,20 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             "forge": "Forge",
         }
         providers = context.review_engine.registry.list_providers()
+        issue_supported = set(
+            context.review_engine.registry.list_issue_providers()
+        )
         return {
             "providers": [
                 {
                     "name": p,
                     "label": provider_labels.get(p, p),
+                    "supports_issue": p in issue_supported,
                 }
                 for p in providers
             ],
             "default": runtime_settings.get("default_provider", settings.default_provider),
+            "issue_providers": sorted(issue_supported),
         }
 
     @api_router.get("/config/claude-global")
@@ -1617,6 +1646,230 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "issue_enabled": repo_obj.issue_enabled,
                 "auto_on_open": repo_obj.issue_auto_on_open,
                 "manual_command_enabled": repo_obj.issue_manual_command_enabled,
+            }
+
+    def _serialize_issue_config_response(
+        resolved,
+        repo_issue_config,
+        global_issue_config,
+        default_engine: str,
+    ):
+        return {
+            "inherit_global": resolved.inherit_global,
+            "has_global_config": bool(
+                global_issue_config
+                and (
+                    global_issue_config.api_url
+                    or global_issue_config.api_key
+                    or global_issue_config.model
+                )
+            ),
+            "configured": bool(
+                repo_issue_config
+                and (
+                    repo_issue_config.api_url
+                    or repo_issue_config.api_key
+                    or repo_issue_config.model
+                    or (repo_issue_config.engine or "").strip() not in {"", default_engine}
+                )
+            ),
+            "engine": resolved.engine,
+            "model": resolved.model,
+            "api_url": resolved.api_url,
+            "has_api_key": bool(resolved.api_key),
+            "temperature": resolved.temperature,
+            "max_tokens": resolved.max_tokens,
+            "custom_prompt": resolved.custom_prompt,
+            "default_focus": resolved.default_focus,
+            "global_engine": (
+                global_issue_config.engine if global_issue_config else default_engine
+            ),
+            "global_model": (global_issue_config.model if global_issue_config else None),
+            "global_api_url": (
+                global_issue_config.api_url if global_issue_config else None
+            ),
+            "global_has_api_key": bool(
+                global_issue_config.api_key if global_issue_config else False
+            ),
+        }
+
+    @api_router.get("/repos/{owner}/{repo}/issue-config")
+    async def get_repo_issue_config(owner: str, repo: str, request: Request):
+        """获取仓库的 Issue 分析配置。"""
+        context.auth_manager.require_session(request)
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        async with database.session() as session:
+            db_service = DBService(session)
+            repo_obj = await db_service.get_repository(owner, repo)
+            global_cfg = await db_service.get_global_issue_config()
+            default_engine = "forge"
+            repo_cfg = None
+            if repo_obj:
+                repo_cfg = await db_service.get_repo_specific_issue_config(repo_obj.id)
+            resolved = resolve_issue_config(
+                repo_cfg, global_cfg, default_engine=default_engine
+            )
+            return _serialize_issue_config_response(
+                resolved, repo_cfg, global_cfg, default_engine
+            )
+
+    @api_router.put("/repos/{owner}/{repo}/issue-config")
+    async def update_repo_issue_config(
+        owner: str, repo: str, payload: IssueConfigRequest, request: Request
+    ):
+        """保存仓库的 Issue 分析配置。"""
+        await _require_repo_setup_permission(owner, repo, request)
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        async with database.session() as session:
+            db_service = DBService(session)
+            default_engine = "forge"
+
+            repo_obj = await db_service.get_or_create_repository(owner, repo)
+            global_cfg = await db_service.get_global_issue_config()
+
+            if payload.inherit_global:
+                repo_cfg = await db_service.get_repo_specific_issue_config(repo_obj.id)
+                if repo_cfg:
+                    clear_issue_provider_overrides(repo_cfg)
+                    if not has_non_provider_issue_settings(repo_cfg):
+                        await db_service.clear_repo_issue_config(repo_obj.id)
+                resolved = resolve_issue_config(
+                    None, global_cfg, default_engine=default_engine
+                )
+                return _serialize_issue_config_response(
+                    resolved, None, global_cfg, default_engine
+                )
+
+            engine = (payload.engine or default_engine).strip() or default_engine
+            if engine not in context.review_engine.registry.list_issue_providers():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"引擎 {engine} 暂不支持 Issue 分析",
+                )
+
+            config = await db_service.upsert_issue_config(
+                repository_id=repo_obj.id,
+                config_name=f"{owner}/{repo}",
+                engine=engine,
+                model=payload.model,
+                api_url=payload.api_url,
+                api_key=payload.api_key,
+                wire_api=payload.wire_api,
+                temperature=payload.temperature,
+                max_tokens=payload.max_tokens,
+                custom_prompt=payload.custom_prompt,
+                default_focus=payload.default_focus,
+            )
+
+            resolved = resolve_issue_config(
+                config, global_cfg, default_engine=default_engine
+            )
+            return _serialize_issue_config_response(
+                resolved, config, global_cfg, default_engine
+            )
+
+    @api_router.get("/config/issue-global")
+    async def get_global_issue_config(request: Request):
+        """获取全局 Issue 分析配置。"""
+        context.auth_manager.require_session(request)
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        async with database.session() as session:
+            db_service = DBService(session)
+            global_cfg = await db_service.get_global_issue_config()
+            default_engine = "forge"
+            resolved = resolve_issue_config(
+                None, global_cfg, default_engine=default_engine
+            )
+            if not global_cfg:
+                return {
+                    "configured": False,
+                    "engine": default_engine,
+                    "model": None,
+                    "api_url": None,
+                    "has_api_key": False,
+                    "temperature": None,
+                    "max_tokens": None,
+                    "custom_prompt": None,
+                    "default_focus": resolved.default_focus,
+                }
+            return {
+                "configured": bool(
+                    global_cfg.api_url or global_cfg.api_key or global_cfg.model
+                ),
+                "engine": global_cfg.engine or default_engine,
+                "model": global_cfg.model,
+                "api_url": global_cfg.api_url,
+                "has_api_key": bool(global_cfg.api_key),
+                "temperature": global_cfg.temperature,
+                "max_tokens": global_cfg.max_tokens,
+                "custom_prompt": global_cfg.custom_prompt,
+                "default_focus": resolved.default_focus,
+            }
+
+    @api_router.put("/config/issue-global")
+    async def update_global_issue_config(
+        payload: IssueConfigRequest,
+        request: Request,
+        admin: User = Depends(admin_required("config", "write")),
+    ):
+        """更新全局 Issue 分析配置。"""
+        del admin
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        async with database.session() as session:
+            db_service = DBService(session)
+            default_engine = "forge"
+            engine = (payload.engine or default_engine).strip() or default_engine
+            if engine not in context.review_engine.registry.list_issue_providers():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"引擎 {engine} 暂不支持 Issue 分析",
+                )
+
+            config = await db_service.upsert_issue_config(
+                repository_id=None,
+                config_name="global-issue-default",
+                engine=engine,
+                model=payload.model,
+                api_url=payload.api_url,
+                api_key=payload.api_key,
+                wire_api=payload.wire_api,
+                temperature=payload.temperature,
+                max_tokens=payload.max_tokens,
+                custom_prompt=payload.custom_prompt,
+                default_focus=payload.default_focus,
+                is_default=True,
+            )
+
+            return {
+                "configured": bool(config.api_url or config.api_key or config.model),
+                "engine": config.engine,
+                "model": config.model,
+                "api_url": config.api_url,
+                "has_api_key": bool(config.api_key),
+                "temperature": config.temperature,
+                "max_tokens": config.max_tokens,
+                "custom_prompt": config.custom_prompt,
+                "default_focus": config.get_focus(),
             }
 
     @api_router.get("/repos/{owner}/{repo}/webhook-secret")

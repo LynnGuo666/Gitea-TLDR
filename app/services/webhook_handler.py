@@ -126,10 +126,19 @@ class WebhookHandler:
             base_branch = pr_data.get("base", {}).get("ref")
             actor_username = self._extract_actor_username(payload)
 
+            # Bot 自触发防护：PR 作者或发送者是 bot 时直接忽略
+            pr_author = pr_data.get("user", {}).get("login") or pr_data.get("user", {}).get("username")
+            if self._is_bot_actor(pr_author) or self._is_bot_actor(actor_username):
+                logger.info(
+                    "跳过 bot 自触发 PR: %s/%s#%s", owner, repo_name, pr_number
+                )
+                return True
+
             logger.info(
-                f"处理PR: {owner}/{repo_name}#{pr_number} - {pr_title} "
+                f"处理PR: {owner}/{repo_name}#{pr_number} "
                 f"({head_branch} -> {base_branch})"
             )
+            del pr_title  # 避免在日志里泄露标题
 
             return await self._perform_review(
                 owner=owner,
@@ -193,6 +202,14 @@ class WebhookHandler:
             command = self.command_parser.parse_comment(comment_body)
             if not command:
                 logger.debug("评论中未包含有效的bot命令")
+                return True
+
+            commenter = (
+                comment_data.get("user", {}).get("login")
+                or comment_data.get("user", {}).get("username")
+            )
+            if self._is_bot_actor(commenter):
+                logger.info("忽略 bot 自发评论中的命令")
                 return True
 
             logger.info(f"检测到手动触发命令: {command.command}")
@@ -263,6 +280,7 @@ class WebhookHandler:
                 trigger_type="manual",
                 source_comment_id=comment_data.get("id"),
                 actor_username=actor_username,
+                focus_areas=command.focus_areas,
             )
 
         except Exception as e:
@@ -300,6 +318,16 @@ class WebhookHandler:
                 or issue_data.get("user", {}).get("login")
                 or issue_data.get("user", {}).get("username")
             )
+
+            issue_author = issue_data.get("user", {}).get("login") or issue_data.get("user", {}).get("username")
+            if self._is_bot_actor(issue_author) or self._is_bot_actor(actor_username):
+                logger.info(
+                    "跳过 bot 自开 Issue: %s/%s#%s",
+                    owner,
+                    repo_name,
+                    issue_data.get("number"),
+                )
+                return True
 
             if not await self._is_issue_auto_enabled(owner, repo_name):
                 logger.info("仓库未启用自动 Issue 分析，忽略")
@@ -761,6 +789,15 @@ class WebhookHandler:
             or payload.get("pull_request", {}).get("user", {}).get("login")
             or payload.get("pull_request", {}).get("user", {}).get("username")
         )
+
+    def _is_bot_actor(self, username: Optional[str]) -> bool:
+        """判断给定用户名是否为配置的 bot 用户，防止自触发。"""
+        if not username:
+            return False
+        bot_username = runtime_settings.get("bot_username", settings.bot_username)
+        if not bot_username:
+            return False
+        return str(username).strip().lower() == str(bot_username).strip().lower()
 
     async def process_comment_async(self, payload: Dict[str, Any]):
         """

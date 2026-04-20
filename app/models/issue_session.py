@@ -56,9 +56,13 @@ class IssueSession(Base):
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     started_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     duration_seconds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     repository: Mapped["Repository"] = relationship(

@@ -13,3 +13,6 @@ greenlet
 
 # Encryption
 PyNaCl>=1.5.0
+
+# Chinese tokenization (for Issue similarity scoring)
+jieba>=0.42

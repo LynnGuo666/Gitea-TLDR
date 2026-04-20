@@ -118,14 +118,28 @@ class CommandParser:
         """
         解析 /issue 命令
 
+        支持:
+        - /issue
+        - /issue --focus bug,duplicate,design
+
         Args:
             comment: 评论内容
 
         Returns:
             ReviewCommand 对象
         """
-        logger.info("解析到 /issue 命令")
-        return ReviewCommand(command="issue")
+        focus_areas = None
+        focus_match = re.search(r"--focus\s+(\S+)", comment)
+        if focus_match:
+            focus_str = focus_match.group(1)
+            raw_focus = [f.strip().lower() for f in focus_str.split(",") if f.strip()]
+            valid_areas = ["bug", "duplicate", "design", "performance", "question"]
+            focus_areas = [f for f in raw_focus if f in valid_areas]
+            if not focus_areas:
+                focus_areas = None
+
+        logger.info("解析到 /issue 命令: focus=%s", focus_areas)
+        return ReviewCommand(command="issue", focus_areas=focus_areas)
 
     def is_bot_command(self, comment_body: str) -> bool:
         """
