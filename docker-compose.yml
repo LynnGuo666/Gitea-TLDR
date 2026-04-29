@@ -8,6 +8,7 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
+      - ./docker-entrypoint.sh:/docker-entrypoint.sh:ro
       - pr-reviewer-data:/app/review-workspace
     restart: unless-stopped
     user: "1000:1000"

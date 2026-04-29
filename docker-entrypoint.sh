@@ -28,5 +28,5 @@ exec uvicorn app.main:app \
   --host "${HOST:-0.0.0.0}" \
   --port "${PORT:-8000}" \
   --workers "${UVICORN_WORKERS:-1}" \
-  --log-level "${LOG_LEVEL:-info}" \
+  --log-level "$(echo "${LOG_LEVEL:-info}" | tr '[:upper:]' '[:lower:]')" \
   --timeout-keep-alive "${KEEP_ALIVE:-60}"
