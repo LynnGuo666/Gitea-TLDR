@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "1.29.0"
+__version__ = "1.29.1"
 __release_date__ = "2026-04-29"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,14 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.29.1": {
+        "date": "2026-04-29",
+        "changes": [
+            "优化：个人设置页将 AI 审查配置与 Issue 分析配置改为横向 Tab 切换，减少页面滚动",
+            "新增：Tab 内顶部新增跨配置同步按钮，可一键将对侧 Base URL 与 Model ID 复制到当前配置",
+            "维护：同步更新前后端版本号到 1.29.1",
+        ],
+    },
     "1.29.0": {
         "date": "2026-04-29",
         "changes": [

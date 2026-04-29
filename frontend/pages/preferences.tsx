@@ -1,11 +1,10 @@
 import Head from 'next/head';
 import { useCallback, useContext, useEffect, useState } from 'react';
-import { Button, Chip, Input, Select, SelectItem, addToast } from '@heroui/react';
-import { Bot } from 'lucide-react';
+import { Button, Chip, Input, Select, SelectItem, Tab, Tabs, addToast } from '@heroui/react';
+import { ArrowRightLeft, Bot } from 'lucide-react';
 import { AuthContext } from '../lib/auth';
 import { apiFetch } from '../lib/api';
 import PageHeader from '../components/PageHeader';
-import SectionHeader from '../components/SectionHeader';
 import { GlobalReviewConfig, ProviderInfo } from '../lib/types';
 
 interface GlobalIssueConfig {
@@ -36,6 +35,17 @@ export default function PreferencesPage() {
   const [globalIssueApiKey, setGlobalIssueApiKey] = useState('');
   const [globalIssueModel, setGlobalIssueModel] = useState('');
   const [globalIssueCustomPrompt, setGlobalIssueCustomPrompt] = useState('');
+  const [activeTab, setActiveTab] = useState<string>('review');
+
+  const syncFromIssue = () => {
+    setGlobalBaseUrl(globalIssueApiUrl);
+    setGlobalModel(globalIssueModel);
+  };
+
+  const syncFromReview = () => {
+    setGlobalIssueApiUrl(globalBaseUrl);
+    setGlobalIssueModel(globalModel);
+  };
 
   const fetchGlobalProvider = useCallback(async () => {
     if (!authStatus.loggedIn) {
@@ -233,156 +243,198 @@ export default function PreferencesPage() {
           <PageHeader title="个人设置" subtitle="维护全局 AI 审查默认引擎和凭据" />
         </div>
 
-        <section className="py-5 border-t border-divider/60">
-          <SectionHeader
-            title="全局 AI 审查配置"
-            icon={<Bot size={18} />}
-            actions={
-              globalProvider?.has_api_key ? (
-                <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
-              ) : null
-            }
-          />
-          <div className="mt-4">
-            {!authStatus.loggedIn ? (
-              <p className="text-default-500 m-0">登录后可配置全局 AI 审查设置</p>
-            ) : globalProviderLoading ? (
-              <p className="text-default-500 m-0">加载中...</p>
-            ) : (
-              <>
-                <div className="flex flex-col gap-3">
-                  {providers.length > 0 ? (
-                    <Select
-                      label="审查引擎"
-                      selectedKeys={new Set([selectedProvider])}
-                      onSelectionChange={(keys) => {
-                        if (keys === 'all') return;
-                        const key = Array.from(keys)[0] as string;
-                        if (key) setSelectedProvider(key);
-                      }}
-                      variant="bordered"
-                      aria-label="选择审查引擎"
-                    >
-                      {providers.map((provider) => (
-                        <SelectItem key={provider.name}>{provider.label}</SelectItem>
-                      ))}
-                    </Select>
-                  ) : null}
-                  <Input
-                    label="Base URL"
-                    value={globalBaseUrl}
-                    onValueChange={setGlobalBaseUrl}
-                    placeholder={currentPlaceholders.baseUrl}
-                    variant="bordered"
-                  />
-                  <Input
-                    label="Model ID（可选）"
-                    value={globalModel}
-                    onValueChange={setGlobalModel}
-                    placeholder={currentModelPlaceholder}
-                    variant="bordered"
-                  />
-                  <Input
-                    label="API Key"
-                    type="password"
-                    value={globalAuthToken}
-                    onValueChange={setGlobalAuthToken}
-                    placeholder={
-                      globalProvider?.has_api_key
-                        ? '已配置（输入新值覆盖）'
-                        : currentPlaceholders.apiKey
-                    }
-                    variant="bordered"
-                  />
-                </div>
-                <div className="mt-4 flex items-center gap-3 flex-wrap">
-                  <Button
-                    color="primary"
-                    onPress={saveGlobalReviewConfig}
-                    isDisabled={globalProviderSaving}
-                    isLoading={globalProviderSaving}
-                  >
-                    保存个人设置
-                  </Button>
-                  <span className="text-default-400 text-xs">
-                    作为仓库默认值使用；仓库页可关闭继承并单独覆盖
+        <div className="border-t border-divider/60 pt-5">
+          <div className="flex items-center gap-3 mb-1">
+            <Bot size={18} className="text-default-500" />
+            <Tabs
+              selectedKey={activeTab}
+              onSelectionChange={(k) => setActiveTab(String(k))}
+              aria-label="配置类型"
+            >
+              <Tab
+                key="review"
+                title={
+                  <span className="flex items-center gap-2">
+                    AI 审查配置
+                    {globalProvider?.has_api_key && (
+                      <Chip size="sm" variant="flat" color="success">已配置</Chip>
+                    )}
                   </span>
-                </div>
-              </>
-            )}
+                }
+              />
+              <Tab
+                key="issue"
+                title={
+                  <span className="flex items-center gap-2">
+                    Issue 分析配置
+                    {globalIssue?.has_api_key && (
+                      <Chip size="sm" variant="flat" color="success">已配置</Chip>
+                    )}
+                  </span>
+                }
+              />
+            </Tabs>
           </div>
-        </section>
 
-        <section className="py-5 border-t border-divider/60">
-          <SectionHeader
-            title="全局 Issue 分析配置"
-            icon={<Bot size={18} />}
-            actions={
-              globalIssue?.has_api_key ? (
-                <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
-              ) : null
-            }
-          />
-          <div className="mt-4">
-            {!authStatus.loggedIn ? (
-              <p className="text-default-500 m-0">登录后可配置全局 Issue 分析设置</p>
-            ) : globalIssueLoading ? (
-              <p className="text-default-500 m-0">加载中...</p>
-            ) : (
-              <>
-                <p className="text-default-500 text-sm mb-4">Issue 分析使用 Forge 引擎，在此配置全局默认 API 凭据和模型</p>
-                <div className="flex flex-col gap-3">
-                  <Input
-                    label="Base URL"
-                    value={globalIssueApiUrl}
-                    onValueChange={setGlobalIssueApiUrl}
-                    placeholder="https://api.anthropic.com"
-                    variant="bordered"
-                  />
-                  <Input
-                    label="Model ID"
-                    value={globalIssueModel}
-                    onValueChange={setGlobalIssueModel}
-                    placeholder="claude-sonnet-4-20250514"
-                    variant="bordered"
-                  />
-                  <Input
-                    label="API Key"
-                    type="password"
-                    value={globalIssueApiKey}
-                    onValueChange={setGlobalIssueApiKey}
-                    placeholder={
-                      globalIssue?.has_api_key
-                        ? '已配置（输入新值覆盖）'
-                        : 'sk-ant-...'
-                    }
-                    variant="bordered"
-                  />
-                  <Input
-                    label="自定义 Prompt"
-                    value={globalIssueCustomPrompt}
-                    onValueChange={setGlobalIssueCustomPrompt}
-                    placeholder="可选"
-                    variant="bordered"
-                  />
-                </div>
-                <div className="mt-4 flex items-center gap-3 flex-wrap">
-                  <Button
-                    color="primary"
-                    onPress={saveGlobalIssueConfig}
-                    isDisabled={globalIssueSaving}
-                    isLoading={globalIssueSaving}
-                  >
-                    保存个人设置
-                  </Button>
-                  <span className="text-default-400 text-xs">
-                    仓库可在仓库设置页关闭继承并覆盖这些配置
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-        </section>
+          {activeTab === 'review' && (
+            <div className="mt-4">
+              {!authStatus.loggedIn ? (
+                <p className="text-default-500 m-0">登录后可配置全局 AI 审查设置</p>
+              ) : globalProviderLoading ? (
+                <p className="text-default-500 m-0">加载中...</p>
+              ) : (
+                <>
+                  {(globalIssueApiUrl !== '' || globalIssue?.has_api_key) && (
+                    <div className="mb-4 flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        startContent={<ArrowRightLeft size={14} />}
+                        onPress={syncFromIssue}
+                      >
+                        从 Issue 分析配置同步
+                      </Button>
+                      <span className="text-default-400 text-xs">（同步 Base URL 和 Model ID，API Key 需单独填写）</span>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-3">
+                    {providers.length > 0 ? (
+                      <Select
+                        label="审查引擎"
+                        selectedKeys={new Set([selectedProvider])}
+                        onSelectionChange={(keys) => {
+                          if (keys === 'all') return;
+                          const key = Array.from(keys)[0] as string;
+                          if (key) setSelectedProvider(key);
+                        }}
+                        variant="bordered"
+                        aria-label="选择审查引擎"
+                      >
+                        {providers.map((provider) => (
+                          <SelectItem key={provider.name}>{provider.label}</SelectItem>
+                        ))}
+                      </Select>
+                    ) : null}
+                    <Input
+                      label="Base URL"
+                      value={globalBaseUrl}
+                      onValueChange={setGlobalBaseUrl}
+                      placeholder={currentPlaceholders.baseUrl}
+                      variant="bordered"
+                    />
+                    <Input
+                      label="Model ID（可选）"
+                      value={globalModel}
+                      onValueChange={setGlobalModel}
+                      placeholder={currentModelPlaceholder}
+                      variant="bordered"
+                    />
+                    <Input
+                      label="API Key"
+                      type="password"
+                      value={globalAuthToken}
+                      onValueChange={setGlobalAuthToken}
+                      placeholder={
+                        globalProvider?.has_api_key
+                          ? '已配置（输入新值覆盖）'
+                          : currentPlaceholders.apiKey
+                      }
+                      variant="bordered"
+                    />
+                  </div>
+                  <div className="mt-4 flex items-center gap-3 flex-wrap">
+                    <Button
+                      color="primary"
+                      onPress={saveGlobalReviewConfig}
+                      isDisabled={globalProviderSaving}
+                      isLoading={globalProviderSaving}
+                    >
+                      保存审查配置
+                    </Button>
+                    <span className="text-default-400 text-xs">
+                      作为仓库默认值使用；仓库页可关闭继承并单独覆盖
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'issue' && (
+            <div className="mt-4">
+              {!authStatus.loggedIn ? (
+                <p className="text-default-500 m-0">登录后可配置全局 Issue 分析设置</p>
+              ) : globalIssueLoading ? (
+                <p className="text-default-500 m-0">加载中...</p>
+              ) : (
+                <>
+                  <p className="text-default-500 text-sm mb-4">Issue 分析使用 Forge 引擎，在此配置全局默认 API 凭据和模型</p>
+                  {(globalBaseUrl !== '' || globalProvider?.has_api_key) && (
+                    <div className="mb-4 flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        startContent={<ArrowRightLeft size={14} />}
+                        onPress={syncFromReview}
+                      >
+                        从 AI 审查配置同步
+                      </Button>
+                      <span className="text-default-400 text-xs">（同步 Base URL 和 Model ID，API Key 需单独填写）</span>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-3">
+                    <Input
+                      label="Base URL"
+                      value={globalIssueApiUrl}
+                      onValueChange={setGlobalIssueApiUrl}
+                      placeholder="https://api.anthropic.com"
+                      variant="bordered"
+                    />
+                    <Input
+                      label="Model ID"
+                      value={globalIssueModel}
+                      onValueChange={setGlobalIssueModel}
+                      placeholder="claude-sonnet-4-20250514"
+                      variant="bordered"
+                    />
+                    <Input
+                      label="API Key"
+                      type="password"
+                      value={globalIssueApiKey}
+                      onValueChange={setGlobalIssueApiKey}
+                      placeholder={
+                        globalIssue?.has_api_key
+                          ? '已配置（输入新值覆盖）'
+                          : 'sk-ant-...'
+                      }
+                      variant="bordered"
+                    />
+                    <Input
+                      label="自定义 Prompt"
+                      value={globalIssueCustomPrompt}
+                      onValueChange={setGlobalIssueCustomPrompt}
+                      placeholder="可选"
+                      variant="bordered"
+                    />
+                  </div>
+                  <div className="mt-4 flex items-center gap-3 flex-wrap">
+                    <Button
+                      color="primary"
+                      onPress={saveGlobalIssueConfig}
+                      isDisabled={globalIssueSaving}
+                      isLoading={globalIssueSaving}
+                    >
+                      保存 Issue 配置
+                    </Button>
+                    <span className="text-default-400 text-xs">
+                      仓库可在仓库设置页关闭继承并覆盖这些配置
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </>
   );
