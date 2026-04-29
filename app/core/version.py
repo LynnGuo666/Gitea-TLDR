@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "1.28.2"
+__version__ = "1.28.3"
 __release_date__ = "2026-04-29"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,18 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.28.3": {
+        "date": "2026-04-29",
+        "changes": [
+            "修复：Docker named volume 初始化为 root 属主导致容器无法创建数据库文件",
+            "修复：docker-compose 改用 bind mount 消除卷权限不匹配",
+            "优化：Issue 分析重点设置从文本框改为卡片切换（缺陷排查/重复检测/设计分析/性能评估/问题解答），点击即时保存",
+            "优化：默认分析重点移至仓库配置页（仓库级别），从全局个人设置中移除",
+            "维护：加密服务 PermissionError 增加详细诊断与恢复指引",
+            "维护：Dockerfile 显式指定 appuser UID=1000 对齐 compose 的 user 设置",
+            "维护：同步更新后端与前端版本号到 1.28.3",
+        ],
+    },
     "1.28.2": {
         "date": "2026-04-29",
         "changes": [

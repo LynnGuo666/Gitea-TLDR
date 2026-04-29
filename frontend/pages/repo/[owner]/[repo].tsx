@@ -49,6 +49,34 @@ const reviewCatalog = [
   },
 ];
 
+const issueFocusCatalog = [
+  {
+    key: 'bug',
+    label: '缺陷排查',
+    detail: '代码缺陷、空指针、边界条件',
+  },
+  {
+    key: 'duplicate',
+    label: '重复检测',
+    detail: '检测重复 Issue 与相似问题',
+  },
+  {
+    key: 'design',
+    label: '设计分析',
+    detail: '架构设计、模式选择、扩展性',
+  },
+  {
+    key: 'performance',
+    label: '性能评估',
+    detail: '查询效率、资源消耗、瓶颈',
+  },
+  {
+    key: 'question',
+    label: '问题解答',
+    detail: '技术问答、最佳实践、方案建议',
+  },
+];
+
 const featureCatalog = [
   {
     key: 'comment',
@@ -457,6 +485,36 @@ export default function RepoConfigPage() {
       setReviewFeatures(reviewFeatures);
     } finally {
       setFocusSaving(false);
+    }
+  };
+
+  const toggleIssueFocus = async (key: string) => {
+    if (issueConfigSaving) return;
+    const next = issueFocus.includes(key)
+      ? issueFocus.filter((item) => item !== key)
+      : [...issueFocus, key];
+
+    if (next.length === 0) return;
+
+    setIssueFocus(next);
+    setIssueConfigSaving(true);
+    try {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/issue-config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ default_focus: next }),
+      });
+      if (res.ok) {
+        addToast({ title: '分析重点已保存', color: 'success' });
+      } else {
+        addToast({ title: '保存失败', color: 'danger' });
+        setIssueFocus(issueFocus);
+      }
+    } catch {
+      addToast({ title: '无法连接后端', color: 'danger' });
+      setIssueFocus(issueFocus);
+    } finally {
+      setIssueConfigSaving(false);
     }
   };
 
@@ -980,7 +1038,6 @@ export default function RepoConfigPage() {
                           <p>API Key: <Chip size="sm" variant="flat" color={issueConfig?.has_api_key ? 'success' : 'warning'}>
                             {issueConfig?.has_api_key ? '已配置' : '未配置'}
                           </Chip></p>
-                          <p>Focus: {issueConfig?.default_focus?.join(', ') || 'bug, duplicate, design'}</p>
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1010,19 +1067,29 @@ export default function RepoConfigPage() {
                             isDisabled={!canEditRepo || issueConfigSaving}
                             placeholder="claude-sonnet-4-20250514"
                           />
-                          <Input
-                            label="默认分析重点"
-                            size="sm"
-                            description="逗号分隔：bug,duplicate,design,performance,question"
-                            value={issueFocus.join(',')}
-                            onValueChange={(value) => setIssueFocus(
-                              value
-                                .split(',')
-                                .map((item) => item.trim().toLowerCase())
-                                .filter((item) => ['bug', 'duplicate', 'design', 'performance', 'question'].includes(item)),
-                            )}
-                            isDisabled={!canEditRepo || issueConfigSaving}
-                          />
+                          <div className="md:col-span-2">
+                            <p className="m-0 mb-2 text-sm text-default-600">默认分析重点</p>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {issueFocusCatalog.map((item) => {
+                                const active = issueFocus.includes(item.key);
+                                return (
+                                  <button
+                                    key={item.key}
+                                    disabled={!canEditRepo || issueConfigSaving}
+                                    className={`text-left p-3 rounded-xl transition-all cursor-pointer ${
+                                      active
+                                        ? 'bg-primary-50 ring-1 ring-primary'
+                                        : 'bg-default-100 hover:bg-default-200'
+                                    } ${!canEditRepo || issueConfigSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                    onClick={() => toggleIssueFocus(item.key)}
+                                  >
+                                    <strong className="text-sm text-foreground">{item.label}</strong>
+                                    <p className="m-0 text-xs text-default-500 mt-1">{item.detail}</p>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
                           <Input
                             label="自定义 Issue 提示词"
                             size="sm"
@@ -1044,7 +1111,6 @@ export default function RepoConfigPage() {
                                   api_key: issueApiKey || undefined,
                                   model: issueModel || null,
                                   custom_prompt: issueCustomPrompt || null,
-                                  default_focus: issueFocus.length > 0 ? issueFocus : undefined,
                                   inherit_global: false,
                                 })
                               }

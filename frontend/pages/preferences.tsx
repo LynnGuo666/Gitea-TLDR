@@ -35,7 +35,6 @@ export default function PreferencesPage() {
   const [globalIssueApiUrl, setGlobalIssueApiUrl] = useState('');
   const [globalIssueApiKey, setGlobalIssueApiKey] = useState('');
   const [globalIssueModel, setGlobalIssueModel] = useState('');
-  const [globalIssueFocus, setGlobalIssueFocus] = useState<string>('');
   const [globalIssueCustomPrompt, setGlobalIssueCustomPrompt] = useState('');
 
   const fetchGlobalProvider = useCallback(async () => {
@@ -85,7 +84,6 @@ export default function PreferencesPage() {
       setGlobalIssue(data);
       setGlobalIssueApiUrl(data.api_url || '');
       setGlobalIssueModel(data.model || '');
-      setGlobalIssueFocus(data.default_focus ? data.default_focus.join(', ') : '');
       setGlobalIssueCustomPrompt(data.custom_prompt || '');
     } catch (error) {
       console.error('Failed to fetch global issue config:', error);
@@ -171,11 +169,6 @@ export default function PreferencesPage() {
 
     setGlobalIssueSaving(true);
     try {
-      const focusArray = globalIssueFocus
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
-
       const res = await apiFetch('/api/config/issue-global', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -185,7 +178,6 @@ export default function PreferencesPage() {
           api_key: globalIssueApiKey || null,
           model: globalIssueModel || null,
           custom_prompt: globalIssueCustomPrompt || null,
-          default_focus: focusArray.length > 0 ? focusArray : undefined,
         }),
       });
 
@@ -364,14 +356,6 @@ export default function PreferencesPage() {
                         ? '已配置（输入新值覆盖）'
                         : 'sk-ant-...'
                     }
-                    variant="bordered"
-                  />
-                  <Input
-                    label="默认关注点"
-                    description="逗号分隔"
-                    value={globalIssueFocus}
-                    onValueChange={setGlobalIssueFocus}
-                    placeholder="bug, duplicate, design, performance, question"
                     variant="bordered"
                   />
                   <Input
