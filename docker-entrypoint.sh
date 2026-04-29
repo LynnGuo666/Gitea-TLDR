@@ -29,5 +29,4 @@ exec uvicorn app.main:app \
   --port "${PORT:-8000}" \
   --workers "${UVICORN_WORKERS:-1}" \
   --log-level "${LOG_LEVEL:-info}" \
-  --graceful-timeout "${GRACEFUL_TIMEOUT:-30}" \
   --timeout-keep-alive "${KEEP_ALIVE:-60}"
