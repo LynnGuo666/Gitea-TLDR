@@ -157,6 +157,7 @@ export default function RepoConfigPage() {
   const [issueModel, setIssueModel] = useState('');
   const [issueCustomPrompt, setIssueCustomPrompt] = useState('');
   const [issueFocus, setIssueFocus] = useState<string[]>([]);
+  const [configHealth, setConfigHealth] = useState<{ overall: string; checks: { component: string; status: string; message: string }[] } | null>(null);
 
   const { status: authStatus, beginLogin } = useContext(AuthContext);
   const requiresLogin = authStatus.enabled && !authStatus.loggedIn;
@@ -283,7 +284,7 @@ export default function RepoConfigPage() {
       }
       const data = (await res.json()) as IssueConfigPayload;
       setIssueConfig(data);
-      setIssueInheritGlobal(data.inherit_global);
+      setIssueInheritGlobal(data.inherit_global && data.global_has_api_key === false ? false : data.inherit_global);
       setIssueApiUrl(data.api_url || '');
       setIssueApiKey('');
       setIssueModel(data.model || '');
@@ -312,7 +313,7 @@ export default function RepoConfigPage() {
         }
         const data = (await res.json()) as IssueConfigPayload;
         setIssueConfig(data);
-        setIssueInheritGlobal(data.inherit_global);
+        setIssueInheritGlobal(data.inherit_global && data.global_has_api_key === false ? false : data.inherit_global);
         setIssueApiUrl(data.api_url || '');
         setIssueApiKey('');
         setIssueModel(data.model || '');
@@ -328,6 +329,19 @@ export default function RepoConfigPage() {
 
   const canEditRepo = webhookStatus?.can_setup_webhook ?? true;
 
+  const fetchConfigHealth = useCallback(async () => {
+    if (!owner || !repo || requiresLogin) return;
+    try {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/config-health`);
+      if (res.ok) {
+        const data = await res.json();
+        setConfigHealth(data);
+      }
+    } catch {
+      // health check is non-critical
+    }
+  }, [owner, repo, requiresLogin]);
+
   useEffect(() => {
     if (router.isReady && owner && repo && !requiresLogin) {
       fetchWebhookStatus();
@@ -336,6 +350,7 @@ export default function RepoConfigPage() {
       fetchReviewSettings();
       fetchIssueSettings();
       fetchIssueConfig();
+      fetchConfigHealth();
       apiFetch('/api/providers').then(async (res) => {
         if (res.ok) {
           const data = await res.json();
@@ -671,6 +686,25 @@ export default function RepoConfigPage() {
           />
         </section>
 
+        {configHealth && configHealth.overall !== 'ok' && !requiresLogin && (
+          <section className="pt-1">
+            <div className={`rounded-lg px-4 py-2.5 text-sm ${
+              configHealth.overall === 'error' ? 'bg-danger-50 text-danger-700' : 'bg-warning-50 text-warning-700'
+            }`}>
+              <p className="m-0">
+                {configHealth.overall === 'error' ? '⚠️' : 'ℹ️'} 配置状态：
+                {configHealth.checks.filter(c => c.status === 'error').map((c, i) => (
+                  <span key={c.component}>
+                    {i > 0 && '、'}
+                    {c.message}
+                  </span>
+                ))}
+                {' '}— 前往对应标签页补充配置
+              </p>
+            </div>
+          </section>
+        )}
+
         <section className="pt-2 border-t border-divider/60">
           <Tabs
             selectedKey={activeTab}
@@ -899,15 +933,27 @@ export default function RepoConfigPage() {
                         可为 Issue 分析单独指定 API / 模型 / 自定义提示词；当前仅 Forge 支持 Issue 场景。
                       </p>
                     </div>
-                    {issueConfig?.has_api_key ? (
-                      <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
-                    ) : null}
                   </div>
 
                   {issueConfigLoading ? (
                     <Skeleton width="100%" height={120} className="rounded-lg" />
                   ) : (
                     <>
+                      {issueConfig?.has_api_key ? (
+                        <div className="rounded-lg bg-success-50 px-3 py-2 text-sm text-success-700">
+                          ✅ Issue 分析 API Key 已配置{issueInheritGlobal ? '（继承自全局）' : '（独立配置）'}
+                        </div>
+                      ) : issueInheritGlobal && issueConfig?.global_has_api_key === false ? (
+                        <div className="rounded-lg bg-warning-50 px-3 py-2 text-sm text-warning-700">
+                          ⚠️ 使用全局配置，但全局 Issue API Key 未配置 — Issue 分析将失败
+                          <span className="ml-2 underline cursor-pointer hover:text-warning-800" onClick={() => router.push('/preferences')}>去设置</span>
+                        </div>
+                      ) : !issueConfig?.has_api_key && !issueInheritGlobal ? (
+                        <div className="rounded-lg bg-danger-50 px-3 py-2 text-sm text-danger-700">
+                          ❌ 未配置 Issue API Key — Issue 分析将失败
+                        </div>
+                      ) : null}
+
                       <div className="flex items-center justify-between gap-4 rounded-lg bg-default-100 px-3 py-2">
                         <span className="text-sm">与全局 Issue 配置保持一致</span>
                         <Switch
@@ -917,13 +963,26 @@ export default function RepoConfigPage() {
                             setIssueInheritGlobal(value);
                             if (value) {
                               void saveIssueConfig({ inherit_global: true });
+                            } else {
+                              if (providerConfig?.engine === 'forge' && providerConfig?.has_api_key && !issueApiUrl) {
+                                setIssueApiUrl(providerConfig.api_url || '');
+                              }
                             }
                           }}
                           aria-label="Issue 分析继承全局"
                         />
                       </div>
 
-                      {!issueInheritGlobal && (
+                      {issueInheritGlobal ? (
+                        <div className="rounded-lg bg-default-100 px-4 py-3 text-sm space-y-1">
+                          <p>API URL: <span className="font-mono">{issueConfig?.api_url || '未设置'}</span></p>
+                          <p>Model: <span className="font-mono">{issueConfig?.model || '未设置'}</span></p>
+                          <p>API Key: <Chip size="sm" variant="flat" color={issueConfig?.has_api_key ? 'success' : 'warning'}>
+                            {issueConfig?.has_api_key ? '已配置' : '未配置'}
+                          </Chip></p>
+                          <p>Focus: {issueConfig?.default_focus?.join(', ') || 'bug, duplicate, design'}</p>
+                        </div>
+                      ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <Input
                             label="Forge Base URL"
@@ -941,6 +1000,7 @@ export default function RepoConfigPage() {
                             onValueChange={setIssueApiKey}
                             isDisabled={!canEditRepo || issueConfigSaving}
                             placeholder={issueConfig?.has_api_key ? '已保存，留空保持不变' : '仅首次保存必填'}
+                            description={providerConfig?.engine === 'forge' && providerConfig?.has_api_key ? '可参考 PR 审查配置' : undefined}
                           />
                           <Input
                             label="Model"

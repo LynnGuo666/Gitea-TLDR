@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "1.28.1"
+__version__ = "1.28.2"
 __release_date__ = "2026-04-29"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,15 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.28.2": {
+        "date": "2026-04-29",
+        "changes": [
+            "优化：Issue 配置区域新增状态横幅，继承模式下展示只读摘要卡片，全局无配置时自动展开本地配置表单",
+            "新增：个人设置页面新增「全局 Issue 分析配置」，支持配置 Forge Base URL / API Key / 模型 / 分析重点 / 自定义提示词",
+            "新增：后端配置健康检查接口 GET /api/repos/{owner}/{repo}/config-health，返回 PR 审查与 Issue 分析的配置状态",
+            "维护：同步更新后端与前端版本号到 1.28.2",
+        ],
+    },
     "1.28.1": {
         "date": "2026-04-29",
         "changes": [

@@ -8,6 +8,16 @@ import PageHeader from '../components/PageHeader';
 import SectionHeader from '../components/SectionHeader';
 import { GlobalProviderConfig, ProviderInfo } from '../lib/types';
 
+interface GlobalIssueConfig {
+  configured: boolean;
+  engine?: string;
+  model?: string;
+  api_url?: string;
+  has_api_key?: boolean;
+  custom_prompt?: string;
+  default_focus?: string[];
+}
+
 export default function PreferencesPage() {
   const { status: authStatus } = useContext(AuthContext);
   const [globalProvider, setGlobalProvider] = useState<GlobalProviderConfig | null>(null);
@@ -18,6 +28,15 @@ export default function PreferencesPage() {
   const [globalModel, setGlobalModel] = useState('');
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [selectedProvider, setSelectedProvider] = useState('claude_code');
+
+  const [globalIssue, setGlobalIssue] = useState<GlobalIssueConfig | null>(null);
+  const [globalIssueLoading, setGlobalIssueLoading] = useState(true);
+  const [globalIssueSaving, setGlobalIssueSaving] = useState(false);
+  const [globalIssueApiUrl, setGlobalIssueApiUrl] = useState('');
+  const [globalIssueApiKey, setGlobalIssueApiKey] = useState('');
+  const [globalIssueModel, setGlobalIssueModel] = useState('');
+  const [globalIssueFocus, setGlobalIssueFocus] = useState<string>('');
+  const [globalIssueCustomPrompt, setGlobalIssueCustomPrompt] = useState('');
 
   const fetchGlobalProvider = useCallback(async () => {
     if (!authStatus.loggedIn) {
@@ -48,6 +67,34 @@ export default function PreferencesPage() {
     }
   }, [authStatus.loggedIn]);
 
+  const fetchGlobalIssue = useCallback(async () => {
+    if (!authStatus.loggedIn) {
+      setGlobalIssue(null);
+      setGlobalIssueLoading(false);
+      return;
+    }
+
+    setGlobalIssueLoading(true);
+    try {
+      const res = await apiFetch('/api/config/issue-global');
+      if (!res.ok) {
+        setGlobalIssue(null);
+        return;
+      }
+      const data = await res.json();
+      setGlobalIssue(data);
+      setGlobalIssueApiUrl(data.api_url || '');
+      setGlobalIssueModel(data.model || '');
+      setGlobalIssueFocus(data.default_focus ? data.default_focus.join(', ') : '');
+      setGlobalIssueCustomPrompt(data.custom_prompt || '');
+    } catch (error) {
+      console.error('Failed to fetch global issue config:', error);
+      setGlobalIssue(null);
+    } finally {
+      setGlobalIssueLoading(false);
+    }
+  }, [authStatus.loggedIn]);
+
   useEffect(() => {
     const fetchProviders = async () => {
       try {
@@ -64,7 +111,8 @@ export default function PreferencesPage() {
 
     fetchProviders();
     fetchGlobalProvider();
-  }, [fetchGlobalProvider]);
+    fetchGlobalIssue();
+  }, [fetchGlobalProvider, fetchGlobalIssue]);
 
   const saveGlobalProviderConfig = async () => {
     if (!authStatus.loggedIn) {
@@ -112,6 +160,56 @@ export default function PreferencesPage() {
       addToast({ title: '无法连接后端', color: 'danger' });
     } finally {
       setGlobalProviderSaving(false);
+    }
+  };
+
+  const saveGlobalIssueConfig = async () => {
+    if (!authStatus.loggedIn) {
+      addToast({ title: '请先登录后再配置', color: 'warning' });
+      return;
+    }
+
+    setGlobalIssueSaving(true);
+    try {
+      const focusArray = globalIssueFocus
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      const res = await apiFetch('/api/config/issue-global', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          engine: 'forge',
+          api_url: globalIssueApiUrl || null,
+          api_key: globalIssueApiKey || null,
+          model: globalIssueModel || null,
+          custom_prompt: globalIssueCustomPrompt || null,
+          default_focus: focusArray.length > 0 ? focusArray : undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        addToast({ title: data.detail || '保存失败', color: 'danger' });
+        return;
+      }
+
+      addToast({ title: '全局 Issue 配置已保存', color: 'success' });
+      setGlobalIssueApiKey('');
+      setGlobalIssue({
+        configured: !!(data.api_url || data.has_api_key),
+        api_url: data.api_url,
+        engine: data.engine,
+        model: data.model,
+        has_api_key: data.has_api_key,
+        custom_prompt: data.custom_prompt,
+        default_focus: data.default_focus,
+      });
+    } catch {
+      addToast({ title: '无法连接后端', color: 'danger' });
+    } finally {
+      setGlobalIssueSaving(false);
     }
   };
 
@@ -216,6 +314,85 @@ export default function PreferencesPage() {
                   </Button>
                   <span className="text-default-400 text-xs">
                     作为仓库默认值使用；仓库页可关闭继承并单独覆盖
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
+        <section className="py-5 border-t border-divider/60">
+          <SectionHeader
+            title="全局 Issue 分析配置"
+            icon={<Bot size={18} />}
+            actions={
+              globalIssue?.has_api_key ? (
+                <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
+              ) : null
+            }
+          />
+          <div className="mt-4">
+            {!authStatus.loggedIn ? (
+              <p className="text-default-500 m-0">登录后可配置全局 Issue 分析设置</p>
+            ) : globalIssueLoading ? (
+              <p className="text-default-500 m-0">加载中...</p>
+            ) : (
+              <>
+                <p className="text-default-500 text-sm mb-4">Issue 分析使用 Forge 引擎，在此配置全局默认 API 凭据和模型</p>
+                <div className="flex flex-col gap-3">
+                  <Input
+                    label="Base URL"
+                    value={globalIssueApiUrl}
+                    onValueChange={setGlobalIssueApiUrl}
+                    placeholder="https://api.anthropic.com"
+                    variant="bordered"
+                  />
+                  <Input
+                    label="Model ID"
+                    value={globalIssueModel}
+                    onValueChange={setGlobalIssueModel}
+                    placeholder="claude-sonnet-4-20250514"
+                    variant="bordered"
+                  />
+                  <Input
+                    label="API Key"
+                    type="password"
+                    value={globalIssueApiKey}
+                    onValueChange={setGlobalIssueApiKey}
+                    placeholder={
+                      globalIssue?.has_api_key
+                        ? '已配置（输入新值覆盖）'
+                        : 'sk-ant-...'
+                    }
+                    variant="bordered"
+                  />
+                  <Input
+                    label="默认关注点"
+                    description="逗号分隔"
+                    value={globalIssueFocus}
+                    onValueChange={setGlobalIssueFocus}
+                    placeholder="bug, duplicate, design, performance, question"
+                    variant="bordered"
+                  />
+                  <Input
+                    label="自定义 Prompt"
+                    value={globalIssueCustomPrompt}
+                    onValueChange={setGlobalIssueCustomPrompt}
+                    placeholder="可选"
+                    variant="bordered"
+                  />
+                </div>
+                <div className="mt-4 flex items-center gap-3 flex-wrap">
+                  <Button
+                    color="primary"
+                    onPress={saveGlobalIssueConfig}
+                    isDisabled={globalIssueSaving}
+                    isLoading={globalIssueSaving}
+                  >
+                    保存个人设置
+                  </Button>
+                  <span className="text-default-400 text-xs">
+                    仓库可在仓库设置页关闭继承并覆盖这些配置
                   </span>
                 </div>
               </>

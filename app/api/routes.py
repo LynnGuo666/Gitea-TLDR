@@ -1873,6 +1873,21 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 "default_focus": config.get_focus(),
             }
 
+    @api_router.get("/repos/{owner}/{repo}/config-health")
+    async def get_repo_config_health(owner: str, repo: str, request: Request):
+        """获取仓库配置健康状态"""
+        context.auth_manager.require_session(request)
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.config_health import check_repo_config_health
+        from app.services.db_service import DBService
+
+        async with database.session() as session:
+            db_service = DBService(session)
+            return await check_repo_config_health(db_service, owner, repo)
+
     @api_router.get("/repos/{owner}/{repo}/webhook-secret")
     async def get_webhook_secret(owner: str, repo: str, request: Request):
         """获取仓库的 Webhook Secret"""
