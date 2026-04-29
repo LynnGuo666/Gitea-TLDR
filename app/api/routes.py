@@ -422,8 +422,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             username = session_data.user.get("username") if session_data.user else None
             if username:
                 org_role = await client.get_org_membership_role(owner, username)
-            if org_role not in {"owner", "admin"}:
-                raise HTTPException(status_code=403, detail="需要组织管理员权限")
+            # 组织仓库同时检查组织管理员和仓库管理员（含通过团队授予的权限）
+            if org_role not in {"owner", "admin"} and not permissions.get("admin", False):
+                raise HTTPException(status_code=403, detail="需要组织管理员或仓库管理员权限")
         elif not permissions.get("admin", False):
             raise HTTPException(status_code=403, detail="需要仓库管理员权限")
 
@@ -731,7 +732,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
         can_setup = permissions.get("admin", False)
         if is_org:
-            can_setup = can_setup and org_role in {"owner", "admin"}
+            can_setup = org_role in {"owner", "admin"} or permissions.get("admin", False)
 
         return {
             "owner": owner,
@@ -806,7 +807,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
         can_setup = permissions.get("admin", False)
         if is_org:
-            can_setup = can_setup and org_role in {"owner", "admin"}
+            can_setup = org_role in {"owner", "admin"} or permissions.get("admin", False)
 
         # 获取当前服务的回调 URL
         try:
@@ -869,8 +870,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             username = session.user.get("username") if session else None
             if username:
                 org_role = await client.get_org_membership_role(owner, username)
-            if org_role not in {"owner", "admin"}:
-                raise HTTPException(status_code=403, detail="需要组织管理员权限")
+            if org_role not in {"owner", "admin"} and not permissions.get("admin", False):
+                raise HTTPException(status_code=403, detail="需要组织管理员或仓库管理员权限")
         elif not permissions.get("admin", False):
             raise HTTPException(status_code=403, detail="需要仓库管理员权限")
 
@@ -923,7 +924,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
         can_setup = permissions.get("admin", False)
         if is_org:
-            can_setup = can_setup and org_role in {"owner", "admin"}
+            can_setup = org_role in {"owner", "admin"} or permissions.get("admin", False)
 
         return {
             "owner": owner,

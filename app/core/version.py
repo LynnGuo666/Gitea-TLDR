@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "1.28.0"
-__release_date__ = "2026-04-24"
+__version__ = "1.28.1"
+__release_date__ = "2026-04-29"
 __author__ = "LynnGuo666"
 
 
@@ -17,6 +17,13 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.28.1": {
+        "date": "2026-04-29",
+        "changes": [
+            "修复：组织仓库权限检查支持团队级仓库管理员，通过团队获得仓库 admin 权限的成员现在可以配置 webhook/审查设置/Provider 配置",
+            "维护：同步更新后端与前端版本号到 1.28.1",
+        ],
+    },
     "1.28.0": {
         "date": "2026-04-24",
         "changes": [
