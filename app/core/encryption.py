@@ -6,6 +6,7 @@ import base64
 import binascii
 import json
 import logging
+import os
 import threading
 from pathlib import Path
 from typing import Optional
@@ -45,8 +46,24 @@ class EncryptionService:
     def _ensure_key_exists(self) -> PrivateKey:
         """确保密钥文件存在，不存在则生成"""
         if self.key_path.exists():
-            key_data = self.key_path.read_bytes()
-            return PrivateKey(key_data)
+            try:
+                key_data = self.key_path.read_bytes()
+                return PrivateKey(key_data)
+            except PermissionError:
+                stat = self.key_path.stat()
+                logger.critical(
+                    "无法读取加密密钥文件 %s：权限不足。"
+                    "运行用户 UID=%s, 文件属主 UID=%s, 文件权限=%s",
+                    self.key_path,
+                    os.getuid(),
+                    stat.st_uid,
+                    oct(stat.st_mode)[-3:],
+                )
+                raise RuntimeError(
+                    f"加密密钥文件权限不足: {self.key_path}。"
+                    f"请确保运行用户 (UID={os.getuid()}) 对该文件有读取权限。"
+                    f"如果是从旧版本升级，请检查 Docker 用户映射是否正确。"
+                ) from None
 
         private_key = PrivateKey.generate()
         self.key_path.parent.mkdir(parents=True, exist_ok=True)

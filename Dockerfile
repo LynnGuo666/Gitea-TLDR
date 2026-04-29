@@ -35,7 +35,7 @@ COPY --from=frontend-builder /frontend/out ./frontend/out
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-RUN groupadd -r appuser && useradd -r -g appuser -d /app appuser \
+RUN groupadd -r appuser && useradd -r -g appuser -u 1000 -d /app appuser \
     && chown -R appuser:appuser /app
 
 EXPOSE 8000
