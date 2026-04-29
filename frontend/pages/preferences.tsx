@@ -6,7 +6,7 @@ import { AuthContext } from '../lib/auth';
 import { apiFetch } from '../lib/api';
 import PageHeader from '../components/PageHeader';
 import SectionHeader from '../components/SectionHeader';
-import { GlobalProviderConfig, ProviderInfo } from '../lib/types';
+import { GlobalReviewConfig, ProviderInfo } from '../lib/types';
 
 interface GlobalIssueConfig {
   configured: boolean;
@@ -20,7 +20,7 @@ interface GlobalIssueConfig {
 
 export default function PreferencesPage() {
   const { status: authStatus } = useContext(AuthContext);
-  const [globalProvider, setGlobalProvider] = useState<GlobalProviderConfig | null>(null);
+  const [globalProvider, setGlobalProvider] = useState<GlobalReviewConfig | null>(null);
   const [globalProviderLoading, setGlobalProviderLoading] = useState(true);
   const [globalProviderSaving, setGlobalProviderSaving] = useState(false);
   const [globalBaseUrl, setGlobalBaseUrl] = useState('');
@@ -46,12 +46,12 @@ export default function PreferencesPage() {
 
     setGlobalProviderLoading(true);
     try {
-      const res = await apiFetch('/api/config/provider-global');
+      const res = await apiFetch('/api/config/global?type=review');
       if (!res.ok) {
         setGlobalProvider(null);
         return;
       }
-      const data: GlobalProviderConfig = await res.json();
+      const data: GlobalReviewConfig = await res.json();
       setGlobalProvider(data);
       setGlobalBaseUrl(data.api_url || '');
       setGlobalModel(data.model || '');
@@ -75,7 +75,7 @@ export default function PreferencesPage() {
 
     setGlobalIssueLoading(true);
     try {
-      const res = await apiFetch('/api/config/issue-global');
+      const res = await apiFetch('/api/config/global?type=issue');
       if (!res.ok) {
         setGlobalIssue(null);
         return;
@@ -112,7 +112,7 @@ export default function PreferencesPage() {
     fetchGlobalIssue();
   }, [fetchGlobalProvider, fetchGlobalIssue]);
 
-  const saveGlobalProviderConfig = async () => {
+  const saveGlobalReviewConfig = async () => {
     if (!authStatus.loggedIn) {
       addToast({ title: '请先登录后再配置', color: 'warning' });
       return;
@@ -125,7 +125,7 @@ export default function PreferencesPage() {
 
     setGlobalProviderSaving(true);
     try {
-      const res = await apiFetch('/api/config/provider-global', {
+      const res = await apiFetch('/api/config/global?type=review', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -169,7 +169,7 @@ export default function PreferencesPage() {
 
     setGlobalIssueSaving(true);
     try {
-      const res = await apiFetch('/api/config/issue-global', {
+      const res = await apiFetch('/api/config/global?type=issue', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -298,7 +298,7 @@ export default function PreferencesPage() {
                 <div className="mt-4 flex items-center gap-3 flex-wrap">
                   <Button
                     color="primary"
-                    onPress={saveGlobalProviderConfig}
+                    onPress={saveGlobalReviewConfig}
                     isDisabled={globalProviderSaving}
                     isLoading={globalProviderSaving}
                   >

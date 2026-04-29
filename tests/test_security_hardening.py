@@ -337,20 +337,20 @@ def test_gitea_client_debug_log_does_not_print_secret(caplog: pytest.LogCaptureF
 # ==================== 新增安全测试 ====================
 
 def test_provider_global_write_requires_admin():
-    """非 admin 用户 PUT /api/config/provider-global 应返回 401（未配置 admin 时依赖链抛 401）"""
+    """非 admin 用户 PUT /api/config/global?type=review 应返回 401（未配置 admin 时依赖链抛 401）"""
     client = build_app(
         auth_status={"loggedIn": False, "user": None},
         auth_manager=DummyAuthManager(session=None, user_client=None),
         database=DummyDatabase(),
     )
 
-    resp = client.put("/api/config/provider-global", json={"engine": "claude_code"})
+    resp = client.put("/api/config/global?type=review", json={"engine": "claude_code"})
     # admin_required 在无 admin DB 时会抛 401/403
     assert resp.status_code in (401, 403)
 
 
 def test_repo_provider_config_write_requires_repo_admin(monkeypatch: pytest.MonkeyPatch):
-    """无仓库 admin 权限的已登录用户 PUT /api/repos/.../provider-config 应返回 403"""
+    """无仓库 admin 权限的已登录用户 PUT /api/repos/.../config?type=review 应返回 403"""
 
     class NonAdminClient:
         async def check_repo_permissions(self, owner, repo):
@@ -373,7 +373,7 @@ def test_repo_provider_config_write_requires_repo_admin(monkeypatch: pytest.Monk
     )
 
     resp = client.put(
-        "/api/repos/owner/repo/provider-config",
+        "/api/repos/owner/repo/config?type=review",
         json={"engine": "claude_code"},
     )
     assert resp.status_code == 403
@@ -491,7 +491,7 @@ def test_repo_provider_config_uses_global_model_when_repo_only_has_review_settin
         database=DummyDatabase(),
     )
 
-    resp = client.get("/api/repos/alice/repo-a/provider-config")
+    resp = client.get("/api/repos/alice/repo-a/config?type=review")
     assert resp.status_code == 200
     body = resp.json()
     assert body["inherit_global"] is True
@@ -571,7 +571,7 @@ def test_inherit_global_preserves_repo_review_settings_instead_of_deleting_confi
     )
 
     resp = client.put(
-        "/api/repos/owner/repo/provider-config",
+        "/api/repos/owner/repo/config?type=review",
         json={"inherit_global": True},
     )
     assert resp.status_code == 200

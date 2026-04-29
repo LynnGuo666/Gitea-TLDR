@@ -15,7 +15,7 @@ export type PublicConfig = {
   oauth_enabled?: boolean;
 };
 
-export type RepoProviderConfig = {
+export type RepoReviewConfig = {
   configured: boolean;
   api_url?: string | null;
   engine?: string | null;
@@ -28,16 +28,14 @@ export type RepoProviderConfig = {
   global_engine?: string | null;
   global_model?: string | null;
 };
-export type RepoClaudeConfig = RepoProviderConfig;
 
-export type GlobalProviderConfig = {
+export type GlobalReviewConfig = {
   configured: boolean;
   api_url?: string | null;
   engine?: string | null;
   model?: string | null;
   has_api_key: boolean;
 };
-export type GlobalClaudeConfig = GlobalProviderConfig;
 
 export type ProviderInfo = {
   name: string;

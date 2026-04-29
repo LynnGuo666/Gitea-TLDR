@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "1.28.3"
+__version__ = "1.29.0"
 __release_date__ = "2026-04-29"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,16 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.29.0": {
+        "date": "2026-04-29",
+        "changes": [
+            "重构：统一路由命名，review/issue 配置改用 ?type=review|issue 查询参数",
+            "重构：/config/global?type=review|issue 替代原 provider-global / issue-global 三套路由",
+            "重构：/repos/{owner}/{repo}/config?type=review|issue 替代原 claude-config / provider-config / issue-config",
+            "新增：scripts/fix-permissions.sh 一键修复 review-workspace 目录权限",
+            "维护：前端类型重命名 GlobalProviderConfig→GlobalReviewConfig、RepoProviderConfig→RepoReviewConfig",
+        ],
+    },
     "1.28.3": {
         "date": "2026-04-29",
         "changes": [

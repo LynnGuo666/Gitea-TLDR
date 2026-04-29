@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import PageHeader from '../../../components/PageHeader';
 import { Skeleton } from '../../../components/ui';
-import { RepoProviderConfig, ProviderInfo, IssueConfigPayload, IssueConfigUpdateRequest } from '../../../lib/types';
+import { RepoReviewConfig, ProviderInfo, IssueConfigPayload, IssueConfigUpdateRequest } from '../../../lib/types';
 import { AuthContext } from '../../../lib/auth';
 import { apiFetch } from '../../../lib/api';
 
@@ -152,7 +152,7 @@ export default function RepoConfigPage() {
   ]);
   const [reviewFeatures, setReviewFeatures] = useState<string[]>(['comment']);
   // Claude 配置状态
-  const [providerConfig, setProviderConfig] = useState<RepoProviderConfig | null>(null);
+  const [providerConfig, setProviderConfig] = useState<RepoReviewConfig | null>(null);
   const [providerBaseUrl, setProviderBaseUrl] = useState('');
   const [providerAuthToken, setProviderAuthToken] = useState('');
   const [providerModel, setProviderModel] = useState('');
@@ -218,7 +218,7 @@ export default function RepoConfigPage() {
 
     setProviderConfigLoading(true);
     try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/provider-config`);
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/config?type=review`);
       if (res.ok) {
         const data = await res.json();
         setProviderConfig(data);
@@ -305,7 +305,7 @@ export default function RepoConfigPage() {
     if (!owner || !repo || requiresLogin) return;
     setIssueConfigLoading(true);
     try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/issue-config`);
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/config?type=issue`);
       if (!res.ok) {
         setIssueConfig(null);
         return;
@@ -330,7 +330,7 @@ export default function RepoConfigPage() {
       if (!owner || !repo || requiresLogin || !canEditRepo) return;
       setIssueConfigSaving(true);
       try {
-        const res = await apiFetch(`/api/repos/${owner}/${repo}/issue-config`, {
+        const res = await apiFetch(`/api/repos/${owner}/${repo}/config?type=issue`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -499,7 +499,7 @@ export default function RepoConfigPage() {
     setIssueFocus(next);
     setIssueConfigSaving(true);
     try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/issue-config`, {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/config?type=issue`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ default_focus: next }),
@@ -588,7 +588,7 @@ export default function RepoConfigPage() {
 
     setProviderSaving(true);
     try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/provider-config`, {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/config?type=review`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -662,7 +662,7 @@ export default function RepoConfigPage() {
 
     setInheritSaving(true);
     try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/provider-config`, {
+      const res = await apiFetch(`/api/repos/${owner}/${repo}/config?type=review`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ inherit_global: nextValue }),

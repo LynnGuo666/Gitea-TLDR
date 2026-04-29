@@ -503,10 +503,15 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             "issue_providers": sorted(issue_supported),
         }
 
-    @api_router.get("/config/claude-global")
-    @api_router.get("/config/provider-global")
-    async def get_global_claude_config(request: Request):
-        """获取全局 Claude 配置"""
+    @api_router.get("/config/global")
+    async def get_global_config(
+        request: Request,
+        config_type: str = Query(..., alias="type"),
+    ):
+        """获取全局配置（type=review|issue）"""
+        if config_type not in ("review", "issue"):
+            raise HTTPException(status_code=400, detail="type 必须为 review 或 issue")
+
         context.auth_manager.require_session(request)
         database = getattr(request.state, "database", None)
         if not database:
@@ -516,68 +521,146 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
         async with database.session() as session:
             db_service = DBService(session)
-            global_config = await db_service.get_global_model_config()
 
-            if not global_config:
+            if config_type == "review":
+                global_config = await db_service.get_global_model_config()
+
+                if not global_config:
+                    return {
+                        "configured": False,
+                        "engine": runtime_settings.get("default_provider", settings.default_provider),
+                        "model": None,
+                        "api_url": None,
+                        "has_api_key": False,
+                    }
+
                 return {
-                    "configured": False,
-                    "engine": runtime_settings.get("default_provider", settings.default_provider),
-                    "model": None,
-                    "api_url": None,
-                    "has_api_key": False,
+                    "configured": bool(global_config.api_url or global_config.api_key),
+                    "engine": global_config.engine or runtime_settings.get("default_provider", settings.default_provider),
+                    "model": global_config.model,
+                    "api_url": global_config.api_url,
+                    "has_api_key": bool(global_config.api_key),
                 }
 
-            return {
-                "configured": bool(global_config.api_url or global_config.api_key),
-                "engine": global_config.engine or runtime_settings.get("default_provider", settings.default_provider),
-                "model": global_config.model,
-                "api_url": global_config.api_url,
-                "has_api_key": bool(global_config.api_key),
-            }
+            else:  # issue
+                global_cfg = await db_service.get_global_issue_config()
+                default_engine = "forge"
+                resolved = resolve_issue_config(
+                    None, global_cfg, default_engine=default_engine
+                )
+                if not global_cfg:
+                    return {
+                        "configured": False,
+                        "engine": default_engine,
+                        "model": None,
+                        "api_url": None,
+                        "has_api_key": False,
+                        "temperature": None,
+                        "max_tokens": None,
+                        "custom_prompt": None,
+                        "default_focus": resolved.default_focus,
+                    }
+                return {
+                    "configured": bool(
+                        global_cfg.api_url or global_cfg.api_key or global_cfg.model
+                    ),
+                    "engine": global_cfg.engine or default_engine,
+                    "model": global_cfg.model,
+                    "api_url": global_cfg.api_url,
+                    "has_api_key": bool(global_cfg.api_key),
+                    "temperature": global_cfg.temperature,
+                    "max_tokens": global_cfg.max_tokens,
+                    "custom_prompt": global_cfg.custom_prompt,
+                    "default_focus": resolved.default_focus,
+                }
 
-    @api_router.put("/config/claude-global")
-    @api_router.put("/config/provider-global")
-    async def update_global_claude_config(
-        payload: ProviderConfigRequest,
+    @api_router.put("/config/global")
+    async def update_global_config(
         request: Request,
+        config_type: str = Query(..., alias="type"),
         admin: User = Depends(admin_required("config", "write")),
     ):
-        """更新全局 Claude 配置"""
+        """更新全局配置（type=review|issue）"""
+        if config_type not in ("review", "issue"):
+            raise HTTPException(status_code=400, detail="type 必须为 review 或 issue")
+
         database = getattr(request.state, "database", None)
         if not database:
             raise HTTPException(status_code=503, detail="数据库未启用")
 
         from app.services.db_service import DBService
 
+        body = await request.json()
+
         async with database.session() as session:
             db_service = DBService(session)
-            global_config = await db_service.get_global_model_config()
-            if not global_config:
-                global_config = await db_service.create_or_update_model_config(
-                    config_name="global-default",
+
+            if config_type == "review":
+                payload = ProviderConfigRequest.model_validate(body)
+                global_config = await db_service.get_global_model_config()
+                if not global_config:
+                    global_config = await db_service.create_or_update_model_config(
+                        config_name="global-default",
+                        repository_id=None,
+                        is_default=True,
+                    )
+
+                if payload.api_url is not None:
+                    global_config.api_url = payload.api_url or None
+                if payload.api_key is not None:
+                    global_config.api_key = payload.api_key or None
+                if payload.engine is not None:
+                    global_config.engine = payload.engine
+                if payload.model is not None:
+                    global_config.model = payload.model or None
+
+                await session.flush()
+
+                return {
+                    "success": True,
+                    "message": "全局 AI 审查配置已保存",
+                    "engine": global_config.engine,
+                    "model": global_config.model,
+                    "api_url": global_config.api_url,
+                    "has_api_key": bool(global_config.api_key),
+                }
+
+            else:  # issue
+                payload = IssueConfigRequest.model_validate(body)
+                default_engine = "forge"
+                engine = (payload.engine or default_engine).strip() or default_engine
+                if engine not in context.review_engine.registry.list_issue_providers():
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"引擎 {engine} 暂不支持 Issue 分析",
+                    )
+
+                config = await db_service.upsert_issue_config(
                     repository_id=None,
+                    config_name="global-issue-default",
+                    engine=engine,
+                    model=payload.model,
+                    api_url=payload.api_url,
+                    api_key=payload.api_key,
+                    wire_api=payload.wire_api,
+                    temperature=payload.temperature,
+                    max_tokens=payload.max_tokens,
+                    custom_prompt=payload.custom_prompt,
+                    default_focus=payload.default_focus,
                     is_default=True,
                 )
 
-            if payload.api_url is not None:
-                global_config.api_url = payload.api_url or None
-            if payload.api_key is not None:
-                global_config.api_key = payload.api_key or None
-            if payload.engine is not None:
-                global_config.engine = payload.engine
-            if payload.model is not None:
-                global_config.model = payload.model or None
-
-            await session.flush()
-
-            return {
-                "success": True,
-                "message": "全局 AI 审查配置已保存",
-                "engine": global_config.engine,
-                "model": global_config.model,
-                "api_url": global_config.api_url,
-                "has_api_key": bool(global_config.api_key),
-            }
+                return {
+                    "configured": bool(config.api_url or config.api_key or config.model),
+                    "engine": config.engine,
+                    "model": config.model,
+                    "api_url": config.api_url,
+                    "has_api_key": bool(config.api_key),
+                    "temperature": config.temperature,
+                    "max_tokens": config.max_tokens,
+                    "custom_prompt": config.custom_prompt,
+                    "default_focus": config.get_focus(),
+                }
 
     @api_router.get("/version")
     async def api_version():
@@ -1375,10 +1458,17 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
         return {"pulls": pulls}
 
-    @api_router.get("/repos/{owner}/{repo}/claude-config")
-    @api_router.get("/repos/{owner}/{repo}/provider-config")
-    async def get_repo_claude_config(owner: str, repo: str, request: Request):
-        """获取仓库的 Claude 配置"""
+    @api_router.get("/repos/{owner}/{repo}/config")
+    async def get_repo_config(
+        owner: str,
+        repo: str,
+        request: Request,
+        config_type: str = Query(..., alias="type"),
+    ):
+        """获取仓库配置（type=review|issue）"""
+        if config_type not in ("review", "issue"):
+            raise HTTPException(status_code=400, detail="type 必须为 review 或 issue")
+
         context.auth_manager.require_session(request)
         database = getattr(request.state, "database", None)
         if not database:
@@ -1388,78 +1478,99 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
         async with database.session() as session:
             db_service = DBService(session)
-            repo_obj = await db_service.get_repository(owner, repo)
-            global_config = await db_service.get_global_model_config()
-            default_engine = runtime_settings.get(
-                "default_provider", settings.default_provider
-            )
 
-            if not repo_obj:
+            if config_type == "review":
+                repo_obj = await db_service.get_repository(owner, repo)
+                global_config = await db_service.get_global_model_config()
+                default_engine = runtime_settings.get(
+                    "default_provider", settings.default_provider
+                )
+
+                if not repo_obj:
+                    resolved = resolve_provider_config(
+                        None,
+                        global_config,
+                        default_engine=default_engine,
+                    )
+                    return {
+                        "inherit_global": resolved.inherit_global,
+                        "has_global_config": bool(
+                            global_config
+                            and (global_config.api_url or global_config.api_key)
+                        ),
+                        "configured": bool(
+                            resolved.api_url or resolved.api_key or resolved.model
+                        ),
+                        "engine": resolved.engine,
+                        "model": resolved.model,
+                        "api_url": resolved.api_url,
+                        "has_api_key": bool(resolved.api_key),
+                        "global_api_url": (
+                            global_config.api_url if global_config else None
+                        ),
+                        "global_has_api_key": bool(
+                            global_config.api_key if global_config else False
+                        ),
+                        "global_engine": (
+                            global_config.engine
+                            if global_config
+                            else default_engine
+                        ),
+                        "global_model": (global_config.model if global_config else None),
+                    }
+
+                repo_config = await db_service.get_repo_specific_model_config(repo_obj.id)
                 resolved = resolve_provider_config(
-                    None,
+                    repo_config,
                     global_config,
                     default_engine=default_engine,
                 )
+
                 return {
                     "inherit_global": resolved.inherit_global,
                     "has_global_config": bool(
-                        global_config
-                        and (global_config.api_url or global_config.api_key)
+                        global_config and (global_config.api_url or global_config.api_key)
                     ),
-                    "configured": bool(
-                        resolved.api_url or resolved.api_key or resolved.model
-                    ),
+                    "configured": bool(resolved.api_url or resolved.api_key or resolved.model),
                     "engine": resolved.engine,
                     "model": resolved.model,
                     "api_url": resolved.api_url,
                     "has_api_key": bool(resolved.api_key),
-                    "global_api_url": (
-                        global_config.api_url if global_config else None
-                    ),
+                    "global_api_url": (global_config.api_url if global_config else None),
                     "global_has_api_key": bool(
                         global_config.api_key if global_config else False
                     ),
                     "global_engine": (
-                        global_config.engine
-                        if global_config
-                        else default_engine
+                        global_config.engine if global_config else default_engine
                     ),
                     "global_model": (global_config.model if global_config else None),
                 }
 
-            repo_config = await db_service.get_repo_specific_model_config(repo_obj.id)
-            resolved = resolve_provider_config(
-                repo_config,
-                global_config,
-                default_engine=default_engine,
-            )
+            else:  # issue
+                repo_obj = await db_service.get_repository(owner, repo)
+                global_cfg = await db_service.get_global_issue_config()
+                default_engine = "forge"
+                repo_cfg = None
+                if repo_obj:
+                    repo_cfg = await db_service.get_repo_specific_issue_config(repo_obj.id)
+                resolved = resolve_issue_config(
+                    repo_cfg, global_cfg, default_engine=default_engine
+                )
+                return _serialize_issue_config_response(
+                    resolved, repo_cfg, global_cfg, default_engine
+                )
 
-            return {
-                "inherit_global": resolved.inherit_global,
-                "has_global_config": bool(
-                    global_config and (global_config.api_url or global_config.api_key)
-                ),
-                "configured": bool(resolved.api_url or resolved.api_key or resolved.model),
-                "engine": resolved.engine,
-                "model": resolved.model,
-                "api_url": resolved.api_url,
-                "has_api_key": bool(resolved.api_key),
-                "global_api_url": (global_config.api_url if global_config else None),
-                "global_has_api_key": bool(
-                    global_config.api_key if global_config else False
-                ),
-                "global_engine": (
-                    global_config.engine if global_config else default_engine
-                ),
-                "global_model": (global_config.model if global_config else None),
-            }
-
-    @api_router.put("/repos/{owner}/{repo}/claude-config")
-    @api_router.put("/repos/{owner}/{repo}/provider-config")
-    async def update_repo_claude_config(
-        owner: str, repo: str, payload: ProviderConfigRequest, request: Request
+    @api_router.put("/repos/{owner}/{repo}/config")
+    async def update_repo_config(
+        owner: str,
+        repo: str,
+        request: Request,
+        config_type: str = Query(..., alias="type"),
     ):
-        """保存仓库的 Claude 配置"""
+        """保存仓库配置（type=review|issue）"""
+        if config_type not in ("review", "issue"):
+            raise HTTPException(status_code=400, detail="type 必须为 review 或 issue")
+
         await _require_repo_setup_permission(owner, repo, request)
         database = getattr(request.state, "database", None)
         if not database:
@@ -1467,69 +1578,117 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
         from app.services.db_service import DBService
 
+        body = await request.json()
+
         async with database.session() as session:
             db_service = DBService(session)
 
-            if payload.inherit_global:
-                repo_obj = await db_service.get_repository(owner, repo)
-                if repo_obj:
-                    repo_config = await db_service.get_repo_specific_model_config(repo_obj.id)
-                    if repo_config:
-                        clear_provider_overrides(repo_config)
-                        if not has_non_provider_settings(repo_config):
-                            await db_service.delete_repo_model_config(repo_obj.id)
+            if config_type == "review":
+                payload = ProviderConfigRequest.model_validate(body)
 
-                global_config = await db_service.get_global_model_config()
+                if payload.inherit_global:
+                    repo_obj = await db_service.get_repository(owner, repo)
+                    if repo_obj:
+                        repo_config = await db_service.get_repo_specific_model_config(repo_obj.id)
+                        if repo_config:
+                            clear_provider_overrides(repo_config)
+                            if not has_non_provider_settings(repo_config):
+                                await db_service.delete_repo_model_config(repo_obj.id)
+
+                    global_config = await db_service.get_global_model_config()
+                    await session.flush()
+                    return {
+                        "success": True,
+                        "inherit_global": True,
+                        "message": "已切换为继承全局 Claude 配置",
+                        "api_url": (global_config.api_url if global_config else None),
+                        "engine": (
+                            global_config.engine
+                            if global_config
+                            else runtime_settings.get("default_provider", settings.default_provider)
+                        ),
+                        "model": (global_config.model if global_config else None),
+                        "has_api_key": bool(
+                            global_config.api_key if global_config else False
+                        ),
+                    }
+
+                repo_obj = await db_service.get_or_create_repository(owner, repo)
+                model_config = await db_service.get_model_config(repo_obj.id)
+                if not model_config:
+                    model_config = await db_service.create_or_update_model_config(
+                        config_name=f"{owner}/{repo}",
+                        repository_id=repo_obj.id,
+                    )
+
+                if payload.api_url is not None:
+                    model_config.api_url = payload.api_url or None
+                if payload.api_key is not None:
+                    model_config.api_key = payload.api_key or None
+                if payload.engine is not None:
+                    model_config.engine = payload.engine
+                if payload.model is not None:
+                    model_config.model = payload.model or None
+
                 await session.flush()
+
                 return {
                     "success": True,
-                    "inherit_global": True,
-                    "message": "已切换为继承全局 Claude 配置",
-                    "api_url": (global_config.api_url if global_config else None),
-                    "engine": (
-                        global_config.engine
-                        if global_config
-                        else runtime_settings.get("default_provider", settings.default_provider)
-                    ),
-                    "model": (global_config.model if global_config else None),
-                    "has_api_key": bool(
-                        global_config.api_key if global_config else False
-                    ),
+                    "inherit_global": False,
+                    "message": "AI 审查配置已保存",
+                    "engine": model_config.engine,
+                    "model": model_config.model,
+                    "api_url": model_config.api_url,
+                    "has_api_key": bool(model_config.api_key),
                 }
 
-            # 获取或创建仓库
-            repo_obj = await db_service.get_or_create_repository(owner, repo)
+            else:  # issue
+                payload = IssueConfigRequest.model_validate(body)
+                default_engine = "forge"
 
-            # 获取或创建模型配置
-            model_config = await db_service.get_model_config(repo_obj.id)
-            if not model_config:
-                # 创建新的配置
-                model_config = await db_service.create_or_update_model_config(
-                    config_name=f"{owner}/{repo}",
+                repo_obj = await db_service.get_or_create_repository(owner, repo)
+                global_cfg = await db_service.get_global_issue_config()
+
+                if payload.inherit_global:
+                    repo_cfg = await db_service.get_repo_specific_issue_config(repo_obj.id)
+                    if repo_cfg:
+                        clear_issue_provider_overrides(repo_cfg)
+                        if not has_non_provider_issue_settings(repo_cfg):
+                            await db_service.clear_repo_issue_config(repo_obj.id)
+                    resolved = resolve_issue_config(
+                        None, global_cfg, default_engine=default_engine
+                    )
+                    return _serialize_issue_config_response(
+                        resolved, None, global_cfg, default_engine
+                    )
+
+                engine = (payload.engine or default_engine).strip() or default_engine
+                if engine not in context.review_engine.registry.list_issue_providers():
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"引擎 {engine} 暂不支持 Issue 分析",
+                    )
+
+                config = await db_service.upsert_issue_config(
                     repository_id=repo_obj.id,
+                    config_name=f"{owner}/{repo}",
+                    engine=engine,
+                    model=payload.model,
+                    api_url=payload.api_url,
+                    api_key=payload.api_key,
+                    wire_api=payload.wire_api,
+                    temperature=payload.temperature,
+                    max_tokens=payload.max_tokens,
+                    custom_prompt=payload.custom_prompt,
+                    default_focus=payload.default_focus,
                 )
 
-            # 更新 Provider 配置
-            if payload.api_url is not None:
-                model_config.api_url = payload.api_url or None
-            if payload.api_key is not None:
-                model_config.api_key = payload.api_key or None
-            if payload.engine is not None:
-                model_config.engine = payload.engine
-            if payload.model is not None:
-                model_config.model = payload.model or None
-
-            await session.flush()
-
-            return {
-                "success": True,
-                "inherit_global": False,
-                "message": "AI 审查配置已保存",
-                "engine": model_config.engine,
-                "model": model_config.model,
-                "api_url": model_config.api_url,
-                "has_api_key": bool(model_config.api_key),
-            }
+                resolved = resolve_issue_config(
+                    config, global_cfg, default_engine=default_engine
+                )
+                return _serialize_issue_config_response(
+                    resolved, config, global_cfg, default_engine
+                )
 
     @api_router.get("/repos/{owner}/{repo}/review-settings")
     async def get_review_settings(owner: str, repo: str, request: Request):
@@ -1693,185 +1852,6 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 global_issue_config.api_key if global_issue_config else False
             ),
         }
-
-    @api_router.get("/repos/{owner}/{repo}/issue-config")
-    async def get_repo_issue_config(owner: str, repo: str, request: Request):
-        """获取仓库的 Issue 分析配置。"""
-        context.auth_manager.require_session(request)
-        database = getattr(request.state, "database", None)
-        if not database:
-            raise HTTPException(status_code=503, detail="数据库未启用")
-
-        from app.services.db_service import DBService
-
-        async with database.session() as session:
-            db_service = DBService(session)
-            repo_obj = await db_service.get_repository(owner, repo)
-            global_cfg = await db_service.get_global_issue_config()
-            default_engine = "forge"
-            repo_cfg = None
-            if repo_obj:
-                repo_cfg = await db_service.get_repo_specific_issue_config(repo_obj.id)
-            resolved = resolve_issue_config(
-                repo_cfg, global_cfg, default_engine=default_engine
-            )
-            return _serialize_issue_config_response(
-                resolved, repo_cfg, global_cfg, default_engine
-            )
-
-    @api_router.put("/repos/{owner}/{repo}/issue-config")
-    async def update_repo_issue_config(
-        owner: str, repo: str, payload: IssueConfigRequest, request: Request
-    ):
-        """保存仓库的 Issue 分析配置。"""
-        await _require_repo_setup_permission(owner, repo, request)
-        database = getattr(request.state, "database", None)
-        if not database:
-            raise HTTPException(status_code=503, detail="数据库未启用")
-
-        from app.services.db_service import DBService
-
-        async with database.session() as session:
-            db_service = DBService(session)
-            default_engine = "forge"
-
-            repo_obj = await db_service.get_or_create_repository(owner, repo)
-            global_cfg = await db_service.get_global_issue_config()
-
-            if payload.inherit_global:
-                repo_cfg = await db_service.get_repo_specific_issue_config(repo_obj.id)
-                if repo_cfg:
-                    clear_issue_provider_overrides(repo_cfg)
-                    if not has_non_provider_issue_settings(repo_cfg):
-                        await db_service.clear_repo_issue_config(repo_obj.id)
-                resolved = resolve_issue_config(
-                    None, global_cfg, default_engine=default_engine
-                )
-                return _serialize_issue_config_response(
-                    resolved, None, global_cfg, default_engine
-                )
-
-            engine = (payload.engine or default_engine).strip() or default_engine
-            if engine not in context.review_engine.registry.list_issue_providers():
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"引擎 {engine} 暂不支持 Issue 分析",
-                )
-
-            config = await db_service.upsert_issue_config(
-                repository_id=repo_obj.id,
-                config_name=f"{owner}/{repo}",
-                engine=engine,
-                model=payload.model,
-                api_url=payload.api_url,
-                api_key=payload.api_key,
-                wire_api=payload.wire_api,
-                temperature=payload.temperature,
-                max_tokens=payload.max_tokens,
-                custom_prompt=payload.custom_prompt,
-                default_focus=payload.default_focus,
-            )
-
-            resolved = resolve_issue_config(
-                config, global_cfg, default_engine=default_engine
-            )
-            return _serialize_issue_config_response(
-                resolved, config, global_cfg, default_engine
-            )
-
-    @api_router.get("/config/issue-global")
-    async def get_global_issue_config(request: Request):
-        """获取全局 Issue 分析配置。"""
-        context.auth_manager.require_session(request)
-        database = getattr(request.state, "database", None)
-        if not database:
-            raise HTTPException(status_code=503, detail="数据库未启用")
-
-        from app.services.db_service import DBService
-
-        async with database.session() as session:
-            db_service = DBService(session)
-            global_cfg = await db_service.get_global_issue_config()
-            default_engine = "forge"
-            resolved = resolve_issue_config(
-                None, global_cfg, default_engine=default_engine
-            )
-            if not global_cfg:
-                return {
-                    "configured": False,
-                    "engine": default_engine,
-                    "model": None,
-                    "api_url": None,
-                    "has_api_key": False,
-                    "temperature": None,
-                    "max_tokens": None,
-                    "custom_prompt": None,
-                    "default_focus": resolved.default_focus,
-                }
-            return {
-                "configured": bool(
-                    global_cfg.api_url or global_cfg.api_key or global_cfg.model
-                ),
-                "engine": global_cfg.engine or default_engine,
-                "model": global_cfg.model,
-                "api_url": global_cfg.api_url,
-                "has_api_key": bool(global_cfg.api_key),
-                "temperature": global_cfg.temperature,
-                "max_tokens": global_cfg.max_tokens,
-                "custom_prompt": global_cfg.custom_prompt,
-                "default_focus": resolved.default_focus,
-            }
-
-    @api_router.put("/config/issue-global")
-    async def update_global_issue_config(
-        payload: IssueConfigRequest,
-        request: Request,
-        admin: User = Depends(admin_required("config", "write")),
-    ):
-        """更新全局 Issue 分析配置。"""
-        del admin
-        database = getattr(request.state, "database", None)
-        if not database:
-            raise HTTPException(status_code=503, detail="数据库未启用")
-
-        from app.services.db_service import DBService
-
-        async with database.session() as session:
-            db_service = DBService(session)
-            default_engine = "forge"
-            engine = (payload.engine or default_engine).strip() or default_engine
-            if engine not in context.review_engine.registry.list_issue_providers():
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"引擎 {engine} 暂不支持 Issue 分析",
-                )
-
-            config = await db_service.upsert_issue_config(
-                repository_id=None,
-                config_name="global-issue-default",
-                engine=engine,
-                model=payload.model,
-                api_url=payload.api_url,
-                api_key=payload.api_key,
-                wire_api=payload.wire_api,
-                temperature=payload.temperature,
-                max_tokens=payload.max_tokens,
-                custom_prompt=payload.custom_prompt,
-                default_focus=payload.default_focus,
-                is_default=True,
-            )
-
-            return {
-                "configured": bool(config.api_url or config.api_key or config.model),
-                "engine": config.engine,
-                "model": config.model,
-                "api_url": config.api_url,
-                "has_api_key": bool(config.api_key),
-                "temperature": config.temperature,
-                "max_tokens": config.max_tokens,
-                "custom_prompt": config.custom_prompt,
-                "default_focus": config.get_focus(),
-            }
 
     @api_router.get("/repos/{owner}/{repo}/config-health")
     async def get_repo_config_health(owner: str, repo: str, request: Request):
