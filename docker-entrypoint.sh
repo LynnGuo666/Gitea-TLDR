@@ -5,14 +5,22 @@ echo "=========================================="
 echo "LCPU AI Reviewer - 启动脚本"
 echo "=========================================="
 
+WORK_DIR="${WORK_DIR:-/app/review-workspace}"
+
+# 以 root 启动时：修复工作目录属主后降权到 appuser 重新执行
+if [ "$(id -u)" = "0" ]; then
+    mkdir -p "$WORK_DIR"
+    chown -R 1000:1000 "$WORK_DIR"
+    exec gosu 1000 "$0" "$@"
+fi
+
 # 等待工作目录就绪
-mkdir -p "${WORK_DIR:-/app/review-workspace}"
+mkdir -p "$WORK_DIR"
 
 # 运行数据库迁移
 echo "正在运行数据库迁移..."
 if [ -f "/app/alembic.ini" ]; then
     cd /app
-    # 使用 Python 的 alembic 命令行工具运行迁移
     python -m alembic upgrade head
     echo "数据库迁移完成"
 else
@@ -23,7 +31,6 @@ echo "=========================================="
 echo "启动应用服务..."
 echo "=========================================="
 
-# 启动应用
 exec uvicorn app.main:app \
   --host "${HOST:-0.0.0.0}" \
   --port "${PORT:-8000}" \

@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     ca-certificates \
+    gosu \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -39,7 +40,5 @@ RUN groupadd -r appuser && useradd -r -g appuser -u 1000 -d /app appuser \
     && chown -R appuser:appuser /app
 
 EXPOSE 8000
-
-USER appuser
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
