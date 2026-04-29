@@ -2,7 +2,11 @@
 Webhook处理模块
 """
 
+import asyncio
+import json
 import logging
+import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 from app.core import settings, runtime_settings
@@ -155,26 +159,142 @@ class WebhookHandler:
             logger.error(f"处理PR异常: {e}", exc_info=True)
             return False
 
+    async def _process_with_retry(
+        self,
+        payload: Dict[str, Any],
+        event_type: str,
+        handler_func,
+        max_retries: int = 3,
+        base_delay: float = 5.0,
+    ):
+        """带重试的 Webhook 处理包装器。
+
+        创建 WebhookLog 记录，失败时自动重试，成功或超过重试次数后更新日志。
+        """
+        repo_data = payload.get("repository", {})
+        owner = repo_data.get("owner", {}).get("login")
+        repo_name = repo_data.get("name")
+        request_id = str(uuid.uuid4())[:8]
+
+        repository_id = 0
+        if self.database and owner and repo_name:
+            try:
+                async with self.database.session() as session:
+                    db_service = DBService(session)
+                    repo = await db_service.get_repository(owner, repo_name)
+                    if repo:
+                        repository_id = repo.id
+            except Exception:
+                pass
+
+        log_id: Optional[int] = None
+        if self.database:
+            try:
+                async with self.database.session() as session:
+                    db_service = DBService(session)
+                    log = await db_service.create_webhook_log(
+                        request_id=request_id,
+                        repository_id=repository_id,
+                        event_type=event_type,
+                        payload=json.dumps(payload, ensure_ascii=False),
+                        status="processing",
+                    )
+                    log_id = log.id
+            except Exception as e:
+                logger.warning(f"创建 WebhookLog 失败: {e}")
+
+        last_error: Optional[str] = None
+        for attempt in range(max_retries + 1):
+            start_time = time.monotonic()
+            try:
+                success = await handler_func()
+                elapsed_ms = int((time.monotonic() - start_time) * 1000)
+
+                if log_id and self.database:
+                    await self._update_log(
+                        log_id,
+                        status="success" if success else "error",
+                        processing_time_ms=elapsed_ms,
+                        error_message=None if success else "handler returned False",
+                    )
+                return
+
+            except Exception as e:
+                elapsed_ms = int((time.monotonic() - start_time) * 1000)
+                last_error = str(e)[:1000]
+                logger.error(
+                    f"Webhook 处理失败 (尝试 {attempt + 1}/{max_retries + 1}): {last_error}"
+                )
+
+                if log_id and self.database:
+                    await self._update_log(
+                        log_id,
+                        status="retrying" if attempt < max_retries else "error",
+                        processing_time_ms=elapsed_ms,
+                        error_message=last_error,
+                        increment_retry=True,
+                    )
+
+                if attempt < max_retries:
+                    delay = base_delay * (2 ** attempt)
+                    logger.info(f"将在 {delay:.1f}s 后重试...")
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        f"Webhook 处理最终失败 (request_id={request_id}): {last_error}"
+                    )
+
+    async def _update_log(
+        self,
+        log_id: int,
+        status: str,
+        processing_time_ms: int,
+        error_message: Optional[str] = None,
+        increment_retry: bool = False,
+    ):
+        try:
+            async with self.database.session() as session:
+                db_service = DBService(session)
+                await db_service.update_webhook_log(
+                    log_id=log_id,
+                    status=status,
+                    error_message=error_message,
+                    processing_time_ms=processing_time_ms,
+                    increment_retry=increment_retry,
+                )
+        except Exception:
+            pass
+
     async def process_webhook_async(
         self,
         payload: Dict[str, Any],
         features: Optional[List[str]],
         focus_areas: Optional[List[str]],
     ):
-        """
-        异步处理webhook（后台任务）
+        """异步处理PR webhook（后台任务，带重试）"""
+        await self._process_with_retry(
+            payload=payload,
+            event_type="pull_request",
+            handler_func=lambda: self.handle_pull_request(
+                payload, features, focus_areas
+            ),
+        )
 
-        Args:
-            payload: Webhook payload
-            features: 启用的功能列表（None 表示按仓库配置回退）
-            focus_areas: 审查重点列表（None 表示按仓库配置回退）
-        """
-        try:
-            await self.handle_pull_request(payload, features, focus_areas)
-        except Exception as e:
-            logger.error(f"异步处理webhook异常: {e}", exc_info=True)
+    async def process_comment_async(self, payload: Dict[str, Any]):
+        """异步处理评论webhook（后台任务，带重试）"""
+        await self._process_with_retry(
+            payload=payload,
+            event_type="issue_comment",
+            handler_func=lambda: self.handle_issue_comment(payload),
+        )
 
-    async def handle_issue_comment(self, payload: Dict[str, Any]) -> bool:
+    async def process_issue_async(self, payload: Dict[str, Any]):
+        """异步处理Issue webhook（后台任务，带重试）"""
+        await self._process_with_retry(
+            payload=payload,
+            event_type="issues",
+            handler_func=lambda: self.handle_issue(payload),
+        )
         """
         处理 Issue 评论事件（用于手动触发 PR 审查或 Issue 分析）
 
@@ -798,27 +918,6 @@ class WebhookHandler:
         if not bot_username:
             return False
         return str(username).strip().lower() == str(bot_username).strip().lower()
-
-    async def process_comment_async(self, payload: Dict[str, Any]):
-        """
-        异步处理评论webhook（后台任务）
-
-        Args:
-            payload: Webhook payload
-        """
-        try:
-            await self.handle_issue_comment(payload)
-        except Exception as e:
-            logger.error(f"异步处理评论异常: {e}", exc_info=True)
-
-    async def process_issue_async(self, payload: Dict[str, Any]):
-        """
-        异步处理普通 Issue webhook（后台任务）
-        """
-        try:
-            await self.handle_issue(payload)
-        except Exception as e:
-            logger.error(f"异步处理 Issue 异常: {e}", exc_info=True)
 
     def _build_review_comments(
         self, analysis_result: ReviewResult

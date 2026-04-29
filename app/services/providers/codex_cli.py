@@ -80,9 +80,6 @@ class CodexProvider(ReviewProvider):
     PROVIDER_NAME = "codex_cli"
     DISPLAY_NAME = "Codex CLI"
 
-    # Codex exec 默认使用的模型
-    DEFAULT_MODEL = "gpt-5.3-codex"
-
     # diff 内容嵌入 prompt 时的最大字符数（防止超长 prompt）
     MAX_DIFF_CHARS = 200_000
 
@@ -222,7 +219,7 @@ JSON结构示例：
         codex_home = tempfile.mkdtemp(
             prefix="codex_home_", dir=self._resolve_codex_home_parent()
         )
-        resolved_model = model or self.DEFAULT_MODEL
+        resolved_model = model
         resolved_wire_api = wire_api or _DEFAULT_WIRE_API
 
         lines = [
@@ -352,11 +349,16 @@ JSON结构示例：
                 logger.debug(f"[{self.PROVIDER_NAME} Prompt]\n{prompt}")
                 logger.debug(f"[Diff Content Length] {len(diff_content)} characters")
 
-            resolved_model = model or self.DEFAULT_MODEL
+            if not model:
+                self._set_last_error(
+                    "Codex CLI 未配置模型名，请在仓库设置或全局设置中指定模型"
+                )
+                return None
+
             codex_home = self._build_codex_home(
                 api_url,
                 api_key,
-                model=resolved_model,
+                model=model,
                 wire_api=wire_api,
             )
             env = self._build_env(codex_home, api_key)
@@ -365,7 +367,7 @@ JSON结构示例：
                 prompt,
                 env,
                 cwd=str(repo_path),
-                model_name=resolved_model,
+                model_name=model,
             )
 
         except Exception as e:
@@ -470,7 +472,18 @@ JSON结构示例：
                 env=env,
             )
 
-            stdout, stderr = await process.communicate(input=prompt.encode("utf-8"))
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(input=prompt.encode("utf-8")),
+                    timeout=300.0,
+                )
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+                self._set_last_error(
+                    "Codex CLI 执行超时（300s），请检查网络或 API 配置"
+                )
+                return None
 
             if process.returncode != 0:
                 stderr_text = stderr.decode(errors="ignore").strip()

@@ -20,6 +20,8 @@ class GiteaClient:
         "cookie",
     }
 
+    _REQUEST_TIMEOUT = 60.0
+
     def __init__(self, base_url: str, token: str, debug: bool = False):
         """
         初始化Gitea客户端
@@ -111,7 +113,7 @@ class GiteaClient:
 
         try:
             self._log_debug("GET", url)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.get(url, headers=self.headers, params=params)
                 self._log_response(response)
                 response.raise_for_status()
@@ -144,7 +146,7 @@ class GiteaClient:
 
         try:
             self._log_debug("GET", url)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.get(url, headers=self.headers, params=params)
                 self._log_response(response)
                 response.raise_for_status()
@@ -177,7 +179,7 @@ class GiteaClient:
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/pulls/{pr_number}"
         try:
             self._log_debug("GET", url)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.get(url, headers=self.headers)
                 self._log_response(response)
                 response.raise_for_status()
@@ -203,7 +205,7 @@ class GiteaClient:
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/pulls/{pr_number}.diff"
         try:
             self._log_debug("GET", url)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.get(url, headers=self.headers)
                 self._log_response(response)
                 response.raise_for_status()
@@ -229,7 +231,7 @@ class GiteaClient:
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/pulls/{pr_number}/files"
         try:
             self._log_debug("GET", url)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.get(url, headers=self.headers)
                 self._log_response(response)
                 response.raise_for_status()
@@ -257,7 +259,7 @@ class GiteaClient:
         payload = {"body": body}
         try:
             self._log_debug("POST", url, json=payload)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(url, headers=self.headers, json=payload)
                 self._log_response(response)
                 response.raise_for_status()
@@ -300,7 +302,7 @@ class GiteaClient:
         payload = {"body": body}
         try:
             self._log_debug("PATCH", url, json=payload)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.patch(url, headers=self.headers, json=payload)
                 self._log_response(response)
                 response.raise_for_status()
@@ -352,7 +354,7 @@ class GiteaClient:
 
         try:
             self._log_debug("POST", url, json=payload)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(url, headers=self.headers, json=payload)
                 self._log_response(response)
                 response.raise_for_status()
@@ -405,7 +407,7 @@ class GiteaClient:
 
         try:
             self._log_debug("POST", url, json=payload)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(url, headers=self.headers, json=payload)
                 self._log_response(response)
                 response.raise_for_status()
@@ -447,7 +449,7 @@ class GiteaClient:
 
         try:
             self._log_debug("POST", url, json=payload)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(url, headers=self.headers, json=payload)
                 self._log_response(response)
                 response.raise_for_status()
@@ -481,7 +483,7 @@ class GiteaClient:
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}"
         try:
             self._log_debug("GET", url)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.get(url, headers=self.headers)
                 self._log_response(response)
                 response.raise_for_status()
@@ -519,7 +521,7 @@ class GiteaClient:
         url = f"{self.base_url}/api/v1/orgs/{org}"
         try:
             self._log_debug("GET", url)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.get(url, headers=self.headers)
                 self._log_response(response)
                 if response.status_code == 404:
@@ -535,7 +537,7 @@ class GiteaClient:
         url = f"{self.base_url}/api/v1/orgs/{org}/memberships/{username}"
         try:
             self._log_debug("GET", url)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.get(url, headers=self.headers)
                 self._log_response(response)
                 if response.status_code == 404:
@@ -570,7 +572,7 @@ class GiteaClient:
 
         try:
             self._log_debug("GET", url)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.get(url, headers=self.headers, params=params)
                 self._log_response(response)
                 response.raise_for_status()
@@ -585,7 +587,7 @@ class GiteaClient:
         url = f"{self.base_url}/api/v1/user/repos"
         try:
             self._log_debug("GET", url)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.get(url, headers=self.headers)
                 self._log_response(response)
                 response.raise_for_status()
@@ -602,7 +604,7 @@ class GiteaClient:
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/hooks"
         try:
             self._log_debug("GET", url)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.get(url, headers=self.headers)
                 self._log_response(response)
                 response.raise_for_status()
@@ -619,7 +621,7 @@ class GiteaClient:
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/hooks"
         try:
             self._log_debug("POST", url, json=hook)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(url, headers=self.headers, json=hook)
                 self._log_response(response)
                 response.raise_for_status()
@@ -637,7 +639,7 @@ class GiteaClient:
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/hooks/{hook_id}"
         try:
             self._log_debug("PATCH", url, json=hook)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.patch(url, headers=self.headers, json=hook)
                 self._log_response(response)
                 response.raise_for_status()
@@ -651,7 +653,7 @@ class GiteaClient:
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/hooks/{hook_id}"
         try:
             self._log_debug("DELETE", url)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.delete(url, headers=self.headers)
                 self._log_response(response)
                 return response.status_code in (200, 204)
@@ -665,7 +667,7 @@ class GiteaClient:
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/collaborators/{username}"
         try:
             self._log_debug("PUT", url)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.put(url, headers=self.headers)
                 self._log_response(response)
                 response.raise_for_status()
@@ -729,7 +731,7 @@ class GiteaClient:
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/labels"
         try:
             self._log_debug("GET", url)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.get(url, headers=self.headers)
                 self._log_response(response)
                 response.raise_for_status()
@@ -751,7 +753,7 @@ class GiteaClient:
         payload = {"name": name, "color": color, "description": description}
         try:
             self._log_debug("POST", url, json=payload)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(url, headers=self.headers, json=payload)
                 self._log_response(response)
                 if response.status_code in (409, 422):
@@ -808,7 +810,7 @@ class GiteaClient:
         payload = {"labels": labels}
         try:
             self._log_debug("POST", url, json=payload)
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(url, headers=self.headers, json=payload)
                 self._log_response(response)
                 response.raise_for_status()

@@ -22,7 +22,7 @@ import {
   beginOAuthLogin,
   requestLogout,
 } from '../lib/auth';
-import { useWindowFocus } from '../lib/hooks';
+import { useWindowFocus, useLocalStorage } from '../lib/hooks';
 
 type LayoutProps = {
   children: ReactNode;
@@ -112,12 +112,21 @@ export default function Layout({ children }: LayoutProps) {
     if (isWindowFocused) refreshAuth();
   }, [isWindowFocused, refreshAuth]);
 
+  const [alphaToastShown, setAlphaToastShown] = useLocalStorage<boolean>(
+    'gitea_tldr_alpha_toast_shown',
+    false,
+  );
+
   useEffect(() => {
-    addToast({
-      title: '当前为 Alpha 内测版本',
-      description: '功能仍在迭代中，界面与交互可能会调整。',
-      color: 'warning',
-    });
+    if (!alphaToastShown) {
+      addToast({
+        title: '当前为 Alpha 内测版本',
+        description: '功能仍在迭代中，界面与交互可能会调整。',
+        color: 'warning',
+        timeout: 8000,
+      });
+      setAlphaToastShown(true);
+    }
   }, []);
 
   const beginLogin = useCallback(async () => {

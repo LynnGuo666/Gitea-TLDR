@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "1.27.0"
-__release_date__ = "2026-04-20"
+__version__ = "1.28.0"
+__release_date__ = "2026-04-24"
 __author__ = "LynnGuo666"
 
 
@@ -17,6 +17,21 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.28.0": {
+        "date": "2026-04-24",
+        "changes": [
+            "安全：Docker 容器切换到非 root 用户运行，增加内存/CPU 资源限制，端口绑定到 localhost，隔离 Docker 网络",
+            "安全：移除 Codex CLI 不存在的 \"gpt-5.3-codex\" 默认模型，要求显式配置模型名",
+            "修复：Codex CLI 子进程添加 300s 超时，避免调用挂起导致永久等待",
+            "修复：GiteaClient 全部 23 处 HTTP 请求添加 60s 超时，网络故障不再卡死",
+            "修复：所有 Webhook 处理入口写入持久化 WebhookLog，失败时自动重试（3 次指数退避）",
+            "修复：应用启动时自动恢复未完成的 Webhook 处理",
+            "修复：前端 Error Boundary 防止渲染错误导致全应用崩溃",
+            "修复：repo 配置页面添加 router.isReady 守卫，避免路由参数未就绪时发起请求",
+            "优化：Alpha 内测提示改为 localStorage 控制，仅首次访问时显示",
+            "维护：同步更新后端与前端版本号到 1.28.0",
+        ],
+    },
     "1.27.0": {
         "date": "2026-04-20",
         "changes": [

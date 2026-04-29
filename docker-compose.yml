@@ -4,19 +4,33 @@ services:
     pull_policy: always
     container_name: gitea-pr-reviewer
     env_file:
-      - .env  # 从 .env 文件读取所有环境变量
+      - .env
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
-      # 持久化工作目录（可选）
       - pr-reviewer-data:/app/review-workspace
     restart: unless-stopped
+    user: "1000:1000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.5"
+    networks:
+      - gitea-tldr-net
+
+networks:
+  gitea-tldr-net:
+    driver: bridge
 
 volumes:
   pr-reviewer-data:

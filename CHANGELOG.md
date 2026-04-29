@@ -4,6 +4,55 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [1.28.0] - 2026-04-24
+
+### 安全 (Security)
+
+- **Docker 安全加固**: 容器切换到非 root 用户运行，增加内存/CPU 资源限制，端口绑定到 localhost，隔离 Docker 网络
+- **Codex 模型默认值修复**: 移除不存在的 `"gpt-5.3-codex"` 默认模型，要求显式配置，避免运行时静默失败
+
+### 修复 (Fixed)
+
+- **Codex CLI 超时**: 子进程添加 300s 超时保护，与 Claude Code 行为对齐，避免永久挂起
+- **GiteaClient 超时**: 全部 API 调用添加 60s 请求超时（23 处 `AsyncClient`），网络故障不再卡死
+- **Webhook 可靠性**: 处理写入持久化 `WebhookLog` 表，失败自动重试（3 次指数退避：5s、10s、20s），应用启动时自动恢复未完成的 webhook
+- **前端 Error Boundary**: 新增 `ErrorBoundary` 类组件包裹整个页面，防止渲染错误导致全应用白屏
+- **repo 页面路由守卫**: 补上 `router.isReady` 检查，避免动态路由参数未就绪时发起无效请求
+
+### 优化 (Improved)
+
+- **Alpha 提示一次性显示**: 内测版本 Toast 改为 `localStorage` 控制，仅首次访问时弹出，不再每次导航都打扰用户
+- **启动日志**: 多 worker 支持（`UVICORN_WORKERS`）、可配日志级别（`LOG_LEVEL`）和优雅关闭超时（`GRACEFUL_TIMEOUT`）
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.28.0`
+
+## [1.27.0] - 2026-04-20
+
+### 新增 (Added)
+
+- **Issue 配置独立**: Issue 分析拥有独立的 `issue_configs` 表与 `/issue-config`、`/config/issue-global` 端点，仓库可与 PR 审查配置解耦
+- **Issue 分析重点**: `/issue` 命令支持 `--focus bug,duplicate,design,performance,question`，仓库与全局均可设置默认分析重点
+- **Forge 分析降级**: 引入 `submit_analysis` 三层降级（tool → text_json → raw_text），前端详情展示 `fallback_mode` 降级标签
+- **自动标签**: 分析成功后自动打 `ai-analyzed` 标签；若识别到相似 Issue 额外打 `possibly-duplicate`
+
+### 修复 (Fixed)
+
+- **Issue 幂等保护**: Issue 分析链路接入幂等保护，同一 Issue 的 in-flight / 5 分钟内成功状态会被拒绝重复触发
+- **Bot 自触发防护**: WebhookHandler 全面过滤 bot 自触发（PR/Issue/评论），避免机器人循环
+- **时区修复**: `issue_sessions.started_at / completed_at` 迁移为 timezone-aware，修正时长统计的时区黑魔法
+
+### 优化 (Improved)
+
+- **相似 Issue 提取**: 引入 jieba 中文分词，支持中英文混合文本的关键词命中
+- **RepoManager 并发锁**: 克隆工作区增加基于 `(owner/repo/kind/id)` 的并发锁，避免同一工作区并行克隆冲突
+- **日志脱敏**: Issue 分析日志不再打印标题，仅输出 `owner/repo#number`
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `1.27.0`
+
 ## [1.26.6] - 2026-04-16
 
 ### 增强 (Improved)

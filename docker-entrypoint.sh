@@ -24,4 +24,10 @@ echo "启动应用服务..."
 echo "=========================================="
 
 # 启动应用
-exec uvicorn app.main:app --host "${HOST:-0.0.0.0}" --port "${PORT:-8000}"
+exec uvicorn app.main:app \
+  --host "${HOST:-0.0.0.0}" \
+  --port "${PORT:-8000}" \
+  --workers "${UVICORN_WORKERS:-1}" \
+  --log-level "${LOG_LEVEL:-info}" \
+  --graceful-timeout "${GRACEFUL_TIMEOUT:-30}" \
+  --timeout-keep-alive "${KEEP_ALIVE:-60}"

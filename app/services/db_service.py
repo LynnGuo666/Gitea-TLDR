@@ -19,6 +19,7 @@ from app.models import (
     ReviewSession,
     User,
     UsageStat,
+    WebhookLog,
 )
 
 logger = logging.getLogger(__name__)
@@ -778,6 +779,84 @@ class DBService:
         self.session.add(stat)
         await self.session.flush()
         return stat
+
+    # ==================== WebhookLog 操作 ====================
+
+    async def create_webhook_log(
+        self,
+        request_id: str,
+        repository_id: int,
+        event_type: str,
+        payload: str,
+        status: str = "processing",
+    ) -> WebhookLog:
+        """创建 Webhook 日志记录。"""
+        import time
+        from datetime import datetime, timezone
+
+        log = WebhookLog(
+            request_id=request_id,
+            repository_id=repository_id,
+            event_type=event_type,
+            payload=payload,
+            status=status,
+            processing_time_ms=0,
+            retry_count=0,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        self.session.add(log)
+        await self.session.flush()
+        return log
+
+    async def update_webhook_log(
+        self,
+        log_id: int,
+        status: Optional[str] = None,
+        error_message: Optional[str] = None,
+        processing_time_ms: Optional[int] = None,
+        increment_retry: bool = False,
+    ) -> Optional[WebhookLog]:
+        """更新 Webhook 日志记录。"""
+        from datetime import datetime, timezone
+
+        stmt = select(WebhookLog).where(WebhookLog.id == log_id)
+        result = await self.session.execute(stmt)
+        log = result.scalar_one_or_none()
+        if not log:
+            return None
+
+        if status is not None:
+            log.status = status
+        if error_message is not None:
+            log.error_message = error_message
+        if processing_time_ms is not None:
+            log.processing_time_ms = processing_time_ms
+        if increment_retry:
+            log.retry_count = (log.retry_count or 0) + 1
+
+        log.updated_at = datetime.now(timezone.utc)
+        await self.session.flush()
+        return log
+
+    async def get_pending_webhook_logs(
+        self, min_age_seconds: int = 60, max_age_hours: int = 6
+    ) -> List[WebhookLog]:
+        """获取状态为 processing 且超时的 Webhook 日志（用于启动恢复）。"""
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime.now(timezone.utc)
+        max_age = now - timedelta(hours=max_age_hours)
+        min_age = now - timedelta(seconds=min_age_seconds)
+
+        stmt = select(WebhookLog).where(
+            WebhookLog.status == "processing",
+            WebhookLog.created_at >= max_age,
+            WebhookLog.created_at <= min_age,
+        )
+        stmt = stmt.order_by(WebhookLog.created_at.asc())
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
 
     async def get_usage_stats(
         self,

@@ -329,7 +329,7 @@ export default function RepoConfigPage() {
   const canEditRepo = webhookStatus?.can_setup_webhook ?? true;
 
   useEffect(() => {
-    if (owner && repo && !requiresLogin) {
+    if (router.isReady && owner && repo && !requiresLogin) {
       fetchWebhookStatus();
       fetchProviderConfig();
       fetchPulls();

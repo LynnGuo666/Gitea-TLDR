@@ -66,6 +66,79 @@ async def close_database() -> None:
         _database = None
 
 
+async def _recover_pending_webhooks(context: AppContext) -> None:
+    """启动时恢复未完成的 Webhook 处理。"""
+    import json as _json
+    import time as _time
+
+    if not context.database:
+        return
+
+    try:
+        from app.services.db_service import DBService
+
+        async with context.database.session() as session:
+            db_service = DBService(session)
+            pending = await db_service.get_pending_webhook_logs()
+    except Exception as e:
+        logger.warning(f"查询 pending webhook 失败: {e}")
+        return
+
+    if not pending:
+        return
+
+    logger.info(f"发现 {len(pending)} 个未完成的 webhook，开始恢复...")
+    recovered = 0
+    for log in pending:
+        try:
+            payload = _json.loads(log.payload)
+        except Exception:
+            logger.warning(f"webhook payload 解析失败: log_id={log.id}")
+            continue
+
+        event_type = log.event_type
+        try:
+            async with context.database.session() as session:
+                db_service = DBService(session)
+                await db_service.update_webhook_log(
+                    log_id=log.id,
+                    status="retrying",
+                )
+        except Exception:
+            pass
+
+        try:
+            _time_start = _time.monotonic()
+            if event_type == "pull_request":
+                await context.webhook_handler.handle_pull_request(
+                    payload, None, None
+                )
+            elif event_type == "issue_comment":
+                await context.webhook_handler.handle_issue_comment(payload)
+            elif event_type == "issues":
+                await context.webhook_handler.handle_issue(payload)
+            else:
+                logger.warning(f"未知 webhook 事件类型: {event_type}")
+                continue
+
+            _elapsed_ms = int((_time.monotonic() - _time_start) * 1000)
+            try:
+                async with context.database.session() as session:
+                    db_service = DBService(session)
+                    await db_service.update_webhook_log(
+                        log_id=log.id,
+                        status="success",
+                        processing_time_ms=_elapsed_ms,
+                    )
+            except Exception:
+                pass
+            recovered += 1
+        except Exception as e:
+            logger.error(f"恢复 webhook 失败 (log_id={log.id}): {e}")
+
+    logger.info(f"Webhook 恢复完成: {recovered}/{len(pending)} 成功")
+
+
 def build_context(database: Database | None = None) -> AppContext:
     """初始化所有服务组件并封装为应用上下文。"""
     gitea_client = GiteaClient(settings.gitea_url, settings.gitea_token, settings.debug)
@@ -182,6 +255,14 @@ def create_app() -> FastAPI:
                         logger.info("管理后台已启用")
                 except Exception as e:
                     logger.warning(f"管理员初始化失败: {e}")
+
+            try:
+                import asyncio as _asyncio
+                import json as _json
+
+                _asyncio.ensure_future(_recover_pending_webhooks(context))
+            except Exception as e:
+                logger.warning(f"Webhook 恢复启动失败: {e}")
 
         except Exception as e:
             logger.error(f"数据库初始化失败: {e}", exc_info=True)
