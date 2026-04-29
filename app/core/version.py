@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "1.29.1"
-__release_date__ = "2026-04-29"
+__version__ = "1.30.0"
+__release_date__ = "2026-04-30"
 __author__ = "LynnGuo666"
 
 
@@ -17,6 +17,20 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "1.30.0": {
+        "date": "2026-04-30",
+        "changes": [
+            "新增：ForgeSession 数据模型，记录 Forge agentic loop 完整运行状态（scenario、status、turns、tool_calls_count、messages_json、token 用量）",
+            "新增：DB Service 提供 create_forge_session / complete_forge_session / list_forge_sessions / get_forge_session 方法",
+            "新增：webhook_handler 与 issue_analysis_service 在调用 Forge 前创建 ForgeSession，完成后记录 messages 与用量",
+            "新增：API 端点 GET /api/forge/sessions（列表）与 GET /api/forge/sessions/{session_id}（详情含完整 messages）",
+            "新增：前端 /forge 页面，展示 Forge 会话列表，支持 all/review/issue 筛选，可展开查看完整思维链与工具调用历史",
+            "新增：前端导航栏新增 Forge 会话入口（Cpu 图标）",
+            "新增：ForgeProvider 在 usage_metadata 中传递 forge_messages，供上层记录",
+            "新增：Alembic 迁移 b9e4f1a2c3d5，创建 forge_sessions 表及索引",
+            "维护：同步更新前后端版本号到 1.30.0",
+        ],
+    },
     "1.29.1": {
         "date": "2026-04-29",
         "changes": [

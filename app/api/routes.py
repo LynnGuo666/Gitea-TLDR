@@ -1266,6 +1266,113 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
 
             return _serialize_issue_detail(issue_session)
 
+    # ==================== Forge 会话 API ====================
+
+    def _serialize_forge_session_summary(fs):
+        """序列化 ForgeSession 摘要（不含 messages）。"""
+        review_info = None
+        if fs.review_session:
+            review_info = {
+                "id": fs.review_session.id,
+                "pr_number": fs.review_session.pr_number,
+                "pr_title": fs.review_session.pr_title,
+            }
+        issue_info = None
+        if fs.issue_session:
+            issue_info = {
+                "id": fs.issue_session.id,
+                "issue_number": fs.issue_session.issue_number,
+                "issue_title": fs.issue_session.issue_title,
+            }
+        return {
+            "session_id": fs.session_id,
+            "scenario": fs.scenario,
+            "status": fs.status,
+            "model": fs.model,
+            "turns": fs.turns,
+            "tool_calls_count": fs.tool_calls_count,
+            "input_tokens": fs.input_tokens,
+            "output_tokens": fs.output_tokens,
+            "cache_creation_input_tokens": fs.cache_creation_input_tokens,
+            "cache_read_input_tokens": fs.cache_read_input_tokens,
+            "started_at": fs.started_at.isoformat() if fs.started_at else None,
+            "completed_at": fs.completed_at.isoformat() if fs.completed_at else None,
+            "duration_seconds": fs.duration_seconds,
+            "error": fs.error,
+            "repo_full_name": (
+                f"{fs.repository.owner}/{fs.repository.repo_name}"
+                if fs.repository
+                else None
+            ),
+            "review_session": review_info,
+            "issue_session": issue_info,
+        }
+
+    @api_router.get("/forge/sessions")
+    async def list_forge_sessions(
+        request: Request,
+        scenario: Optional[str] = Query(None, description="筛选场景: review | issue"),
+        limit: int = Query(50, ge=1, le=200),
+        offset: int = Query(0, ge=0),
+    ):
+        """列出当前用户可见仓库的 Forge 会话列表。"""
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        session_data = context.auth_manager.require_session(request)
+        client = context.auth_manager.build_user_client(session_data)
+        user_repos = await client.list_user_repos()
+        if user_repos is None:
+            raise HTTPException(status_code=502, detail="无法从Gitea获取用户仓库列表")
+
+        async with database.session() as db_session:
+            db_service = DBService(db_session)
+            repo_ids = await _resolve_accessible_repo_ids(db_service, user_repos)
+            sessions = await db_service.list_forge_sessions(
+                repository_ids=repo_ids if repo_ids else None,
+                scenario=scenario,
+                limit=limit,
+                offset=offset,
+            )
+            return {
+                "sessions": [_serialize_forge_session_summary(fs) for fs in sessions],
+                "total": len(sessions),
+                "limit": limit,
+                "offset": offset,
+            }
+
+    @api_router.get("/forge/sessions/{session_id}")
+    async def get_forge_session(session_id: str, request: Request):
+        """获取单条 Forge 会话详情（含完整 messages）。"""
+        database = getattr(request.state, "database", None)
+        if not database:
+            raise HTTPException(status_code=503, detail="数据库未启用")
+
+        from app.services.db_service import DBService
+
+        session_data = context.auth_manager.require_session(request)
+        client = context.auth_manager.build_user_client(session_data)
+        user_repos = await client.list_user_repos()
+        if user_repos is None:
+            raise HTTPException(status_code=502, detail="无法从Gitea获取用户仓库列表")
+
+        async with database.session() as db_session:
+            db_service = DBService(db_session)
+            repo_ids = await _resolve_accessible_repo_ids(db_service, user_repos)
+            fs = await db_service.get_forge_session(
+                session_id,
+                repository_ids=repo_ids if repo_ids else None,
+            )
+            if not fs:
+                raise HTTPException(status_code=404, detail="Forge 会话不存在")
+
+            data = _serialize_forge_session_summary(fs)
+            data["messages"] = fs.get_messages()
+            return data
+
     # ==================== 使用量统计 API ====================
 
     @api_router.get("/stats")

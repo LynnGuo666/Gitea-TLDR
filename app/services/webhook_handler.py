@@ -496,6 +496,7 @@ class WebhookHandler:
         gitea_api_calls = 0
         clone_operations = 0
         actor_user_id = None
+        forge_session_str_id: Optional[str] = None
 
         try:
             pr_title = pr_data.get("title")
@@ -710,6 +711,17 @@ class WebhookHandler:
 
             clone_operations += 1
             analysis_mode = "full"
+
+            # Forge 场景：在调用前创建 ForgeSession（status="running"）
+            if engine == "forge" and self.database and repository_id:
+                try:
+                    async with self.database.session() as session:
+                        _db = DBService(session)
+                        _fs = await _db.create_forge_session(repository_id, "review")
+                        forge_session_str_id = _fs.session_id
+                except Exception as _fse:
+                    logger.warning("创建 ForgeSession 失败（非致命）: %s", _fse)
+
             analysis_result = await self.review_engine.analyze_pr(
                 repo_path,
                 diff_content,
@@ -761,6 +773,22 @@ class WebhookHandler:
                             error_message=analysis_error,
                             completed=True,
                         )
+
+                # 完成 ForgeSession（失败）
+                if forge_session_str_id and self.database:
+                    try:
+                        async with self.database.session() as session:
+                            _db = DBService(session)
+                            await _db.complete_forge_session(
+                                forge_session_str_id,
+                                status="failed",
+                                model=model,
+                                review_session_id=review_session_id,
+                                error=analysis_error,
+                            )
+                    except Exception as _fse:
+                        logger.warning("完成 ForgeSession 失败（非致命）: %s", _fse)
+
                 return False
 
             # 根据功能标头发布结果
@@ -879,6 +907,31 @@ class WebhookHandler:
                             clone_operations=clone_operations,
                         )
 
+            # 完成 ForgeSession（成功）
+            if forge_session_str_id and self.database:
+                try:
+                    import json as _json
+
+                    meta = analysis_result.usage_metadata
+                    _msgs = meta.get("forge_messages") or []
+                    async with self.database.session() as session:
+                        _db = DBService(session)
+                        await _db.complete_forge_session(
+                            forge_session_str_id,
+                            status="completed",
+                            model=meta.get("model") or model,
+                            turns=meta.get("turns", 0),
+                            tool_calls_count=meta.get("tool_calls", 0),
+                            messages_json=_json.dumps(_msgs, ensure_ascii=False) if _msgs else None,
+                            input_tokens=meta.get("input_tokens", 0),
+                            output_tokens=meta.get("output_tokens", 0),
+                            cache_creation_input_tokens=meta.get("cache_creation_input_tokens", 0),
+                            cache_read_input_tokens=meta.get("cache_read_input_tokens", 0),
+                            review_session_id=review_session_id,
+                        )
+                except Exception as _fse:
+                    logger.warning("完成 ForgeSession 失败（非致命）: %s", _fse)
+
             logger.info(f"PR审查完成: {owner}/{repo_name}#{pr_number}")
             return success
 
@@ -898,6 +951,20 @@ class WebhookHandler:
                         )
                 except Exception as db_error:
                     logger.error(f"更新数据库记录失败: {db_error}")
+
+            # 完成 ForgeSession（异常）
+            if forge_session_str_id and self.database:
+                try:
+                    async with self.database.session() as session:
+                        _db = DBService(session)
+                        await _db.complete_forge_session(
+                            forge_session_str_id,
+                            status="failed",
+                            review_session_id=review_session_id,
+                            error=str(e),
+                        )
+                except Exception as _fse:
+                    logger.warning("完成 ForgeSession 失败（非致命）: %s", _fse)
 
             return False
 

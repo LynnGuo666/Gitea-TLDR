@@ -251,19 +251,58 @@ class IssueAnalysisService:
             clone_operations += 1
 
             provider = ForgeProvider()
-            result: Optional[IssueResult] = await provider.analyze_issue(
-                repo_path=repo_path,
-                issue_info=issue_data,
-                similar_candidates=similar_issue_candidates,
-                api_url=resolved_config.api_url or DEFAULT_FORGE_BASE_URL,
-                api_key=resolved_api_key,
-                model=resolved_config.model or DEFAULT_FORGE_MODEL,
-                custom_prompt=resolved_config.custom_prompt,
-                focus_areas=effective_focus,
-                temperature=resolved_config.temperature,
-                max_tokens=resolved_config.max_tokens,
-                max_turns=max(1, int(getattr(settings, "forge_max_turns", 5) or 5)),
-            )
+
+            # Forge 场景：在调用前创建 ForgeSession（status="running"）
+            forge_session_str_id: Optional[str] = None
+            if self.database and repository_id:
+                try:
+                    async with self.database.session() as session:
+                        _db_fs = DBService(session)
+                        _fs = await _db_fs.create_forge_session(repository_id, "issue")
+                        forge_session_str_id = _fs.session_id
+                except Exception as _fse:
+                    logger.warning("创建 ForgeSession 失败（非致命）: %s", _fse)
+
+            result: Optional[IssueResult] = None
+            try:
+                result = await provider.analyze_issue(
+                    repo_path=repo_path,
+                    issue_info=issue_data,
+                    similar_candidates=similar_issue_candidates,
+                    api_url=resolved_config.api_url or DEFAULT_FORGE_BASE_URL,
+                    api_key=resolved_api_key,
+                    model=resolved_config.model or DEFAULT_FORGE_MODEL,
+                    custom_prompt=resolved_config.custom_prompt,
+                    focus_areas=effective_focus,
+                    temperature=resolved_config.temperature,
+                    max_tokens=resolved_config.max_tokens,
+                    max_turns=max(1, int(getattr(settings, "forge_max_turns", 5) or 5)),
+                )
+            finally:
+                if forge_session_str_id and self.database:
+                    try:
+                        import json as _json
+
+                        _meta = result.usage_metadata if result else {}
+                        _msgs = _meta.get("forge_messages") or []
+                        async with self.database.session() as session:
+                            _db_fs = DBService(session)
+                            await _db_fs.complete_forge_session(
+                                forge_session_str_id,
+                                status="completed" if result is not None else "failed",
+                                model=_meta.get("model") or (result.model if result else None),
+                                turns=_meta.get("turns", 0),
+                                tool_calls_count=_meta.get("tool_calls", 0),
+                                messages_json=_json.dumps(_msgs, ensure_ascii=False) if _msgs else None,
+                                input_tokens=_meta.get("input_tokens", 0),
+                                output_tokens=_meta.get("output_tokens", 0),
+                                cache_creation_input_tokens=_meta.get("cache_creation_input_tokens", 0),
+                                cache_read_input_tokens=_meta.get("cache_read_input_tokens", 0),
+                                issue_session_id=issue_session_id,
+                                error=provider.last_error if result is None else None,
+                            )
+                    except Exception as _fse2:
+                        logger.warning("完成 ForgeSession 失败（非致命）: %s", _fse2)
 
             self.repo_manager.cleanup_workspace(
                 owner, repo_name, WORKSPACE_KIND, issue_number

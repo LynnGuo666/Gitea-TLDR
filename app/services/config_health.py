@@ -42,6 +42,16 @@ async def check_repo_config_health(
         if resolved.api_key:
             pr_status = "ok"
             pr_message = "PR 审查已配置 API Key"
+    else:
+        # 仓库不存在时也尝试读全局 PR 审查配置
+        global_config = await db_service.get_global_model_config()
+        if global_config is not None:
+            resolved = resolve_provider_config(
+                None, global_config, default_engine="claude_code"
+            )
+            if resolved.api_key:
+                pr_status = "ok"
+                pr_message = "PR 审查已配置 API Key（全局）"
 
     checks.append(
         {

@@ -1,6 +1,7 @@
 from .admin_settings import AdminSettings
 from .api_key import ApiKey, KeyRotationStrategy
 from .base import Base, TimestampMixin
+from .forge_session import ForgeSession
 from .issue_config import DEFAULT_ISSUE_FOCUS, IssueConfig
 from .issue_session import IssueSession
 from .inline_comment import InlineComment
@@ -19,6 +20,7 @@ __all__ = [
     "ModelConfig",
     "IssueConfig",
     "DEFAULT_ISSUE_FOCUS",
+    "ForgeSession",
     "IssueSession",
     "ReviewSession",
     "InlineComment",

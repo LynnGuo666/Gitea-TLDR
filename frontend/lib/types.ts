@@ -153,3 +153,58 @@ export type IssueConfigUpdateRequest = {
   default_focus?: string[];
   inherit_global?: boolean;
 };
+
+// ==================== Forge 会话类型 ====================
+
+export type ForgeMessageContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  | { type: 'tool_result'; tool_use_id: string; content: string | unknown[]; is_error?: boolean };
+
+export type ForgeMessage = {
+  role: 'user' | 'assistant';
+  content: ForgeMessageContentBlock[] | string;
+};
+
+export type ForgeSessionReviewInfo = {
+  id: number;
+  pr_number: number | null;
+  pr_title: string | null;
+};
+
+export type ForgeSessionIssueInfo = {
+  id: number;
+  issue_number: number | null;
+  issue_title: string | null;
+};
+
+export type ForgeSessionSummary = {
+  session_id: string;
+  scenario: 'review' | 'issue' | string;
+  status: 'running' | 'completed' | 'failed' | string;
+  model: string | null;
+  turns: number;
+  tool_calls_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  error: string | null;
+  repo_full_name: string | null;
+  review_session: ForgeSessionReviewInfo | null;
+  issue_session: ForgeSessionIssueInfo | null;
+};
+
+export type ForgeSessionDetail = ForgeSessionSummary & {
+  messages: ForgeMessage[];
+};
+
+export type ForgeSessionsResponse = {
+  sessions: ForgeSessionSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+};

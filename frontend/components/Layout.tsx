@@ -11,7 +11,7 @@ import {
   Avatar,
   addToast,
 } from '@heroui/react';
-import { BarChart3, User, Sun, Moon, Shield, LogOut, LayoutGrid, Menu, X, Settings2, BookOpen, GitBranch, Lightbulb } from 'lucide-react';
+import { BarChart3, User, Sun, Moon, Shield, LogOut, LayoutGrid, Menu, X, Settings2, BookOpen, GitBranch, Lightbulb, Cpu } from 'lucide-react';
 import { VersionDisplay } from './VersionDisplay';
 import {
   AuthContext,
@@ -33,6 +33,7 @@ const navItems = [
   { href: '/usage', label: '用量', icon: BarChart3 },
   { href: '/reviews', label: '审查记录', icon: BookOpen },
   { href: '/issues', label: 'Issue 分析', icon: Lightbulb },
+  { href: '/forge', label: 'Forge 会话', icon: Cpu },
   { href: '/settings', label: '用户中心', icon: User },
   { href: '/preferences', label: '个人设置', icon: Settings2 },
   { href: '/admin', label: '管理后台', icon: Shield, adminOnly: true },

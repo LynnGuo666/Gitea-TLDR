@@ -136,6 +136,7 @@ class ForgeProvider(ReviewProvider):
                     "model": model,
                     "turns": result.turns,
                     "tool_calls": result.tool_calls,
+                    "forge_messages": result.messages,
                 },
             )
 
@@ -162,6 +163,7 @@ class ForgeProvider(ReviewProvider):
                     "output_tokens": result.usage.output_tokens,
                     "model": model,
                     "turns": result.turns,
+                    "forge_messages": result.messages,
                 },
             )
 
@@ -177,6 +179,7 @@ class ForgeProvider(ReviewProvider):
                 "output_tokens": result.usage.output_tokens,
                 "model": model,
                 "turns": result.turns,
+                "forge_messages": result.messages,
             },
         )
 
@@ -258,6 +261,7 @@ class ForgeProvider(ReviewProvider):
                 "cache_read_input_tokens": forge_result.usage.cache_read_input_tokens,
                 "turns": forge_result.turns,
                 "tool_calls": forge_result.tool_calls,
+                "forge_messages": forge_result.messages,
             },
             error=error_message,
         )

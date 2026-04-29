@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models import (
+    ForgeSession,
     IssueConfig,
     IssueSession,
     InlineComment,
@@ -855,6 +856,123 @@ class DBService:
             WebhookLog.created_at <= min_age,
         )
         stmt = stmt.order_by(WebhookLog.created_at.asc())
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    # ==================== ForgeSession 操作 ====================
+
+    async def create_forge_session(
+        self, repository_id: Optional[int], scenario: str
+    ) -> ForgeSession:
+        """创建 ForgeSession 记录，status="running"。"""
+        import secrets
+
+        session_id = "fgs-" + secrets.token_hex(8)
+        fs = ForgeSession(
+            session_id=session_id,
+            scenario=scenario,
+            status="running",
+            repository_id=repository_id,
+            started_at=datetime.now(timezone.utc),
+        )
+        self.session.add(fs)
+        await self.session.flush()
+        logger.info("创建 ForgeSession: %s scenario=%s", session_id, scenario)
+        return fs
+
+    async def complete_forge_session(
+        self,
+        session_id: str,
+        *,
+        status: str = "completed",
+        model: Optional[str] = None,
+        turns: int = 0,
+        tool_calls_count: int = 0,
+        messages_json: Optional[str] = None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        cache_creation_input_tokens: int = 0,
+        cache_read_input_tokens: int = 0,
+        review_session_id: Optional[int] = None,
+        issue_session_id: Optional[int] = None,
+        error: Optional[str] = None,
+    ) -> Optional[ForgeSession]:
+        """更新 ForgeSession 为完成状态。"""
+        stmt = select(ForgeSession).where(ForgeSession.session_id == session_id)
+        result = await self.session.execute(stmt)
+        fs = result.scalar_one_or_none()
+        if not fs:
+            logger.warning("complete_forge_session: 未找到 session_id=%s", session_id)
+            return None
+
+        fs.status = status
+        if model is not None:
+            fs.model = model
+        fs.turns = turns
+        fs.tool_calls_count = tool_calls_count
+        if messages_json is not None:
+            fs.messages_json = messages_json
+        fs.input_tokens = input_tokens
+        fs.output_tokens = output_tokens
+        fs.cache_creation_input_tokens = cache_creation_input_tokens
+        fs.cache_read_input_tokens = cache_read_input_tokens
+        if review_session_id is not None:
+            fs.review_session_id = review_session_id
+        if issue_session_id is not None:
+            fs.issue_session_id = issue_session_id
+        if error is not None:
+            fs.error = error
+
+        completed_at = datetime.now(timezone.utc)
+        fs.completed_at = completed_at
+        if fs.started_at:
+            started = fs.started_at
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+            fs.duration_seconds = (completed_at - started).total_seconds()
+
+        await self.session.flush()
+        return fs
+
+    async def get_forge_session(
+        self,
+        session_id: str,
+        repository_ids: Optional[List[int]] = None,
+    ) -> Optional[ForgeSession]:
+        """按 session_id 查询单条 ForgeSession，可选按 repository_ids 过滤权限。"""
+        stmt = (
+            select(ForgeSession)
+            .options(
+                selectinload(ForgeSession.repository),
+                selectinload(ForgeSession.review_session),
+                selectinload(ForgeSession.issue_session),
+            )
+            .where(ForgeSession.session_id == session_id)
+        )
+        if repository_ids is not None:
+            stmt = stmt.where(ForgeSession.repository_id.in_(repository_ids))
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def list_forge_sessions(
+        self,
+        repository_ids: Optional[List[int]] = None,
+        scenario: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[ForgeSession]:
+        """列出 ForgeSession，按 started_at DESC 排序。"""
+        stmt = select(ForgeSession).options(
+            selectinload(ForgeSession.repository),
+            selectinload(ForgeSession.review_session),
+            selectinload(ForgeSession.issue_session),
+        )
+        if repository_ids is not None:
+            stmt = stmt.where(ForgeSession.repository_id.in_(repository_ids))
+        if scenario:
+            stmt = stmt.where(ForgeSession.scenario == scenario)
+        stmt = stmt.order_by(ForgeSession.started_at.desc())
+        stmt = stmt.limit(limit).offset(offset)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
