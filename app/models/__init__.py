@@ -1,34 +1,51 @@
-from .admin_settings import AdminSettings
-from .api_key import ApiKey, KeyRotationStrategy
+"""运行时 ORM 模型导出。
+
+应用代码只导入当前领域模型；旧表仅在 Alembic 迁移脚本中
+通过 SQL 读取并重命名为 legacy_*，不再建立运行时 ORM 映射。
+"""
+
 from .base import Base, TimestampMixin
-from .forge_session import ForgeSession
-from .issue_config import DEFAULT_ISSUE_FOCUS, IssueConfig
-from .issue_session import IssueSession
-from .inline_comment import InlineComment
-from .model_config import ModelConfig
-from .repository import Repository
-from .review_session import ReviewSession
-from .usage_stat import UsageStat
-from .user import User
-from .user_session import UserSession
-from .webhook_log import WebhookLog
+from .schema import (
+    Actor,
+    AnalysisAnnotation,
+    AnalysisRun,
+    AppSetting,
+    AuditEvent,
+    AuthSession,
+    ConfigTemplate,
+    Namespace,
+    ProviderCredential,
+    ProviderRun,
+    Repository,
+    RepositoryConfig,
+    RepositoryFeature,
+    UsageEvent,
+    WebhookEvent,
+)
+
+# 兼容还未完全清理的权限/依赖注入类型名；表和语义已经是 Actor。
+User = Actor
+
+DEFAULT_ISSUE_FOCUS = ["bug", "duplicate", "design"]
 
 __all__ = [
     "Base",
     "TimestampMixin",
-    "Repository",
-    "ModelConfig",
-    "IssueConfig",
-    "DEFAULT_ISSUE_FOCUS",
-    "ForgeSession",
-    "IssueSession",
-    "ReviewSession",
-    "InlineComment",
-    "UsageStat",
+    "Actor",
     "User",
-    "UserSession",
-    "AdminSettings",
-    "ApiKey",
-    "KeyRotationStrategy",
-    "WebhookLog",
+    "AuthSession",
+    "AppSetting",
+    "Namespace",
+    "Repository",
+    "RepositoryFeature",
+    "ProviderCredential",
+    "ConfigTemplate",
+    "RepositoryConfig",
+    "AnalysisRun",
+    "AnalysisAnnotation",
+    "ProviderRun",
+    "UsageEvent",
+    "WebhookEvent",
+    "AuditEvent",
+    "DEFAULT_ISSUE_FOCUS",
 ]

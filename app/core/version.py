@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "1.30.0"
-__release_date__ = "2026-04-30"
+__version__ = "2.0.0"
+__release_date__ = "2026-05-09"
 __author__ = "LynnGuo666"
 
 
@@ -17,6 +17,19 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.0.0": {
+        "date": "2026-05-09",
+        "changes": [
+            "破坏性重构：数据库 schema 全量切换为 actors、repositories、repository_configs、analysis_runs、provider_runs、usage_events、audit_events 等当前领域表",
+            "重构：运行时配置废弃全局继承，改为配置模板复制到仓库独立配置",
+            "安全：API Key 仅保存在 provider_credentials，仓库配置只引用 credential_id",
+            "重构：PR Review、Issue Analysis、Forge 会话和用量统计统一为 analysis_runs、provider_runs、usage_events",
+            "新增：写操作审计 audit_events，敏感字段只记录脱敏信息",
+            "变更：对外 API 统一挂载到 /api/v2，旧 /api 业务端点不再注册",
+            "迁移：旧表迁移后重命名为 legacy_*，应用运行时不再建立旧 ORM 映射",
+            "维护：同步更新前后端版本号到 2.0.0",
+        ],
+    },
     "1.30.0": {
         "date": "2026-04-30",
         "changes": [

@@ -547,6 +547,10 @@ class WebhookHandler:
                     repo_config = await db_service.get_repo_specific_model_config(
                         repository_id
                     )
+                    if repo_config is None:
+                        raise RuntimeError(
+                            f"configuration_required: 仓库 {owner}/{repo_name} 尚未初始化 review 配置"
+                        )
                     global_config = await db_service.get_global_model_config()
                     resolved_provider = resolve_provider_config(
                         repo_config,
@@ -563,7 +567,7 @@ class WebhookHandler:
                     config_source = (
                         "repo_config"
                         if not resolved_provider.inherit_global and repo_config is not None
-                        else "global_default"
+                        else "repo_config"
                     )
 
                     if settings_config:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import secrets
@@ -199,16 +200,21 @@ class AuthManager:
             try:
                 from datetime import datetime, timezone
                 from sqlalchemy import select
-                from app.models import User
+                from app.models import Actor
 
                 async with database.session() as db_session:
-                    stmt = select(User).where(User.username == username)
+                    stmt = select(Actor).where(
+                        Actor.external_provider == "gitea",
+                        Actor.external_username == username,
+                    )
                     result = await db_session.execute(stmt)
                     db_user = result.scalar_one_or_none()
 
                     if db_user is None:
-                        db_user = User(
-                            username=username,
+                        db_user = Actor(
+                            external_provider="gitea",
+                            external_username=username,
+                            display_name=user_info.get("full_name") or username,
                             email=user_info.get("email"),
                             role="user",
                             is_active=True,
@@ -338,18 +344,28 @@ class AuthManager:
             无返回值。
         """
         try:
-            from app.models import UserSession  # noqa: PLC0415
+            from datetime import datetime, timezone  # noqa: PLC0415
+            from app.models import AuthSession  # noqa: PLC0415
 
             async with database.session() as db_session:
-                db_row = UserSession(
-                    session_id=session_id,
-                    user_id=session.user_id,
-                    access_token=session.access_token,
-                    refresh_token=session.refresh_token,
-                    scope=session.scope,
-                    expires_at=session.expires_at,
-                    user_info=json.dumps(session.user),
+                db_row = AuthSession(
+                    session_token_hash=hashlib.sha256(
+                        session_id.encode("utf-8")
+                    ).hexdigest(),
+                    actor_id=session.user_id,
+                    access_token_enc="",
+                    refresh_token_enc=None,
+                    scopes_json=json.dumps(
+                        [s for s in session.scope.replace(",", " ").split() if s],
+                        ensure_ascii=False,
+                    ),
+                    expires_at=datetime.fromtimestamp(
+                        session.expires_at, tz=timezone.utc
+                    ).replace(tzinfo=None),
+                    user_info_json=json.dumps(session.user, ensure_ascii=False),
                 )
+                db_row.access_token = session.access_token
+                db_row.refresh_token = session.refresh_token
                 db_session.add(db_row)
                 await db_session.commit()
         except Exception as exc:
@@ -369,29 +385,34 @@ class AuthManager:
         """
         try:
             from sqlalchemy import select  # noqa: PLC0415
-            from app.models import UserSession  # noqa: PLC0415
+            from app.models import AuthSession  # noqa: PLC0415
+
+            token_hash = hashlib.sha256(session_id.encode("utf-8")).hexdigest()
 
             async with database.session() as db_session:
-                stmt = select(UserSession).where(UserSession.session_id == session_id)
+                stmt = select(AuthSession).where(
+                    AuthSession.session_token_hash == token_hash
+                )
                 result = await db_session.execute(stmt)
                 row = result.scalar_one_or_none()
 
             if row is None:
                 return None
-            if row.expires_at <= time.time():
+            if row.expires_at.timestamp() <= time.time() or row.revoked_at is not None:
                 await self._delete_session_from_db(session_id, database)
                 return None
 
             user_data: Dict[str, Any] = (
-                json.loads(row.user_info) if row.user_info else {}
+                json.loads(row.user_info_json) if row.user_info_json else {}
             )
+            scope_list = json.loads(row.scopes_json) if row.scopes_json else []
             session = SessionData(
                 access_token=row.access_token,
                 refresh_token=row.refresh_token,
-                scope=row.scope,
-                expires_at=row.expires_at,
+                scope=" ".join(scope_list),
+                expires_at=row.expires_at.timestamp(),
                 user=user_data,
-                user_id=row.user_id,
+                user_id=row.actor_id,
             )
             async with self._lock:
                 self._sessions[session_id] = session
@@ -411,11 +432,18 @@ class AuthManager:
             无返回值。
         """
         try:
-            from sqlalchemy import delete  # noqa: PLC0415
-            from app.models import UserSession  # noqa: PLC0415
+            from datetime import datetime, timezone  # noqa: PLC0415
+            from sqlalchemy import update  # noqa: PLC0415
+            from app.models import AuthSession  # noqa: PLC0415
+
+            token_hash = hashlib.sha256(session_id.encode("utf-8")).hexdigest()
 
             async with database.session() as db_session:
-                stmt = delete(UserSession).where(UserSession.session_id == session_id)
+                stmt = (
+                    update(AuthSession)
+                    .where(AuthSession.session_token_hash == token_hash)
+                    .values(revoked_at=datetime.now(timezone.utc).replace(tzinfo=None))
+                )
                 await db_session.execute(stmt)
                 await db_session.commit()
         except Exception as exc:

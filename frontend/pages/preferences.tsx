@@ -224,14 +224,19 @@ export default function PreferencesPage() {
       baseUrl: 'https://api.openai.com (留空使用默认)',
       apiKey: 'sk-...',
     },
+    forge: {
+      baseUrl: 'https://api.anthropic.com (留空使用全局 FORGE_BASE_URL)',
+      apiKey: 'sk-ant-...',
+    },
   };
 
-  const currentPlaceholders = providerPlaceholders[selectedProvider] || providerPlaceholders.claude_code;
+  const currentPlaceholders = providerPlaceholders[selectedProvider] ?? providerPlaceholders.claude_code;
   const modelPlaceholders: Record<string, string> = {
     claude_code: '例如: claude-3-7-sonnet-20250219',
     codex_cli: '例如: gpt-5.3-codex',
+    forge: '例如: claude-sonnet-4-20250514',
   };
-  const currentModelPlaceholder = modelPlaceholders[selectedProvider] || '例如: gpt-5.3-codex';
+  const currentModelPlaceholder = modelPlaceholders[selectedProvider] ?? '例如: claude-sonnet-4-20250514';
 
   return (
     <>

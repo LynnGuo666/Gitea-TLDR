@@ -440,14 +440,8 @@ class IssueAnalysisService:
         config_source = "global_default"
 
         if not self.database:
-            effective_focus = list(focus_areas or base_resolved.default_focus)
-            return (
-                repository_id,
-                actor_user_id,
-                issue_session_id,
-                base_resolved,
-                config_source,
-                effective_focus,
+            raise RuntimeError(
+                f"configuration_required: 仓库 {owner}/{repo_name} 尚未初始化 issue 配置"
             )
 
         async with self.database.session() as session:
@@ -462,26 +456,21 @@ class IssueAnalysisService:
             repo_issue_config = await db_service.get_repo_specific_issue_config(
                 repository_id
             )
+            if repo_issue_config is None:
+                raise RuntimeError(
+                    f"configuration_required: 仓库 {owner}/{repo_name} 尚未初始化 issue 配置"
+                )
             global_issue_config = await db_service.get_global_issue_config()
             resolved = resolve_issue_config(
                 repo_issue_config,
                 global_issue_config,
                 default_engine=default_engine,
             )
-            # 环境默认值兜底，避免 resolver 完全没有 api_key 时失败
-            if not resolved.api_url:
-                resolved.api_url = base_resolved.api_url
-            if not resolved.api_key:
-                resolved.api_key = base_resolved.api_key
-            if not resolved.model:
-                resolved.model = base_resolved.model
 
             if repo_issue_config is not None and not resolved.inherit_global:
                 config_source = "repo_config"
-            elif global_issue_config is not None:
-                config_source = "global_default"
             else:
-                config_source = "env_default"
+                config_source = "repo_config"
 
             effective_focus = list(
                 focus_areas

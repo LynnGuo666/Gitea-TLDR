@@ -17,7 +17,6 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(project_root))
 
 from app.api import create_api_router
-from app.api.admin_routes import create_admin_router
 from app.core import (
     settings,
     __version__,
@@ -91,7 +90,8 @@ async def _recover_pending_webhooks(context: AppContext) -> None:
     recovered = 0
     for log in pending:
         try:
-            payload = _json.loads(log.payload)
+            payload_raw = getattr(log, "payload_json", None) or getattr(log, "payload", "{}")
+            payload = _json.loads(payload_raw)
         except Exception:
             logger.warning(f"webhook payload 解析失败: log_id={log.id}")
             continue
@@ -322,16 +322,10 @@ def create_app() -> FastAPI:
 
     app.state.context = context
 
-    # 创建路由
+    # 只有 HTTP API 带 /v2，内部模型/服务直接使用最终命名。
     api_router, public_router = create_api_router(context)
     app.include_router(public_router)
-    app.include_router(api_router, prefix="/api")
-
-    # 创建管理后台路由
-    if settings.admin_enabled:
-        admin_router = create_admin_router(context)
-        app.include_router(admin_router, prefix="/api")
-        logger.info("管理后台路由已注册")
+    app.include_router(api_router, prefix="/api/v2")
 
     frontend_out_dir = Path(__file__).resolve().parent.parent / "frontend" / "out"
     if frontend_out_dir.exists():

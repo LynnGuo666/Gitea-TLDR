@@ -4,6 +4,27 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [2.0.0] - 2026-05-09
+
+### 破坏性变更 (Breaking)
+
+- **数据库全量重构**: 运行时 schema 切换为当前领域表，包括 `actors`、`repositories`、`repository_configs`、`analysis_runs`、`provider_runs`、`usage_events`、`webhook_events`、`audit_events`
+- **API 命名空间**: 对外业务 API 统一挂载到 `/api/v2`，旧 `/api` 业务端点不再注册
+- **配置模型**: 废弃运行时全局继承，改为“模板复制到仓库配置”，仓库运行必须存在独立 `repository_configs`
+- **凭证模型**: API Key 只保存在 `provider_credentials`，仓库配置只引用 `credential_id`
+- **旧 ORM 清理**: 旧运行时 ORM 文件已移除，迁移后旧表仅作为 `legacy_*` 数据备份存在
+
+### 新增 (Added)
+
+- **统一运行记录**: PR Review、Issue Analysis、Provider 执行明细统一进入 `analysis_runs` 与 `provider_runs`
+- **用量事件明细**: 用 `usage_events` 替代聚合式历史统计表，便于后续按仓库、actor、provider 汇总
+- **审计事件**: 新增 `audit_events`，写操作记录 action、resource、before/after、敏感字段脱敏信息
+- **V2 迁移**: 新增 Alembic 全量迁移，SQLite 迁移前自动备份数据库文件，旧表 rename 为 `legacy_*`
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `2.0.0`
+
 ## [1.28.0] - 2026-04-24
 
 ### 安全 (Security)

@@ -7,7 +7,7 @@ from fastapi import HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import User
+from app.models import Actor as User
 from app.services.permission_service import has_permission as check_permission
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,8 @@ async def get_admin_user(session: AsyncSession, username: str) -> Optional[User]
         可能为空的结果。
     """
     stmt = select(User).where(
-        User.username == username,
+        User.external_provider == "gitea",
+        User.external_username == username,
         User.role.in_(["admin", "super_admin"]),
         User.is_active == True,
     )
@@ -52,10 +53,12 @@ async def create_user(
         User 类型结果。
     """
     user = User(
-        username=username,
+        external_provider="gitea",
+        external_username=username,
+        display_name=username,
         email=email,
         role=role,
-        permissions=permissions,
+        permissions_json=permissions,
         is_active=True,
     )
     session.add(user)
@@ -87,7 +90,14 @@ async def ensure_initial_admin(
     existing = result.scalar_one_or_none()
 
     if not existing:
-        initial_user_stmt = select(User).where(User.username == initial_username).limit(1)
+        initial_user_stmt = (
+            select(User)
+            .where(
+                User.external_provider == "gitea",
+                User.external_username == initial_username,
+            )
+            .limit(1)
+        )
         initial_user_result = await session.execute(initial_user_stmt)
         initial_user = initial_user_result.scalar_one_or_none()
 

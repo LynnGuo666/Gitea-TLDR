@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
-
-from app.models import ModelConfig
+from typing import Any, Optional
 
 DEFAULT_PROVIDER_ENGINE = "claude_code"
 
@@ -20,7 +18,7 @@ class ResolvedProviderConfig:
     wire_api: Optional[str]
 
 
-def has_explicit_provider_override(config: Optional[ModelConfig]) -> bool:
+def has_explicit_provider_override(config: Optional[Any]) -> bool:
     """判断仓库级配置是否真的覆盖了 Provider 选择。"""
     if config is None:
         return False
@@ -30,7 +28,7 @@ def has_explicit_provider_override(config: Optional[ModelConfig]) -> bool:
     return bool(engine and engine != DEFAULT_PROVIDER_ENGINE)
 
 
-def has_non_provider_settings(config: Optional[ModelConfig]) -> bool:
+def has_non_provider_settings(config: Optional[Any]) -> bool:
     """判断配置中是否还承载了 focus/features 等仓库级设置。"""
     if config is None:
         return False
@@ -45,7 +43,7 @@ def has_non_provider_settings(config: Optional[ModelConfig]) -> bool:
     )
 
 
-def clear_provider_overrides(config: ModelConfig) -> None:
+def clear_provider_overrides(config: Any) -> None:
     """清空仓库级 Provider 覆盖，但保留 review settings。"""
     config.api_url = None
     config.api_key = None
@@ -55,8 +53,8 @@ def clear_provider_overrides(config: ModelConfig) -> None:
 
 
 def resolve_provider_config(
-    repo_config: Optional[ModelConfig],
-    global_config: Optional[ModelConfig],
+    repo_config: Optional[Any],
+    global_config: Optional[Any],
     *,
     default_engine: str,
 ) -> ResolvedProviderConfig:

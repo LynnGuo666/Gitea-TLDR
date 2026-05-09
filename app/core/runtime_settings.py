@@ -58,14 +58,23 @@ _cache: dict[str, Any] = {}
 
 async def seed(session: Any) -> None:
     """启动时调用：将缺失字段写入 DB，然后从 DB 加载所有值进缓存。"""
-    from app.services.admin_service import AdminService
+    from sqlalchemy import select
 
-    svc = AdminService(session)
+    from app.models import AppSetting
+
     for key, (category, description, default) in RUNTIME_KEYS.items():
-        row = await svc.get_setting(key)
+        result = await session.execute(select(AppSetting).where(AppSetting.key == key))
+        row = result.scalar_one_or_none()
         if row is None:
-            row = await svc.set_setting(key, default, category, description)
-        _cache[key] = json.loads(row.value)
+            row = AppSetting(
+                key=key,
+                category=category,
+                description=description,
+                value_json=json.dumps(default, ensure_ascii=False),
+            )
+            session.add(row)
+            await session.flush()
+        _cache[key] = json.loads(row.value_json)
     await session.commit()
 
 

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from app.models import DEFAULT_ISSUE_FOCUS, IssueConfig
+from app.models import DEFAULT_ISSUE_FOCUS
 
 DEFAULT_ISSUE_ENGINE = "forge"
 
@@ -24,7 +24,7 @@ class ResolvedIssueConfig:
     default_focus: List[str] = field(default_factory=lambda: list(DEFAULT_ISSUE_FOCUS))
 
 
-def has_explicit_issue_override(config: Optional[IssueConfig]) -> bool:
+def has_explicit_issue_override(config: Optional[Any]) -> bool:
     """判断仓库级 Issue 配置是否真的显式覆盖了 Provider 设置。"""
     if config is None:
         return False
@@ -36,7 +36,7 @@ def has_explicit_issue_override(config: Optional[IssueConfig]) -> bool:
     return False
 
 
-def has_non_provider_issue_settings(config: Optional[IssueConfig]) -> bool:
+def has_non_provider_issue_settings(config: Optional[Any]) -> bool:
     """判断 focus/custom_prompt 等非 Provider 字段是否还承载。"""
     if config is None:
         return False
@@ -50,7 +50,7 @@ def has_non_provider_issue_settings(config: Optional[IssueConfig]) -> bool:
     )
 
 
-def clear_issue_provider_overrides(config: IssueConfig) -> None:
+def clear_issue_provider_overrides(config: Any) -> None:
     """清空仓库级 Issue Provider 覆盖，但保留 focus/custom_prompt。"""
     config.api_url = None
     config.api_key = None
@@ -60,14 +60,14 @@ def clear_issue_provider_overrides(config: IssueConfig) -> None:
 
 
 def resolve_issue_config(
-    repo_config: Optional[IssueConfig],
-    global_config: Optional[IssueConfig],
+    repo_config: Optional[Any],
+    global_config: Optional[Any],
     *,
     default_engine: str = DEFAULT_ISSUE_ENGINE,
 ) -> ResolvedIssueConfig:
     """按"仓库显式覆盖 > 全局 > 默认值"解析实际 Issue 配置。"""
 
-    def _focus_of(config: Optional[IssueConfig]) -> Optional[List[str]]:
+    def _focus_of(config: Optional[Any]) -> Optional[List[str]]:
         if not config or not config.default_focus:
             return None
         focus = config.get_focus()
