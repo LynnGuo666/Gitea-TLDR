@@ -8,4 +8,4 @@
  */
 
 export const FRONTEND_VERSION = '2.0.1';
-export const FRONTEND_RELEASE_DATE = '2026-05-09';
+export const FRONTEND_RELEASE_DATE = '2026-05-10';

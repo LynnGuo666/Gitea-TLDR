@@ -3,7 +3,7 @@
 """
 
 __version__ = "2.0.1"
-__release_date__ = "2026-05-09"
+__release_date__ = "2026-05-10"
 __author__ = "LynnGuo666"
 
 
@@ -18,7 +18,7 @@ def _semver_key(v: str) -> tuple[int, ...]:
 # 版本历史
 VERSION_HISTORY = {
     "2.0.1": {
-        "date": "2026-05-09",
+        "date": "2026-05-10",
         "changes": [
             "收口：前端页面直接使用 /api/v2 当前模型与端点，移除旧 API 路径兼容映射",
             "收口：后端运行流清理旧 session/config/forge 适配方法，统一使用 analysis_runs、provider_runs、usage_events",

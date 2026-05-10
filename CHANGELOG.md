@@ -4,6 +4,16 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [2.0.1] - 2026-05-10
+
+### 收口 (Finalization)
+
+- **前端 V2 化**: 页面直接调用 `/api/v2/*` 当前模型端点，移除旧路径兼容映射
+- **运行流清理**: 后端 Review/Issue 运行链路统一使用 `analysis_runs`、`provider_runs`、`usage_events`
+- **审计统一入口**: 新增 `AuditService`，写操作和运行失败路径统一记录 `audit_events`
+- **测试工具链**: 新增 `requirements-dev.txt` 与 `pyproject.toml`，统一 `ruff`、`mypy`、`pytest` 本地验证方式
+- **版本一致性**: 同步更新后端与前端版本号到 `2.0.1`
+
 ## [2.0.0] - 2026-05-09
 
 ### 破坏性变更 (Breaking)
