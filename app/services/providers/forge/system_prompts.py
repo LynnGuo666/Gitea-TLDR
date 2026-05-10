@@ -76,7 +76,7 @@ def build_issue_system_prompt(
     issue_author = (issue_info.get("user") or {}).get("login", "未知")
     labels = issue_info.get("labels") or []
     label_names = [
-        label.get("name")
+        str(label.get("name"))
         for label in labels
         if isinstance(label, dict) and label.get("name")
     ]

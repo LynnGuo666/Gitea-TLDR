@@ -22,8 +22,8 @@ module.exports = (phase) => {
       async rewrites() {
         return [
           {
-            source: '/api/:path*',
-            destination: `${backendOrigin}/api/:path*`,
+            source: '/api/v2/:path*',
+            destination: `${backendOrigin}/api/v2/:path*`,
           },
           {
             source: '/health',

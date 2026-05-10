@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 __release_date__ = "2026-05-09"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,16 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.0.1": {
+        "date": "2026-05-09",
+        "changes": [
+            "收口：前端页面直接使用 /api/v2 当前模型与端点，移除旧 API 路径兼容映射",
+            "收口：后端运行流清理旧 session/config/forge 适配方法，统一使用 analysis_runs、provider_runs、usage_events",
+            "新增：AuditService 作为业务审计统一入口，写操作与运行失败路径记录 audit_events",
+            "测试：补齐 requirements-dev.txt 与 pyproject.toml，ruff、mypy、pytest、前端 lint/tsc/build 验证通过",
+            "维护：同步更新后端与前端版本号到 2.0.1",
+        ],
+    },
     "2.0.0": {
         "date": "2026-05-09",
         "changes": [
@@ -34,7 +44,7 @@ VERSION_HISTORY = {
         "date": "2026-04-30",
         "changes": [
             "新增：ForgeSession 数据模型，记录 Forge agentic loop 完整运行状态（scenario、status、turns、tool_calls_count、messages_json、token 用量）",
-            "新增：DB Service 提供 create_forge_session / complete_forge_session / list_forge_sessions / get_forge_session 方法",
+            "新增：DB Service 提供 Provider run 创建、完成、列表与详情查询方法",
             "新增：webhook_handler 与 issue_analysis_service 在调用 Forge 前创建 ForgeSession，完成后记录 messages 与用量",
             "新增：API 端点 GET /api/forge/sessions（列表）与 GET /api/forge/sessions/{session_id}（详情含完整 messages）",
             "新增：前端 /forge 页面，展示 Forge 会话列表，支持 all/review/issue 筛选，可展开查看完整思维链与工具调用历史",

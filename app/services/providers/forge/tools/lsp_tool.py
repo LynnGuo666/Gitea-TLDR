@@ -118,7 +118,7 @@ class LSPTool(ForgeTool):
 
         results = self._collect_symbols(repo_path, base_dir, query=query, limit=limit)
         lines = [
-            f"lsp method: workspace/symbol",
+            "lsp method: workspace/symbol",
             f"query: {query}",
             f"搜索目录: {path or '/'}",
             f"命中符号数: {len(results)}",

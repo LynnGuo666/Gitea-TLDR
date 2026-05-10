@@ -1,1348 +1,187 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useContext, useEffect, useState, useCallback } from 'react';
-import {
-  Button,
-  Chip,
-  Input,
-  Select,
-  SelectItem,
-  Tab,
-  Tabs,
-  Switch,
-  addToast,
-} from '@heroui/react';
-import {
-  FolderGit2,
-  RefreshCw,
-  ArrowLeft,
-  ExternalLink,
-  ChevronRight,
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Button, Input, Select, SelectItem, Textarea } from '@heroui/react';
 import PageHeader from '../../../components/PageHeader';
-import { Skeleton } from '../../../components/ui';
-import { RepoReviewConfig, ProviderInfo, IssueConfigPayload, IssueConfigUpdateRequest } from '../../../lib/types';
-import { AuthContext } from '../../../lib/auth';
+import SectionHeader from '../../../components/SectionHeader';
 import { apiFetch } from '../../../lib/api';
+import { ConfigTemplate, ProviderCredential, RepositoryConfiguration } from '../../../lib/types';
 
-const defaultEvents = ['pull_request', 'issues', 'issue_comment'];
-const reviewCatalog = [
-  {
-    key: 'quality',
-    label: '质量保障',
-    detail: '架构、风格一致性、重复代码',
-  },
-  {
-    key: 'security',
-    label: '安全合规',
-    detail: '权限、依赖、输入校验与密钥',
-  },
-  {
-    key: 'performance',
-    label: '性能体验',
-    detail: '慢查询、循环、资源热点',
-  },
-  {
-    key: 'logic',
-    label: '业务逻辑',
-    detail: '边界条件、回归风险、异常链路',
-  },
-];
+type Scenario = 'review' | 'issue';
 
-const issueFocusCatalog = [
-  {
-    key: 'bug',
-    label: '缺陷排查',
-    detail: '代码缺陷、空指针、边界条件',
-  },
-  {
-    key: 'duplicate',
-    label: '重复检测',
-    detail: '检测重复 Issue 与相似问题',
-  },
-  {
-    key: 'design',
-    label: '设计分析',
-    detail: '架构设计、模式选择、扩展性',
-  },
-  {
-    key: 'performance',
-    label: '性能评估',
-    detail: '查询效率、资源消耗、瓶颈',
-  },
-  {
-    key: 'question',
-    label: '问题解答',
-    detail: '技术问答、最佳实践、方案建议',
-  },
-];
+function isTemplateBehind(config: RepositoryConfiguration | null, template: ConfigTemplate | undefined) {
+  if (!config?.template_version_copied_at || !template?.updated_at) return false;
+  return new Date(template.updated_at).getTime() > new Date(config.template_version_copied_at).getTime();
+}
 
-const featureCatalog = [
-  {
-    key: 'comment',
-    label: '评论功能',
-    detail: '发布一条 PR 总结评论',
-  },
-  {
-    key: 'review',
-    label: '审查功能',
-    detail: '创建 PR Review 并附带行内评论',
-  },
-  {
-    key: 'status',
-    label: '状态功能',
-    detail: '写入 commit 状态（success / failure）',
-  },
-];
-
-type WebhookStatus = {
-  configured: boolean;
-  active: boolean;
-  webhook_id: number | null;
-  events: string[];
-  url: string | null;
-  can_setup_webhook?: boolean;
-};
-
-type PullRequest = {
-  id: number;
-  number: number;
-  title: string;
-  state: string;
-  created_at: string;
-  updated_at: string;
-  user: {
-    login: string;
-    avatar_url: string;
-  };
-  head: {
-    ref: string;
-    repo: {
-      name: string;
-    } | null;
-  };
-  base: {
-    ref: string;
-  };
-  html_url: string;
-  mergeable: boolean;
-  merged: boolean;
-  merged_at: string | null;
-};
-
-type IssueSettings = {
-  issue_enabled: boolean;
-  auto_on_open: boolean;
-  manual_command_enabled: boolean;
-};
-
-export default function RepoConfigPage() {
+export default function RepoPage() {
   const router = useRouter();
-  const { owner, repo } = router.query;
-  const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
-  const [statusLoading, setStatusLoading] = useState(true);
-  const [toggling, setToggling] = useState(false);
-  const [events, setEvents] = useState<string[]>(defaultEvents);
-  const [bringBot, setBringBot] = useState(true);
-  const [reviewFocus, setReviewFocus] = useState<string[]>([
-    'quality',
-    'security',
-    'performance',
-    'logic',
-  ]);
-  const [reviewFeatures, setReviewFeatures] = useState<string[]>(['comment']);
-  // Claude 配置状态
-  const [providerConfig, setProviderConfig] = useState<RepoReviewConfig | null>(null);
-  const [providerBaseUrl, setProviderBaseUrl] = useState('');
-  const [providerAuthToken, setProviderAuthToken] = useState('');
-  const [providerModel, setProviderModel] = useState('');
-  const [providerConfigLoading, setProviderConfigLoading] = useState(true);
-  const [providerSaving, setProviderSaving] = useState(false);
-  const [inheritGlobal, setInheritGlobal] = useState(true);
-  const [inheritSaving, setInheritSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('webhook');
-  const [refreshingAll, setRefreshingAll] = useState(false);
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState('claude_code');
-  // Pull Requests
-  const [pulls, setPulls] = useState<PullRequest[]>([]);
-  const [pullsLoading, setPullsLoading] = useState(true);
-  const [focusLoading, setFocusLoading] = useState(true);
-  const [focusSaving, setFocusSaving] = useState(false);
-  const [issueSettings, setIssueSettings] = useState<IssueSettings>({
-    issue_enabled: true,
-    auto_on_open: true,
-    manual_command_enabled: true,
+  const owner = String(router.query.owner || '');
+  const repo = String(router.query.repo || '');
+  const [scenario, setScenario] = useState<Scenario>('review');
+  const [config, setConfig] = useState<RepositoryConfiguration | null>(null);
+  const [configurationRequired, setConfigurationRequired] = useState(false);
+  const [templates, setTemplates] = useState<ConfigTemplate[]>([]);
+  const [credentials, setCredentials] = useState<ProviderCredential[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [form, setForm] = useState({
+    engine: '',
+    model: '',
+    credential_id: '',
+    wire_api: '',
+    temperature: '',
+    max_tokens: '',
+    custom_prompt: '',
+    focus: '',
+    features: '',
+    is_active: true,
   });
-  const [issueSettingsLoading, setIssueSettingsLoading] = useState(true);
-  const [issueSettingsSaving, setIssueSettingsSaving] = useState(false);
-  const [issueConfig, setIssueConfig] = useState<IssueConfigPayload | null>(null);
-  const [issueConfigLoading, setIssueConfigLoading] = useState(true);
-  const [issueConfigSaving, setIssueConfigSaving] = useState(false);
-  const [issueInheritGlobal, setIssueInheritGlobal] = useState(true);
-  const [issueApiUrl, setIssueApiUrl] = useState('');
-  const [issueApiKey, setIssueApiKey] = useState('');
-  const [issueModel, setIssueModel] = useState('');
-  const [issueCustomPrompt, setIssueCustomPrompt] = useState('');
-  const [issueFocus, setIssueFocus] = useState<string[]>([]);
-  const [configHealth, setConfigHealth] = useState<{ overall: string; checks: { component: string; status: string; message: string }[] } | null>(null);
 
-  const { status: authStatus, beginLogin } = useContext(AuthContext);
-  const requiresLogin = authStatus.enabled && !authStatus.loggedIn;
+  const scenarioTemplates = useMemo(() => templates.filter((item) => item.scenario === scenario), [templates, scenario]);
+  const sourceTemplate = templates.find((item) => item.id === config?.source_template_id);
+  const behindTemplate = isTemplateBehind(config, sourceTemplate);
 
-  const fetchWebhookStatus = useCallback(async () => {
-    if (!owner || !repo || requiresLogin) return;
-
-    setStatusLoading(true);
-    try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/webhook-status`);
-      if (res.ok) {
-        const data = await res.json();
-        setWebhookStatus(data);
-        // 如果已配置，同步 events
-        if (data.configured && data.events?.length) {
-          setEvents(data.events);
-        }
-      } else {
-        setWebhookStatus(null);
-      }
-    } catch {
-      setWebhookStatus(null);
-    } finally {
-      setStatusLoading(false);
-    }
-  }, [owner, repo, requiresLogin]);
-
-  const fetchProviderConfig = useCallback(async () => {
-    if (!owner || !repo || requiresLogin) return;
-
-    setProviderConfigLoading(true);
-    try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/config?type=review`);
-      if (res.ok) {
-        const data = await res.json();
-        setProviderConfig(data);
-        setInheritGlobal(data.inherit_global ?? true);
-        const baseUrl = data.api_url;
-        if (baseUrl) {
-          setProviderBaseUrl(baseUrl);
-        } else {
-          setProviderBaseUrl('');
-        }
-        setProviderModel(data.model || '');
-        if (data.engine) {
-          setSelectedProvider(data.engine);
-        }
-      } else {
-        setProviderConfig(null);
-        setInheritGlobal(true);
-      }
-    } catch {
-      setProviderConfig(null);
-      setInheritGlobal(true);
-    } finally {
-      setProviderConfigLoading(false);
-    }
-  }, [owner, repo, requiresLogin]);
-
-  const fetchPulls = useCallback(async () => {
-    if (!owner || !repo || requiresLogin) return;
-
-    setPullsLoading(true);
-    try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/pulls?state=all&limit=5`);
-      if (res.ok) {
-        const data = await res.json();
-        setPulls(data.pulls || []);
-      } else {
-        setPulls([]);
-      }
-    } catch {
-      setPulls([]);
-    } finally {
-      setPullsLoading(false);
-    }
-  }, [owner, repo, requiresLogin]);
-
-  const fetchReviewSettings = useCallback(async () => {
-    if (!owner || !repo || requiresLogin) return;
-    setFocusLoading(true);
-    try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/review-settings`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.default_focus?.length) {
-          setReviewFocus(data.default_focus);
-        }
-        if (data.default_features?.length) {
-          setReviewFeatures(data.default_features);
-        }
-      }
-    } catch {
-      // Keep defaults on error
-    } finally {
-      setFocusLoading(false);
-    }
-  }, [owner, repo, requiresLogin]);
-
-  const fetchIssueSettings = useCallback(async () => {
-    if (!owner || !repo || requiresLogin) return;
-    setIssueSettingsLoading(true);
-    try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/issue-settings`);
-      if (res.ok) {
-        const data = (await res.json()) as IssueSettings;
-        setIssueSettings(data);
-      }
-    } catch {
-      // Keep defaults on error
-    } finally {
-      setIssueSettingsLoading(false);
-    }
-  }, [owner, repo, requiresLogin]);
-
-  const fetchIssueConfig = useCallback(async () => {
-    if (!owner || !repo || requiresLogin) return;
-    setIssueConfigLoading(true);
-    try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/config?type=issue`);
-      if (!res.ok) {
-        setIssueConfig(null);
-        return;
-      }
-      const data = (await res.json()) as IssueConfigPayload;
-      setIssueConfig(data);
-      setIssueInheritGlobal(data.inherit_global && data.global_has_api_key === false ? false : data.inherit_global);
-      setIssueApiUrl(data.api_url || '');
-      setIssueApiKey('');
-      setIssueModel(data.model || '');
-      setIssueCustomPrompt(data.custom_prompt || '');
-      setIssueFocus(data.default_focus || []);
-    } catch {
-      // keep defaults
-    } finally {
-      setIssueConfigLoading(false);
-    }
-  }, [owner, repo, requiresLogin]);
-
-  const saveIssueConfig = useCallback(
-    async (payload: IssueConfigUpdateRequest) => {
-      if (!owner || !repo || requiresLogin || !canEditRepo) return;
-      setIssueConfigSaving(true);
-      try {
-        const res = await apiFetch(`/api/repos/${owner}/${repo}/config?type=issue`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) {
-          addToast({ title: '保存失败', description: '请检查权限或参数', color: 'danger' });
-          return;
-        }
-        const data = (await res.json()) as IssueConfigPayload;
-        setIssueConfig(data);
-        setIssueInheritGlobal(data.inherit_global && data.global_has_api_key === false ? false : data.inherit_global);
-        setIssueApiUrl(data.api_url || '');
-        setIssueApiKey('');
-        setIssueModel(data.model || '');
-        setIssueCustomPrompt(data.custom_prompt || '');
-        setIssueFocus(data.default_focus || []);
-        addToast({ title: 'Issue 分析配置已保存', color: 'success' });
-      } finally {
-        setIssueConfigSaving(false);
-      }
-    },
-    [owner, repo, requiresLogin],
-  );
-
-  const canEditRepo = webhookStatus?.can_setup_webhook ?? true;
-
-  const fetchConfigHealth = useCallback(async () => {
-    if (!owner || !repo || requiresLogin) return;
-    try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/config-health`);
-      if (res.ok) {
-        const data = await res.json();
-        setConfigHealth(data);
-      }
-    } catch {
-      // health check is non-critical
-    }
-  }, [owner, repo, requiresLogin]);
-
-  useEffect(() => {
-    if (router.isReady && owner && repo && !requiresLogin) {
-      fetchWebhookStatus();
-      fetchProviderConfig();
-      fetchPulls();
-      fetchReviewSettings();
-      fetchIssueSettings();
-      fetchIssueConfig();
-      fetchConfigHealth();
-      apiFetch('/api/providers').then(async (res) => {
-        if (res.ok) {
-          const data = await res.json();
-          setProviders(data.providers || []);
-        }
-      }).catch(() => {});
-    } else {
-      setStatusLoading(false);
-      setProviderConfigLoading(false);
-      setPullsLoading(false);
-      setFocusLoading(false);
-      setIssueSettingsLoading(false);
-      setIssueConfigLoading(false);
-    }
-  }, [
-    owner,
-    repo,
-    requiresLogin,
-    fetchWebhookStatus,
-    fetchProviderConfig,
-    fetchPulls,
-    fetchReviewSettings,
-    fetchIssueSettings,
-    fetchIssueConfig,
-  ]);
-
-  const refreshAll = async () => {
-    if (requiresLogin) return;
-    setRefreshingAll(true);
-    try {
-      await Promise.all([
-        fetchWebhookStatus(),
-        fetchProviderConfig(),
-        fetchPulls(),
-        fetchReviewSettings(),
-        fetchIssueSettings(),
-      ]);
-    } finally {
-      setRefreshingAll(false);
-    }
+  const loadStatic = async () => {
+    const [templateRes, credentialRes] = await Promise.all([
+      apiFetch('/api/v2/config-templates'),
+      apiFetch('/api/v2/provider-credentials'),
+    ]);
+    if (templateRes.ok) setTemplates((await templateRes.json()).templates || []);
+    if (credentialRes.ok) setCredentials((await credentialRes.json()).credentials || []);
   };
 
-  const toggleEvent = (event: string) => {
-    setEvents((prev) =>
-      prev.includes(event) ? prev.filter((e) => e !== event) : [...prev, event]
-    );
-  };
-
-  const toggleFocus = async (key: string) => {
-    if (focusSaving) return;
-    const next = reviewFocus.includes(key)
-      ? reviewFocus.filter((item) => item !== key)
-      : [...reviewFocus, key];
-
-    // Don't allow empty - must have at least one
-    if (next.length === 0) return;
-
-    setReviewFocus(next);
-    setFocusSaving(true);
-    try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/review-settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ default_focus: next }),
-      });
-      if (res.ok) {
-        addToast({ title: '审查方向已保存', color: 'success' });
-      } else {
-        addToast({ title: '保存失败', color: 'danger' });
-        setReviewFocus(reviewFocus); // Revert on failure
-      }
-    } catch {
-      addToast({ title: '无法连接后端', color: 'danger' });
-      setReviewFocus(reviewFocus); // Revert on failure
-    } finally {
-      setFocusSaving(false);
-    }
-  };
-
-  const toggleFeature = async (key: string) => {
-    if (focusSaving) return;
-    const next = reviewFeatures.includes(key)
-      ? reviewFeatures.filter((item) => item !== key)
-      : [...reviewFeatures, key];
-
-    if (next.length === 0) return;
-
-    setReviewFeatures(next);
-    setFocusSaving(true);
-    try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/review-settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ default_features: next }),
-      });
-      if (res.ok) {
-        addToast({ title: '审查功能已保存', color: 'success' });
-      } else {
-        addToast({ title: '保存失败', color: 'danger' });
-        setReviewFeatures(reviewFeatures);
-      }
-    } catch {
-      addToast({ title: '无法连接后端', color: 'danger' });
-      setReviewFeatures(reviewFeatures);
-    } finally {
-      setFocusSaving(false);
-    }
-  };
-
-  const toggleIssueFocus = async (key: string) => {
-    if (issueConfigSaving) return;
-    const next = issueFocus.includes(key)
-      ? issueFocus.filter((item) => item !== key)
-      : [...issueFocus, key];
-
-    if (next.length === 0) return;
-
-    setIssueFocus(next);
-    setIssueConfigSaving(true);
-    try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/config?type=issue`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ default_focus: next }),
-      });
-      if (res.ok) {
-        addToast({ title: '分析重点已保存', color: 'success' });
-      } else {
-        addToast({ title: '保存失败', color: 'danger' });
-        setIssueFocus(issueFocus);
-      }
-    } catch {
-      addToast({ title: '无法连接后端', color: 'danger' });
-      setIssueFocus(issueFocus);
-    } finally {
-      setIssueConfigSaving(false);
-    }
-  };
-
-  const enableWebhook = async () => {
-    if (requiresLogin || !owner || !repo || !canEditRepo) return;
-
-    setToggling(true);
-    try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/setup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ events, bring_bot: bringBot }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        addToast({ title: 'Webhook 已启用', color: 'success' });
-        await fetchWebhookStatus();
-      } else {
-        addToast({ title: data.detail || 'Webhook 配置失败', color: 'danger' });
-      }
-    } catch {
-      addToast({ title: '无法连接后端', color: 'danger' });
-    } finally {
-      setToggling(false);
-    }
-  };
-
-  const disableWebhook = async () => {
-    if (requiresLogin || !owner || !repo || !canEditRepo) return;
-
-    setToggling(true);
-    try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/webhook`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        addToast({ title: 'Webhook 已禁用', color: 'success' });
-        setWebhookStatus({
-          configured: false,
-          active: false,
-          webhook_id: null,
-          events: [],
-          url: null,
-        });
-      } else {
-        const data = await res.json();
-        addToast({ title: data.detail || '删除 Webhook 失败', color: 'danger' });
-      }
-    } catch {
-      addToast({ title: '无法连接后端', color: 'danger' });
-    } finally {
-      setToggling(false);
-    }
-  };
-
-  const handleToggle = () => {
-    if (webhookStatus?.configured) {
-      disableWebhook();
-    } else {
-      enableWebhook();
-    }
-  };
-
-  const saveProviderConfig = async () => {
-    if (requiresLogin || !owner || !repo || !canEditRepo || inheritGlobal) return;
-
-    if (selectedProvider === 'claude_code' && !providerBaseUrl.trim()) {
-      addToast({ title: 'Claude Code 必须配置 Base URL', color: 'warning' });
+  const loadConfig = async () => {
+    if (!owner || !repo) return;
+    const res = await apiFetch(`/api/v2/repos/${owner}/${repo}/configurations?scenario=${scenario}`);
+    if (res.status === 404) {
+      setConfig(null);
+      setConfigurationRequired(true);
       return;
     }
-
-    setProviderSaving(true);
-    try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/config?type=review`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          engine: selectedProvider,
-          model: providerModel || null,
-          api_url: providerBaseUrl || null,
-          api_key: providerAuthToken || null,
-          inherit_global: false,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        addToast({ title: 'AI 审查配置已保存', color: 'success' });
-        setInheritGlobal(false);
-        setProviderConfig((prev) => ({
-          configured: true,
-          api_url: data.api_url,
-          engine: data.engine,
-          model: data.model,
-          has_api_key: data.has_api_key,
-          inherit_global: false,
-          has_global_config: prev?.has_global_config ?? false,
-          global_api_url: prev?.global_api_url ?? null,
-          global_has_api_key: prev?.global_has_api_key ?? false,
-          global_engine: prev?.global_engine ?? null,
-          global_model: prev?.global_model ?? null,
-        }));
-        setProviderAuthToken('');
-      } else {
-        addToast({ title: data.detail || '保存失败', color: 'danger' });
-      }
-    } catch {
-      addToast({ title: '无法连接后端', color: 'danger' });
-    } finally {
-      setProviderSaving(false);
-    }
+    if (!res.ok) return;
+    const data = (await res.json()) as RepositoryConfiguration;
+    setConfig(data);
+    setConfigurationRequired(false);
+    setForm({
+      engine: data.engine || '',
+      model: data.model || '',
+      credential_id: data.credential_id ? String(data.credential_id) : '',
+      wire_api: data.wire_api || '',
+      temperature: data.temperature == null ? '' : String(data.temperature),
+      max_tokens: data.max_tokens == null ? '' : String(data.max_tokens),
+      custom_prompt: data.custom_prompt || '',
+      focus: data.focus.join(','),
+      features: data.features.join(','),
+      is_active: data.is_active,
+    });
   };
 
-  const updateIssueSettings = async (patch: Partial<IssueSettings>) => {
-    if (issueSettingsSaving || requiresLogin || !owner || !repo || !canEditRepo) return;
+  useEffect(() => {
+    if (!router.isReady) return;
+    void loadStatic();
+  }, [router.isReady]);
 
-    const previous = issueSettings;
-    const next = { ...issueSettings, ...patch };
-    setIssueSettings(next);
-    setIssueSettingsSaving(true);
+  useEffect(() => {
+    if (!router.isReady) return;
+    void loadConfig();
+  }, [router.isReady, owner, repo, scenario]);
 
-    try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/issue-settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-      });
-      if (!res.ok) {
-        setIssueSettings(previous);
-        addToast({ title: 'Issue 设置保存失败', color: 'danger' });
-        return;
-      }
-      const data = (await res.json()) as IssueSettings;
-      setIssueSettings(data);
-      addToast({ title: 'Issue 设置已保存', color: 'success' });
-    } catch {
-      setIssueSettings(previous);
-      addToast({ title: '无法连接后端', color: 'danger' });
-    } finally {
-      setIssueSettingsSaving(false);
-    }
+  const createFromTemplate = async () => {
+    const templateId = selectedTemplateId || scenarioTemplates.find((item) => item.is_default)?.id || scenarioTemplates[0]?.id;
+    if (!templateId) return;
+    const res = await apiFetch(`/api/v2/repos/${owner}/${repo}/configurations/from-template`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scenario, template_id: Number(templateId) }),
+    });
+    if (res.ok) await loadConfig();
   };
 
-  const toggleInheritGlobal = async (nextValue: boolean) => {
-    if (requiresLogin || !owner || !repo || !canEditRepo || inheritSaving) return;
-
-    setInheritSaving(true);
-    try {
-      const res = await apiFetch(`/api/repos/${owner}/${repo}/config?type=review`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inherit_global: nextValue }),
-      });
-      const data = await res.json();
-
-      if (res.ok) {
-        setInheritGlobal(nextValue);
-        addToast({
-          title: nextValue ? '已切换为全局设置' : '已切换为仓库独立设置',
-          color: 'success',
-        });
-        if (nextValue) {
-          setProviderBaseUrl(data.api_url || '');
-          setProviderModel(data.model || '');
-          setProviderAuthToken('');
-        }
-        await fetchProviderConfig();
-      } else {
-        addToast({ title: data.detail || '切换失败', color: 'danger' });
-      }
-    } catch {
-      addToast({ title: '无法连接后端', color: 'danger' });
-    } finally {
-      setInheritSaving(false);
-    }
+  const saveConfig = async () => {
+    const res = await apiFetch(`/api/v2/repos/${owner}/${repo}/configurations/${scenario}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        engine: form.engine || undefined,
+        model: form.model || null,
+        credential_id: form.credential_id ? Number(form.credential_id) : null,
+        wire_api: form.wire_api || null,
+        temperature: form.temperature ? Number(form.temperature) : null,
+        max_tokens: form.max_tokens ? Number(form.max_tokens) : null,
+        custom_prompt: form.custom_prompt || null,
+        focus: form.focus.split(',').map((item) => item.trim()).filter(Boolean),
+        features: form.features.split(',').map((item) => item.trim()).filter(Boolean),
+        is_active: form.is_active,
+      }),
+    });
+    if (res.ok) await loadConfig();
   };
 
-  if (!owner || !repo) {
-    return null;
-  }
-
-  const isWebhookEnabled = webhookStatus?.configured && webhookStatus?.active;
-
-  const providerPlaceholders: Record<string, { baseUrl: string; apiKey: string }> = {
-    claude_code: {
-      baseUrl: '必须填写 Claude API Base URL',
-      apiKey: 'sk-ant-...',
-    },
-    codex_cli: {
-      baseUrl: 'https://api.openai.com (留空使用默认)',
-      apiKey: 'sk-...',
-    },
-    forge: {
-      baseUrl: 'https://api.anthropic.com (留空使用全局 FORGE_BASE_URL)',
-      apiKey: 'sk-ant-...',
-    },
+  const applyTemplate = async () => {
+    const templateId = selectedTemplateId || config?.source_template_id;
+    if (!templateId) return;
+    const res = await apiFetch(`/api/v2/repos/${owner}/${repo}/configurations/${scenario}/apply-template`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ template_id: Number(templateId) }),
+    });
+    if (res.ok) await loadConfig();
   };
-
-  const currentPlaceholders = providerPlaceholders[selectedProvider] || providerPlaceholders.claude_code;
-  const modelPlaceholders: Record<string, string> = {
-    claude_code: '例如: claude-3-7-sonnet-20250219',
-    codex_cli: '例如: gpt-5.3-codex',
-    forge: '例如: claude-sonnet-4-20250514',
-  };
-  const currentModelPlaceholder = modelPlaceholders[selectedProvider] || '例如: gpt-5.3-codex';
-  const providerLabel = (name: string) => providers.find((p) => p.name === name)?.label || name;
 
   return (
     <>
       <Head>
-        <title>{`${owner}/${repo} - 配置`}</title>
+        <title>{owner}/{repo} - 仓库配置</title>
       </Head>
-      <div className="max-w-[1100px] mx-auto">
-        <section className="pb-4">
-          <PageHeader
-            title={`${owner}/${repo}`}
-            icon={<FolderGit2 size={20} />}
-            actions={
-              <>
-                <Button isIconOnly variant="bordered" size="sm" onPress={refreshAll} isDisabled={refreshingAll} aria-label="刷新仓库数据">
-                  <RefreshCw size={16} className={refreshingAll ? 'animate-spin' : ''} />
-                </Button>
-                <Button variant="light" size="sm" onPress={() => router.push('/')}>
-                  <ArrowLeft size={16} /> 返回
-                </Button>
-              </>
-            }
-          />
-        </section>
+      <div className="max-w-[1100px] mx-auto flex flex-col gap-8">
+        <PageHeader title={`${owner}/${repo}`} subtitle="仓库独立配置，运行时不会从全局 fallback" />
 
-        {configHealth && configHealth.overall !== 'ok' && !requiresLogin && (
-          <section className="pt-1">
-            <div className={`rounded-lg px-4 py-2.5 text-sm ${
-              configHealth.overall === 'error' ? 'bg-danger-50 text-danger-700' : 'bg-warning-50 text-warning-700'
-            }`}>
-              <p className="m-0">
-                {configHealth.overall === 'error' ? '⚠️' : 'ℹ️'} 配置状态：
-                {configHealth.checks.filter(c => c.status === 'error').map((c, i) => (
-                  <span key={c.component}>
-                    {i > 0 && '、'}
-                    {c.message}
-                  </span>
-                ))}
-                {' '}— 前往对应标签页补充配置
-              </p>
-            </div>
-          </section>
-        )}
+        <section className="border-t border-divider pt-5">
+          <div className="flex items-center justify-between gap-3">
+            <SectionHeader title="场景配置" />
+            <Select className="max-w-48" selectedKeys={new Set([scenario])} onSelectionChange={(keys) => setScenario(String(Array.from(keys)[0] || 'review') as Scenario)}>
+              <SelectItem key="review">review</SelectItem>
+              <SelectItem key="issue">issue</SelectItem>
+            </Select>
+          </div>
 
-        <section className="pt-2 border-t border-divider/60">
-          <Tabs
-            selectedKey={activeTab}
-            onSelectionChange={(key) => setActiveTab(String(key))}
-            variant="underlined"
-            color="primary"
-          >
-            <Tab key="webhook" title="自动审查" />
-            <Tab key="focus" title="审查方向" />
-            <Tab key="issues" title="Issue 分析" />
-            <Tab key="claude" title="AI 审查配置" />
-            <Tab key="pulls" title="最新 PR" />
-          </Tabs>
-        </section>
-
-        {activeTab === 'webhook' && (
-          <section className="py-5">
-            <div>
-              {requiresLogin ? (
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h3 className="m-0 text-base">需要登录</h3>
-                    <p className="m-0 text-default-500 text-sm mt-1">连接 Gitea 后才能查看和配置 Webhook</p>
-                  </div>
-                  <Button color="primary" onPress={beginLogin}>登录</Button>
-                </div>
-              ) : statusLoading ? (
-                <div className="flex items-center justify-between gap-4">
-                  <Skeleton width={200} height={20} />
-                  <Skeleton width={52} height={28} />
-                </div>
-              ) : (
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h3 className="m-0 text-base flex items-center gap-2">
-                      <span className={`w-2.5 h-2.5 rounded-full ${isWebhookEnabled ? 'bg-success' : 'bg-default-300'}`} />
-                      {isWebhookEnabled ? 'Webhook 已启用' : 'Webhook 未启用'}
-                    </h3>
-                    <p className="m-0 text-default-500 text-sm mt-1">
-                      {canEditRepo
-                        ? isWebhookEnabled
-                          ? `监听事件: ${webhookStatus?.events?.join(', ') || '无'}`
-                          : '启用后，PR 将自动触发代码审查'
-                        : '组织仓库需要组织管理员权限才能修改配置'}
-                    </p>
-                  </div>
-                  <Switch
-                    isSelected={!!isWebhookEnabled}
-                    isDisabled={toggling || !canEditRepo}
-                    onValueChange={() => {
-                      if (!toggling) handleToggle();
-                    }}
-                    aria-label="切换 Webhook"
-                  />
-                </div>
-              )}
-
-              {!requiresLogin && !statusLoading && !isWebhookEnabled && canEditRepo && (
-                <div className="mt-4 border-t border-divider pt-4">
-                  <p className="text-default-500 text-sm m-0 mb-2">启用前可选择监听的事件：</p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {defaultEvents.map((event) => (
-                      <Chip
-                        key={event}
-                        variant={events.includes(event) ? 'solid' : 'bordered'}
-                        color={events.includes(event) ? 'primary' : 'default'}
-                        className="cursor-pointer"
-                        onClick={() => toggleEvent(event)}
-                      >
-                        {event}
-                      </Chip>
-                    ))}
-                    <label className="flex items-center gap-2 text-sm cursor-pointer ml-2">
-                      <input
-                        type="checkbox"
-                        checked={bringBot}
-                        onChange={(e) => setBringBot(e.target.checked)}
-                        className="accent-primary"
-                      />
-                      <span>邀请 bot 协作</span>
-                    </label>
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {activeTab === 'focus' && (
-          <section className="py-5">
-            {focusLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Skeleton width="100%" height={80} className="rounded-xl" />
-                <Skeleton width="100%" height={80} className="rounded-xl" />
-                <Skeleton width="100%" height={80} className="rounded-xl" />
-                <Skeleton width="100%" height={80} className="rounded-xl" />
-              </div>
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <Select label="模板" className="max-w-xs" selectedKeys={selectedTemplateId ? new Set([selectedTemplateId]) : new Set([])} onSelectionChange={(keys) => setSelectedTemplateId(String(Array.from(keys)[0] || ''))}>
+              {scenarioTemplates.map((template) => <SelectItem key={String(template.id)}>{template.name}</SelectItem>)}
+            </Select>
+            {configurationRequired ? (
+              <Button color="primary" onPress={createFromTemplate} isDisabled={!scenarioTemplates.length}>从模板初始化配置</Button>
             ) : (
-              <>
-                <div className="mb-4 flex justify-end gap-2">
-                  <Chip size="sm" variant="flat">功能 {reviewFeatures.length} 个</Chip>
-                  <Chip size="sm" variant="flat">重点 {reviewFocus.length} 个</Chip>
-                </div>
-
-                <p className="m-0 mb-2 text-sm text-default-600">审查功能</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-                  {featureCatalog.map((item) => {
-                    const active = reviewFeatures.includes(item.key);
-                    return (
-                      <button
-                        key={item.key}
-                        disabled={focusSaving}
-                        className={`text-left p-4 rounded-xl transition-all cursor-pointer ${
-                          active
-                            ? 'bg-primary-50 ring-1 ring-primary'
-                            : 'bg-default-100 hover:bg-default-200'
-                        } ${focusSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
-                        onClick={() => toggleFeature(item.key)}
-                      >
-                        <strong className="text-sm text-foreground">{item.label}</strong>
-                        <p className="m-0 text-xs text-default-500 mt-1">{item.detail}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <p className="m-0 mb-2 text-sm text-default-600">审查重点</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {reviewCatalog.map((item) => {
-                    const active = reviewFocus.includes(item.key);
-                    return (
-                      <button
-                        key={item.key}
-                        disabled={focusSaving}
-                        className={`text-left p-4 rounded-xl transition-all cursor-pointer ${
-                          active
-                            ? 'bg-primary-50 ring-1 ring-primary'
-                            : 'bg-default-100 hover:bg-default-200'
-                        } ${focusSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
-                        onClick={() => toggleFocus(item.key)}
-                      >
-                        <strong className="text-sm text-foreground">{item.label}</strong>
-                        <p className="m-0 text-xs text-default-500 mt-1">{item.detail}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
+              <Button variant="flat" onPress={applyTemplate} isDisabled={!selectedTemplateId && !config?.source_template_id}>应用模板</Button>
             )}
-          </section>
-        )}
+          </div>
 
-        {activeTab === 'issues' && (
-          <section className="py-5">
-            {issueSettingsLoading ? (
-              <div className="flex flex-col gap-3">
-                <Skeleton width="100%" height={72} className="rounded-xl" />
-                <Skeleton width="100%" height={72} className="rounded-xl" />
-                <Skeleton width="100%" height={72} className="rounded-xl" />
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4">
-                <div className="rounded-xl border border-divider bg-content1 px-4 py-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h3 className="m-0 text-base">启用 Issue 分析</h3>
-                      <p className="m-0 mt-1 text-sm text-default-500">
-                        打开后，仓库会接收 `issues` 事件并允许记录 Issue 分析结果。
-                      </p>
-                    </div>
-                    <Switch
-                      isSelected={issueSettings.issue_enabled}
-                      isDisabled={!canEditRepo || issueSettingsSaving}
-                      onValueChange={(value) => updateIssueSettings({ issue_enabled: value })}
-                      aria-label="启用 Issue 分析"
-                    />
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-divider bg-content1 px-4 py-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h3 className="m-0 text-base">自动分析新建 Issue</h3>
-                      <p className="m-0 mt-1 text-sm text-default-500">
-                        当 `issues/opened` 或 `issues/reopened` 到达时，自动生成分析与解决方案。
-                      </p>
-                    </div>
-                    <Switch
-                      isSelected={issueSettings.auto_on_open}
-                      isDisabled={!canEditRepo || issueSettingsSaving || !issueSettings.issue_enabled}
-                      onValueChange={(value) => updateIssueSettings({ auto_on_open: value })}
-                      aria-label="自动分析新建 Issue"
-                    />
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-divider bg-content1 px-4 py-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h3 className="m-0 text-base">启用 `/issue` 手动命令</h3>
-                      <p className="m-0 mt-1 text-sm text-default-500">
-                        在普通 Issue 评论中发送 `/issue`，或在配置了 bot 用户名时发送 `@bot /issue`。
-                      </p>
-                    </div>
-                    <Switch
-                      isSelected={issueSettings.manual_command_enabled}
-                      isDisabled={!canEditRepo || issueSettingsSaving || !issueSettings.issue_enabled}
-                      onValueChange={(value) => updateIssueSettings({ manual_command_enabled: value })}
-                      aria-label="启用 /issue 手动命令"
-                    />
-                  </div>
-                </div>
-
-                <div className="rounded-xl bg-default-100 px-4 py-3 text-sm text-default-600">
-                  <p className="m-0">
-                    当前默认建议的 Webhook 事件为：
-                    <span className="ml-2 font-mono text-foreground">pull_request, issues, issue_comment</span>
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-divider bg-content1 px-4 py-4 flex flex-col gap-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h3 className="m-0 text-base">Issue 专属引擎配置</h3>
-                      <p className="m-0 mt-1 text-sm text-default-500">
-                        可为 Issue 分析单独指定 API / 模型 / 自定义提示词；当前仅 Forge 支持 Issue 场景。
-                      </p>
-                    </div>
-                  </div>
-
-                  {issueConfigLoading ? (
-                    <Skeleton width="100%" height={120} className="rounded-lg" />
-                  ) : (
-                    <>
-                      {issueConfig?.has_api_key ? (
-                        <div className="rounded-lg bg-success-50 px-3 py-2 text-sm text-success-700">
-                          ✅ Issue 分析 API Key 已配置{issueInheritGlobal ? '（继承自全局）' : '（独立配置）'}
-                        </div>
-                      ) : issueInheritGlobal && issueConfig?.global_has_api_key === false ? (
-                        <div className="rounded-lg bg-warning-50 px-3 py-2 text-sm text-warning-700">
-                          ⚠️ 使用全局配置，但全局 Issue API Key 未配置 — Issue 分析将失败
-                          <span className="ml-2 underline cursor-pointer hover:text-warning-800" onClick={() => router.push('/preferences')}>去设置</span>
-                        </div>
-                      ) : !issueConfig?.has_api_key && !issueInheritGlobal ? (
-                        <div className="rounded-lg bg-danger-50 px-3 py-2 text-sm text-danger-700">
-                          ❌ 未配置 Issue API Key — Issue 分析将失败
-                        </div>
-                      ) : null}
-
-                      <div className="flex items-center justify-between gap-4 rounded-lg bg-default-100 px-3 py-2">
-                        <span className="text-sm">与全局 Issue 配置保持一致</span>
-                        <Switch
-                          isSelected={issueInheritGlobal}
-                          isDisabled={!canEditRepo || issueConfigSaving}
-                          onValueChange={(value) => {
-                            setIssueInheritGlobal(value);
-                            if (value) {
-                              void saveIssueConfig({ inherit_global: true });
-                            } else {
-                              if (providerConfig?.engine === 'forge' && providerConfig?.has_api_key && !issueApiUrl) {
-                                setIssueApiUrl(providerConfig.api_url || '');
-                              }
-                            }
-                          }}
-                          aria-label="Issue 分析继承全局"
-                        />
-                      </div>
-
-                      {issueInheritGlobal ? (
-                        <div className="rounded-lg bg-default-100 px-4 py-3 text-sm space-y-1">
-                          <p>API URL: <span className="font-mono">{issueConfig?.api_url || '未设置'}</span></p>
-                          <p>Model: <span className="font-mono">{issueConfig?.model || '未设置'}</span></p>
-                          <p>API Key: <Chip size="sm" variant="flat" color={issueConfig?.has_api_key ? 'success' : 'warning'}>
-                            {issueConfig?.has_api_key ? '已配置' : '未配置'}
-                          </Chip></p>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <Input
-                            label="Forge Base URL"
-                            size="sm"
-                            value={issueApiUrl}
-                            onValueChange={setIssueApiUrl}
-                            isDisabled={!canEditRepo || issueConfigSaving}
-                            placeholder="https://api.anthropic.com"
-                          />
-                          <Input
-                            label="API Key"
-                            type="password"
-                            size="sm"
-                            value={issueApiKey}
-                            onValueChange={setIssueApiKey}
-                            isDisabled={!canEditRepo || issueConfigSaving}
-                            placeholder={issueConfig?.has_api_key ? '已保存，留空保持不变' : '仅首次保存必填'}
-                            description={providerConfig?.engine === 'forge' && providerConfig?.has_api_key ? '可参考 PR 审查配置' : undefined}
-                          />
-                          <Input
-                            label="Model"
-                            size="sm"
-                            value={issueModel}
-                            onValueChange={setIssueModel}
-                            isDisabled={!canEditRepo || issueConfigSaving}
-                            placeholder="claude-sonnet-4-20250514"
-                          />
-                          <div className="md:col-span-2">
-                            <p className="m-0 mb-2 text-sm text-default-600">默认分析重点</p>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                              {issueFocusCatalog.map((item) => {
-                                const active = issueFocus.includes(item.key);
-                                return (
-                                  <button
-                                    key={item.key}
-                                    disabled={!canEditRepo || issueConfigSaving}
-                                    className={`text-left p-3 rounded-xl transition-all cursor-pointer ${
-                                      active
-                                        ? 'bg-primary-50 ring-1 ring-primary'
-                                        : 'bg-default-100 hover:bg-default-200'
-                                    } ${!canEditRepo || issueConfigSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
-                                    onClick={() => toggleIssueFocus(item.key)}
-                                  >
-                                    <strong className="text-sm text-foreground">{item.label}</strong>
-                                    <p className="m-0 text-xs text-default-500 mt-1">{item.detail}</p>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                          <Input
-                            label="自定义 Issue 提示词"
-                            size="sm"
-                            value={issueCustomPrompt}
-                            onValueChange={setIssueCustomPrompt}
-                            isDisabled={!canEditRepo || issueConfigSaving}
-                            className="md:col-span-2"
-                            placeholder="可选，追加在系统提示词末尾"
-                          />
-                          <div className="md:col-span-2 flex justify-end">
-                            <Button
-                              color="primary"
-                              size="sm"
-                              isDisabled={!canEditRepo || issueConfigSaving}
-                              onPress={() =>
-                                saveIssueConfig({
-                                  engine: 'forge',
-                                  api_url: issueApiUrl || null,
-                                  api_key: issueApiKey || undefined,
-                                  model: issueModel || null,
-                                  custom_prompt: issueCustomPrompt || null,
-                                  inherit_global: false,
-                                })
-                              }
-                            >
-                              保存 Issue 配置
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </section>
-        )}
-
-        {activeTab === 'claude' && (
-          <section className="py-5">
-            {providerConfig?.has_api_key ? (
-              <div className="mb-4 flex justify-end">
-                <Chip size="sm" variant="flat" color="success">已配置 Token</Chip>
-              </div>
-            ) : null}
-
-            <div>
-              {requiresLogin ? (
-                <p className="text-default-500 m-0">登录后可配置 AI 审查 API</p>
-              ) : providerConfigLoading ? (
-                <div className="flex flex-col gap-3">
-                  <Skeleton width="100%" height={40} />
-                  <Skeleton width="100%" height={40} />
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between gap-4 rounded-xl bg-default-100 px-4 py-3 mb-4">
-                    <div>
-                      <p className="m-0 text-sm font-medium">与全局设置保持一致</p>
-                      <p className="m-0 mt-1 text-xs text-default-500">
-                        {inheritGlobal
-                          ? '当前使用全局 AI 审查配置'
-                          : '当前使用此仓库的独立 AI 审查配置'}
-                      </p>
-                    </div>
-                    <Switch
-                      isSelected={inheritGlobal}
-                      isDisabled={!canEditRepo || inheritSaving}
-                      onValueChange={toggleInheritGlobal}
-                      aria-label="与全局设置保持一致"
-                    />
-                  </div>
-
-                  {inheritGlobal ? (
-                    <div className="rounded-xl bg-default-100 px-4 py-3">
-                      {providerConfig?.has_global_config ? (
-                        <>
-                          <p className="m-0 text-sm text-default-700">
-                            审查引擎: {providerLabel(providerConfig.global_engine || 'claude_code')}
-                          </p>
-                          <p className="m-0 mt-1 text-sm text-default-700">
-                            模型 ID: {providerConfig.global_model || '未设置'}
-                          </p>
-                          <p className="m-0 mt-1 text-sm text-default-700">
-                            Base URL: {providerConfig.global_api_url || '未配置'}
-                          </p>
-                          <p className="m-0 mt-1 text-sm text-default-700">
-                            API Key: {providerConfig.global_has_api_key ? '已配置' : '未配置'}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="m-0 text-sm text-warning-600">
-                          尚未配置全局 AI 审查设置，请先在「个人设置」中配置
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex flex-col gap-3">
-                        {providers.length > 0 && (
-                          <Select
-                            label="审查引擎"
-                            selectedKeys={new Set([selectedProvider])}
-                            onSelectionChange={(keys) => {
-                              if (keys === 'all') return;
-                              const key = Array.from(keys)[0] as string;
-                              if (key) setSelectedProvider(key);
-                            }}
-                            isDisabled={!canEditRepo}
-                            variant="bordered"
-                            aria-label="选择审查引擎"
-                          >
-                            {providers.map((p) => (
-                              <SelectItem key={p.name}>{p.label}</SelectItem>
-                            ))}
-                          </Select>
-                        )}
-                        <Input
-                          label="Base URL"
-                          value={providerBaseUrl}
-                          onValueChange={setProviderBaseUrl}
-                          placeholder={currentPlaceholders.baseUrl}
-                          isDisabled={!canEditRepo}
-                          variant="bordered"
-                        />
-                        <Input
-                          label="Model ID（可选）"
-                          value={providerModel}
-                          onValueChange={setProviderModel}
-                          placeholder={currentModelPlaceholder}
-                          isDisabled={!canEditRepo}
-                          variant="bordered"
-                        />
-                        <Input
-                          label="API Key"
-                          type="password"
-                          value={providerAuthToken}
-                          onValueChange={setProviderAuthToken}
-                          placeholder={providerConfig?.has_api_key ? '已配置（输入新值覆盖）' : currentPlaceholders.apiKey}
-                          isDisabled={!canEditRepo}
-                          variant="bordered"
-                        />
-                      </div>
-                      <div className="mt-4 flex items-center gap-3 flex-wrap">
-                        <Button
-                          color="primary"
-                          onPress={saveProviderConfig}
-                          isDisabled={providerSaving || !canEditRepo}
-                          isLoading={providerSaving}
-                        >
-                          保存配置
-                        </Button>
-                        <span className="text-default-400 text-xs">
-                          {canEditRepo
-                            ? '配置后，审查 PR 时将使用此仓库的 API Key'
-                            : '组织仓库需要组织管理员权限才能修改 AI 审查配置'}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                  <div className="mt-3 text-default-400 text-xs">
-                    全局配置在“个人设置”维护，仓库仅在需要时单独覆盖
-                  </div>
-                </>
-              )}
+          {configurationRequired ? (
+            <div className="mt-6 rounded-md border border-warning/50 bg-warning/10 p-4 text-sm text-warning-700">
+              configuration_required：这个仓库还没有 {scenario} 配置，请先从模板初始化。
             </div>
-          </section>
-        )}
-
-        {activeTab === 'pulls' && (
-          <section className="py-5">
-            <div>
-              {requiresLogin ? (
-                <p className="text-default-500 m-0">登录后可查看 Pull Request</p>
-              ) : pullsLoading ? (
-                <div className="flex flex-col gap-3">
-                  <Skeleton width="100%" height={80} />
-                  <Skeleton width="100%" height={80} />
-                  <Skeleton width="100%" height={80} />
-                </div>
-              ) : pulls.length === 0 ? (
-                <p className="text-default-500 m-0">暂无 Pull Request</p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {pulls.map((pr) => {
-                    const prDate = new Date(pr.updated_at);
-                    const now = new Date();
-                    const diffMs = now.getTime() - prDate.getTime();
-                    const diffMins = Math.floor(diffMs / 60000);
-                    const diffHours = Math.floor(diffMs / 3600000);
-                    const diffDays = Math.floor(diffMs / 86400000);
-
-                    let timeAgo = '';
-                    if (diffDays > 0) {
-                      timeAgo = `${diffDays} 天前`;
-                    } else if (diffHours > 0) {
-                      timeAgo = `${diffHours} 小时前`;
-                    } else if (diffMins > 0) {
-                      timeAgo = `${diffMins} 分钟前`;
-                    } else {
-                      timeAgo = '刚刚';
-                    }
-
-                    let statusColor: 'success' | 'danger' | 'primary' = 'primary';
-                    let statusText = '打开';
-                    if (pr.merged) {
-                      statusColor = 'success';
-                      statusText = '已合并';
-                    } else if (pr.state === 'closed') {
-                      statusColor = 'danger';
-                      statusText = '已关闭';
-                    }
-
-                    return (
-                      <a
-                        key={pr.id}
-                        href={pr.html_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group flex items-center gap-3 p-3 rounded-xl bg-default-100 no-underline text-foreground transition-all hover:bg-default-200"
-                      >
-                        <img
-                          src={pr.user.avatar_url}
-                          alt={pr.user.login}
-                          className="w-9 h-9 rounded-full shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium truncate">{pr.title}</div>
-                          <div className="text-xs text-default-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                            <span>#{pr.number}</span>
-                            <span>·</span>
-                            <span>{pr.user.login}</span>
-                            <span>·</span>
-                            <span>{timeAgo}</span>
-                          </div>
-                          <div className="text-xs text-default-400 mt-1 flex items-center gap-1">
-                            <code className="bg-default-100 px-1.5 py-0.5 rounded text-[11px] max-w-[120px] truncate">{pr.head.ref}</code>
-                            <ChevronRight size={12} />
-                            <code className="bg-default-100 px-1.5 py-0.5 rounded text-[11px] max-w-[120px] truncate">{pr.base.ref}</code>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Chip size="sm" variant="flat" color={statusColor}>{statusText}</Chip>
-                          <ExternalLink size={16} className="text-default-400 group-hover:text-primary transition-colors" />
-                        </div>
-                      </a>
-                    );
-                  })}
-                </div>
-              )}
+          ) : config ? (
+            <div className="mt-6 flex flex-col gap-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <Input label="Engine" value={form.engine} onValueChange={(engine) => setForm({ ...form, engine })} />
+                <Input label="Model" value={form.model} onValueChange={(model) => setForm({ ...form, model })} />
+                <Select label="凭证" selectedKeys={form.credential_id ? new Set([form.credential_id]) : new Set([])} onSelectionChange={(keys) => setForm({ ...form, credential_id: String(Array.from(keys)[0] || '') })}>
+                  {credentials.map((credential) => <SelectItem key={String(credential.id)}>{credential.name}</SelectItem>)}
+                </Select>
+                <Input label="Wire API" value={form.wire_api} onValueChange={(wire_api) => setForm({ ...form, wire_api })} />
+                <Input label="Temperature" value={form.temperature} onValueChange={(temperature) => setForm({ ...form, temperature })} />
+                <Input label="Max tokens" value={form.max_tokens} onValueChange={(max_tokens) => setForm({ ...form, max_tokens })} />
+              </div>
+              <Textarea label="Focus，逗号分隔" value={form.focus} onValueChange={(focus) => setForm({ ...form, focus })} />
+              <Textarea label="Features，逗号分隔" value={form.features} onValueChange={(features) => setForm({ ...form, features })} />
+              <Textarea label="Custom prompt" value={form.custom_prompt} onValueChange={(custom_prompt) => setForm({ ...form, custom_prompt })} />
+              <div className="text-sm text-default-500">
+                模板 #{config.source_template_id || '无'} · 复制时间 {config.template_version_copied_at || '未知'} · {behindTemplate ? '落后模板' : '与模板同步或无模板版本'}
+              </div>
+              <Button color="primary" onPress={saveConfig}>保存仓库配置</Button>
             </div>
-          </section>
-        )}
+          ) : null}
+        </section>
       </div>
     </>
   );

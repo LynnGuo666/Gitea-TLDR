@@ -3,7 +3,7 @@
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Awaitable, Dict, Iterator, Iterable
+from typing import Any, Dict, Iterator, Iterable
 
 from ..types import ForgeToolResult, ForgeToolCall, Scenario, ToolDefinition
 

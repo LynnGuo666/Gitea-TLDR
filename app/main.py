@@ -53,7 +53,7 @@ async def init_database() -> Database:
     if _database is None:
         _database = Database(settings.effective_database_url)
         await _database.init()
-        logger.info(f"数据库初始化完成")
+        logger.info("数据库初始化完成")
     return _database
 
 
@@ -78,7 +78,7 @@ async def _recover_pending_webhooks(context: AppContext) -> None:
 
         async with context.database.session() as session:
             db_service = DBService(session)
-            pending = await db_service.get_pending_webhook_logs()
+            pending = await db_service.list_pending_webhook_events()
     except Exception as e:
         logger.warning(f"查询 pending webhook 失败: {e}")
         return
@@ -90,7 +90,9 @@ async def _recover_pending_webhooks(context: AppContext) -> None:
     recovered = 0
     for log in pending:
         try:
-            payload_raw = getattr(log, "payload_json", None) or getattr(log, "payload", "{}")
+            payload_raw = str(
+                getattr(log, "payload_json", None) or getattr(log, "payload", "{}")
+            )
             payload = _json.loads(payload_raw)
         except Exception:
             logger.warning(f"webhook payload 解析失败: log_id={log.id}")
@@ -100,8 +102,8 @@ async def _recover_pending_webhooks(context: AppContext) -> None:
         try:
             async with context.database.session() as session:
                 db_service = DBService(session)
-                await db_service.update_webhook_log(
-                    log_id=log.id,
+                await db_service.update_webhook_event(
+                    event_id=log.id,
                     status="retrying",
                 )
         except Exception:
@@ -125,8 +127,8 @@ async def _recover_pending_webhooks(context: AppContext) -> None:
             try:
                 async with context.database.session() as session:
                     db_service = DBService(session)
-                    await db_service.update_webhook_log(
-                        log_id=log.id,
+                    await db_service.update_webhook_event(
+                        event_id=log.id,
                         status="success",
                         processing_time_ms=_elapsed_ms,
                     )
@@ -258,7 +260,6 @@ def create_app() -> FastAPI:
 
             try:
                 import asyncio as _asyncio
-                import json as _json
 
                 _asyncio.ensure_future(_recover_pending_webhooks(context))
             except Exception as e:

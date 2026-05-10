@@ -21,6 +21,8 @@ from app.core import (
     settings,
 )
 from app.core.context import AppContext
+from app.models import Actor
+from app.services.audit_service import AuditService
 from app.services.db_service import DBService
 
 
@@ -97,6 +99,20 @@ class RepositoryConfigUpdatePayload(BaseModel):
     is_active: Optional[bool] = None
 
 
+class AppSettingPayload(BaseModel):
+    value: Any
+    category: str = "general"
+    description: Optional[str] = None
+
+
+class ActorUpdatePayload(BaseModel):
+    display_name: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
+    permissions: Optional[list[str]] = None
+    is_active: Optional[bool] = None
+
+
 def _loads_list(value: Optional[str]) -> list[Any]:
     if not value:
         return []
@@ -118,6 +134,38 @@ def _serialize_credential(cred) -> dict[str, Any]:
         "has_api_key": bool(cred.api_key_enc),
         "is_active": cred.is_active,
         "last_used_at": cred.last_used_at.isoformat() if cred.last_used_at else None,
+    }
+
+
+def _serialize_actor(actor) -> dict[str, Any]:
+    return {
+        "id": actor.id,
+        "external_provider": actor.external_provider,
+        "external_username": actor.external_username,
+        "display_name": actor.display_name,
+        "email": actor.email,
+        "role": actor.role,
+        "permissions": _loads_list(actor.permissions_json),
+        "is_active": actor.is_active,
+        "last_login_at": actor.last_login_at.isoformat() if actor.last_login_at else None,
+        "created_at": actor.created_at.isoformat() if actor.created_at else None,
+        "updated_at": actor.updated_at.isoformat() if actor.updated_at else None,
+    }
+
+
+def _serialize_app_setting(setting) -> dict[str, Any]:
+    try:
+        value = json.loads(setting.value_json)
+    except Exception:
+        value = setting.value_json
+    return {
+        "id": setting.id,
+        "key": setting.key,
+        "category": setting.category,
+        "value": value,
+        "description": setting.description,
+        "updated_by_actor_id": setting.updated_by_actor_id,
+        "updated_at": setting.updated_at.isoformat() if setting.updated_at else None,
     }
 
 
@@ -222,7 +270,8 @@ def _serialize_run(run) -> dict[str, Any]:
 
 
 def _serialize_repo(repo: dict[str, Any]) -> dict[str, Any]:
-    owner = repo.get("owner") if isinstance(repo.get("owner"), dict) else {}
+    raw_owner = repo.get("owner")
+    owner: dict[str, Any] = raw_owner if isinstance(raw_owner, dict) else {}
     return {
         "id": repo.get("id"),
         "name": repo.get("name"),
@@ -258,8 +307,38 @@ def _serialize_provider_run(run) -> dict[str, Any]:
         "error_message": run.error_message,
         "error": run.error_message,
         "repo_full_name": run.repository.full_name if getattr(run, "repository", None) else None,
-        "review_session": None,
-        "issue_session": None,
+    }
+
+
+def _serialize_annotation(annotation) -> dict[str, Any]:
+    return {
+        "id": annotation.id,
+        "analysis_run_id": annotation.analysis_run_id,
+        "annotation_type": annotation.annotation_type,
+        "file_path": annotation.file_path,
+        "new_line": annotation.new_line,
+        "old_line": annotation.old_line,
+        "severity": annotation.severity,
+        "body": annotation.body,
+        "suggestion": annotation.suggestion,
+        "created_at": annotation.created_at.isoformat() if annotation.created_at else None,
+    }
+
+
+def _serialize_webhook_event(event) -> dict[str, Any]:
+    return {
+        "id": event.id,
+        "request_id": event.request_id,
+        "repository_id": event.repository_id,
+        "analysis_run_id": event.analysis_run_id,
+        "event_type": event.event_type,
+        "payload": json.loads(event.payload_json) if event.payload_json else None,
+        "status": event.status,
+        "error_message": event.error_message,
+        "processing_time_ms": event.processing_time_ms,
+        "retry_count": event.retry_count,
+        "created_at": event.created_at.isoformat() if event.created_at else None,
+        "updated_at": event.updated_at.isoformat() if event.updated_at else None,
     }
 
 
@@ -359,6 +438,82 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         )
         return response
 
+    @router.get("/actors")
+    async def list_actors(
+        request: Request,
+        role: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        limit: int = Query(100, ge=1, le=500),
+        offset: int = Query(0, ge=0),
+    ):
+        async with request.state.database.session() as session:
+            service = DBService(session)
+            actors = await service.list_actors(
+                role=role, is_active=is_active, limit=limit, offset=offset
+            )
+            return {"actors": [_serialize_actor(actor) for actor in actors], "limit": limit, "offset": offset}
+
+    @router.put("/actors/{actor_id}")
+    async def update_actor(actor_id: int, payload: ActorUpdatePayload, request: Request):
+        async with request.state.database.session() as session:
+            service = DBService(session)
+            audit = AuditService(service)
+            before = await service.session.get(Actor, actor_id)
+            before_snapshot = _serialize_actor(before) if before else None
+            actor = await service.update_actor(actor_id, **payload.model_dump(exclude_unset=True))
+            if not actor:
+                raise HTTPException(status_code=404, detail="actor_not_found")
+            await audit.record_success(
+                action="update",
+                resource_type="actor",
+                resource_id=actor.id,
+                before=before_snapshot,
+                after=_serialize_actor(actor),
+            )
+            return _serialize_actor(actor)
+
+    @router.get("/app-settings")
+    async def list_app_settings(request: Request, category: Optional[str] = None):
+        async with request.state.database.session() as session:
+            service = DBService(session)
+            settings_rows = await service.list_app_settings(category)
+            return {"settings": [_serialize_app_setting(row) for row in settings_rows]}
+
+    @router.put("/app-settings/{key}")
+    async def update_app_setting(key: str, payload: AppSettingPayload, request: Request):
+        async with request.state.database.session() as session:
+            service = DBService(session)
+            audit = AuditService(service)
+            row = await service.update_app_setting(
+                key,
+                payload.value,
+                category=payload.category,
+                description=payload.description,
+            )
+            await audit.record_success(
+                action="update",
+                resource_type="app_setting",
+                resource_id=row.id,
+                after=_serialize_app_setting(row),
+            )
+            return _serialize_app_setting(row)
+
+    @router.delete("/app-settings/{key}")
+    async def delete_app_setting(key: str, request: Request):
+        async with request.state.database.session() as session:
+            service = DBService(session)
+            audit = AuditService(service)
+            deleted = await service.delete_app_setting(key)
+            if not deleted:
+                raise HTTPException(status_code=404, detail="setting_not_found")
+            await audit.record_success(
+                action="delete",
+                resource_type="app_setting",
+                resource_id=None,
+                after={"key": key},
+            )
+            return {"success": True}
+
     @router.get("/repos")
     async def list_repos():
         repos = await context.gitea_client.list_user_repos()
@@ -399,15 +554,14 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         if getattr(request.state, "database", None):
             async with request.state.database.session() as session:
                 service = DBService(session)
+                audit = AuditService(service)
                 repo_obj = await service.update_repository_secret(owner, repo, secret)
-                await service.record_audit(
-                    actor_id=None,
-                    actor_type="user",
+                await audit.record_success(
                     action="update",
                     resource_type="repository",
                     resource_id=repo_obj.id if repo_obj else None,
-                    repository_id=repo_obj.id if repo_obj else None,
-                    sensitive_fields=["webhook_secret_enc"],
+                    after={"webhook_secret_enc": secret},
+                    context={"repository_id": repo_obj.id if repo_obj else None},
                 )
         return {"success": True, "hook_id": hook_id}
 
@@ -416,16 +570,15 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         if getattr(request.state, "database", None):
             async with request.state.database.session() as session:
                 service = DBService(session)
+                audit = AuditService(service)
                 repo_obj = await service.get_or_create_repository(owner, repo)
                 await service.ensure_repository_feature(repo_obj.id, "review")
                 await service.ensure_repository_feature(repo_obj.id, "issue")
-                await service.record_audit(
-                    actor_id=None,
-                    actor_type="user",
+                await audit.record_success(
                     action="create",
                     resource_type="repository",
                     resource_id=repo_obj.id,
-                    repository_id=repo_obj.id,
+                    context={"repository_id": repo_obj.id},
                 )
         return {"success": True}
 
@@ -450,14 +603,12 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         async with request.state.database.session() as session:
             service = DBService(session)
             cred = await service.create_provider_credential(**payload.model_dump())
-            await service.record_audit(
-                actor_id=None,
-                actor_type="user",
+            audit = AuditService(service)
+            await audit.record_success(
                 action="create",
                 resource_type="provider_credential",
                 resource_id=cred.id,
                 after=_serialize_credential(cred),
-                sensitive_fields=["api_key_enc"],
             )
             return _serialize_credential(cred)
 
@@ -471,14 +622,12 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             )
             if not cred:
                 raise HTTPException(status_code=404, detail="凭证不存在")
-            await service.record_audit(
-                actor_id=None,
-                actor_type="user",
+            audit = AuditService(service)
+            await audit.record_success(
                 action="update",
                 resource_type="provider_credential",
                 resource_id=cred.id,
                 after=_serialize_credential(cred),
-                sensitive_fields=["api_key_enc"],
             )
             return _serialize_credential(cred)
 
@@ -489,13 +638,12 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             cred = await service.rotate_provider_credential(credential_id, payload.api_key)
             if not cred:
                 raise HTTPException(status_code=404, detail="凭证不存在")
-            await service.record_audit(
-                actor_id=None,
-                actor_type="user",
+            audit = AuditService(service)
+            await audit.record_success(
                 action="rotate_secret",
                 resource_type="provider_credential",
                 resource_id=cred.id,
-                sensitive_fields=["api_key_enc"],
+                after={"api_key_enc": payload.api_key},
             )
             return _serialize_credential(cred)
 
@@ -511,9 +659,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 raise
             if not deleted:
                 raise HTTPException(status_code=404, detail="凭证不存在")
-            await service.record_audit(
-                actor_id=None,
-                actor_type="user",
+            audit = AuditService(service)
+            await audit.record_success(
                 action="delete",
                 resource_type="provider_credential",
                 resource_id=credential_id,
@@ -531,9 +678,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
         async with request.state.database.session() as session:
             service = DBService(session)
             template = await service.create_config_template(**payload.model_dump())
-            await service.record_audit(
-                actor_id=None,
-                actor_type="user",
+            audit = AuditService(service)
+            await audit.record_success(
                 action="create",
                 resource_type="config_template",
                 resource_id=template.id,
@@ -551,9 +697,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             )
             if not template:
                 raise HTTPException(status_code=404, detail="模板不存在")
-            await service.record_audit(
-                actor_id=None,
-                actor_type="user",
+            audit = AuditService(service)
+            await audit.record_success(
                 action="update",
                 resource_type="config_template",
                 resource_id=template.id,
@@ -568,9 +713,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             deleted = await service.delete_config_template(template_id)
             if not deleted:
                 raise HTTPException(status_code=404, detail="模板不存在")
-            await service.record_audit(
-                actor_id=None,
-                actor_type="user",
+            audit = AuditService(service)
+            await audit.record_success(
                 action="delete",
                 resource_type="config_template",
                 resource_id=template_id,
@@ -597,14 +741,13 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             config = await service.create_repository_config_from_template(
                 repo_obj.id, payload.scenario, payload.template_id
             )
-            await service.record_audit(
-                actor_id=None,
-                actor_type="user",
+            audit = AuditService(service)
+            await audit.record_success(
                 action="create",
                 resource_type="repository_config",
                 resource_id=config.id,
-                repository_id=repo_obj.id,
                 after=_serialize_repo_config(config),
+                context={"repository_id": repo_obj.id},
             )
             return _serialize_repo_config(config)
 
@@ -618,15 +761,13 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                 scenario,
                 **payload.model_dump(exclude_unset=True),
             )
-            await service.record_audit(
-                actor_id=None,
-                actor_type="user",
+            audit = AuditService(service)
+            await audit.record_success(
                 action="update",
                 resource_type="repository_config",
                 resource_id=config.id,
-                repository_id=repo_obj.id,
                 after=_serialize_repo_config(config),
-                sensitive_fields=["api_key_enc"],
+                context={"repository_id": repo_obj.id},
             )
             return _serialize_repo_config(config)
 
@@ -638,14 +779,13 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             config = await service.apply_template_to_repository_config(
                 repo_obj.id, scenario, payload.template_id
             )
-            await service.record_audit(
-                actor_id=None,
-                actor_type="user",
+            audit = AuditService(service)
+            await audit.record_success(
                 action="apply_template",
                 resource_type="repository_config",
                 resource_id=config.id,
-                repository_id=repo_obj.id,
                 after=_serialize_repo_config(config),
+                context={"repository_id": repo_obj.id},
             )
             return _serialize_repo_config(config)
 
@@ -666,6 +806,13 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             if not run:
                 raise HTTPException(status_code=404, detail="运行记录不存在")
             return _serialize_run(run)
+
+    @router.get("/runs/{run_id}/annotations")
+    async def get_run_annotations(run_id: int, request: Request):
+        async with request.state.database.session() as session:
+            service = DBService(session)
+            annotations = await service.list_analysis_annotations(run_id)
+            return {"annotations": [_serialize_annotation(item) for item in annotations]}
 
     @router.get("/provider-runs")
     async def list_provider_runs(request: Request, provider: Optional[str] = "forge", scenario: Optional[str] = None, limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
@@ -745,6 +892,54 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
                     for e in events
                 ]
             }
+
+    @router.get("/webhook-events")
+    async def webhook_events(
+        request: Request,
+        repository_id: Optional[int] = None,
+        status: Optional[str] = None,
+        limit: int = Query(100, ge=1, le=500),
+        offset: int = Query(0, ge=0),
+    ):
+        async with request.state.database.session() as session:
+            service = DBService(session)
+            events = await service.list_webhook_events(
+                repository_id=repository_id, status=status, limit=limit, offset=offset
+            )
+            return {"events": [_serialize_webhook_event(event) for event in events], "limit": limit, "offset": offset}
+
+    @router.get("/webhook-events/{event_id}")
+    async def webhook_event_detail(event_id: int, request: Request):
+        async with request.state.database.session() as session:
+            service = DBService(session)
+            event = await service.get_webhook_event(event_id)
+            if not event:
+                raise HTTPException(status_code=404, detail="webhook_event_not_found")
+            return _serialize_webhook_event(event)
+
+    @router.post("/webhook-events/{event_id}/replay")
+    async def replay_webhook_event(event_id: int, request: Request, background_tasks: BackgroundTasks):
+        async with request.state.database.session() as session:
+            service = DBService(session)
+            audit = AuditService(service)
+            event = await service.get_webhook_event(event_id)
+            if not event:
+                raise HTTPException(status_code=404, detail="webhook_event_not_found")
+            payload = json.loads(event.payload_json)
+            await service.update_webhook_event(event.id, status="queued")
+            await audit.record_success(
+                action="replay_webhook",
+                resource_type="webhook_event",
+                resource_id=event.id,
+                context={"repository_id": event.repository_id},
+            )
+        if event.event_type == "pull_request":
+            background_tasks.add_task(context.webhook_handler.handle_pull_request, payload, None, None)
+        elif event.event_type == "issues":
+            background_tasks.add_task(context.webhook_handler.handle_issue, payload)
+        elif event.event_type == "issue_comment":
+            background_tasks.add_task(context.webhook_handler.handle_issue_comment, payload)
+        return {"success": True}
 
     @router.get("/audit-events/{event_id}")
     async def audit_event_detail(event_id: int, request: Request):

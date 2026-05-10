@@ -126,13 +126,24 @@ docker run -d --name gitea-tldr -p 8000:8000 --env-file .env \
 ## 开发
 
 ```bash
+# 安装开发测试依赖
+python -m pip install -r requirements-dev.txt
+
 # 测试
-pytest tests/ -v
+pytest
 
 # 代码检查
-ruff check app && mypy app
-cd frontend && npm run lint && npx tsc --noEmit
+ruff check app tests
+mypy app
+cd frontend && npm run lint && npx tsc --noEmit && npm run build
 ```
+
+## 2.0 数据库迁移说明
+
+- 业务 API 统一使用 `/api/v2/*`。
+- 运行时配置不再从全局配置继承，仓库必须先从模板初始化 `repository_configs`。
+- API Key 只存放在 `provider_credentials`，仓库配置只引用 `credential_id`。
+- Alembic 迁移会在 SQLite 下自动备份数据库，并将旧表重命名为 `legacy_*`。
 
 ## 故障排查
 

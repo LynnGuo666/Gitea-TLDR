@@ -18,8 +18,8 @@ from app.services.providers.base import (
 from app.services.review_engine import ReviewEngine
 from app.services.command_parser import CommandParser
 from app.services.db_service import DBService
+from app.services.audit_service import AuditService
 from app.services.gitea_client import GiteaClient
-from app.services.provider_config_resolver import resolve_provider_config
 from app.services.issue_analysis_service import IssueAnalysisService
 from app.services.repo_manager import RepoManager
 
@@ -192,7 +192,7 @@ class WebhookHandler:
             try:
                 async with self.database.session() as session:
                     db_service = DBService(session)
-                    log = await db_service.create_webhook_log(
+                    log = await db_service.create_webhook_event(
                         request_id=request_id,
                         repository_id=repository_id,
                         event_type=event_type,
@@ -253,10 +253,12 @@ class WebhookHandler:
         increment_retry: bool = False,
     ):
         try:
+            if not self.database:
+                return
             async with self.database.session() as session:
                 db_service = DBService(session)
-                await db_service.update_webhook_log(
-                    log_id=log_id,
+                await db_service.update_webhook_event(
+                    event_id=log_id,
                     status=status,
                     error_message=error_message,
                     processing_time_ms=processing_time_ms,
@@ -295,6 +297,8 @@ class WebhookHandler:
             event_type="issues",
             handler_func=lambda: self.handle_issue(payload),
         )
+
+    async def handle_issue_comment(self, payload: Dict[str, Any]) -> bool:
         """
         处理 Issue 评论事件（用于手动触发 PR 审查或 Issue 分析）
 
@@ -489,14 +493,14 @@ class WebhookHandler:
         Returns:
             是否处理成功
         """
-        review_session_id = None
+        review_run_id = None
         repository_id = None
         analysis_mode = None
         diff_size = 0
         gitea_api_calls = 0
         clone_operations = 0
         actor_user_id = None
-        forge_session_str_id: Optional[str] = None
+        provider_run_session_id: Optional[str] = None
 
         try:
             pr_title = pr_data.get("title")
@@ -514,8 +518,13 @@ class WebhookHandler:
             if self.database and head_sha:
                 async with self.database.session() as session:
                     db_service = DBService(session)
-                    existing = await db_service.get_existing_review_session(
-                        owner, repo_name, pr_number, head_sha
+                    existing_repo = await db_service.get_repository(owner, repo_name)
+                    existing = (
+                        await db_service.get_review_run_by_head(
+                            existing_repo.id, pr_number, head_sha
+                        )
+                        if existing_repo
+                        else None
                     )
                     if existing:
                         logger.info(
@@ -544,31 +553,73 @@ class WebhookHandler:
                         )
                         actor_user_id = actor_user.id
 
-                    repo_config = await db_service.get_repo_specific_model_config(
-                        repository_id
+                    repo_config = await db_service.get_repository_config(
+                        repository_id, "review"
                     )
                     if repo_config is None:
+                        failed = await db_service.create_analysis_run(
+                            kind="review",
+                            repository_id=repository_id,
+                            external_number=pr_number,
+                            trigger_type=trigger_type,
+                            external_title=pr_title,
+                            external_author=pr_author,
+                            source_branch=head_branch,
+                            target_branch=base_branch,
+                            head_sha=head_sha,
+                        )
+                        await db_service.complete_analysis_run(
+                            failed.id,
+                            status="failed",
+                            overall_success=False,
+                            error_message="configuration_required",
+                        )
+                        await AuditService(db_service).record_failure(
+                            actor_id=actor_user_id,
+                            action="trigger_analysis",
+                            resource_type="analysis_run",
+                            resource_id=failed.id,
+                            error="configuration_required",
+                            context={"repository_id": repository_id, "source": "webhook"},
+                        )
                         raise RuntimeError(
                             f"configuration_required: 仓库 {owner}/{repo_name} 尚未初始化 review 配置"
                         )
-                    global_config = await db_service.get_global_model_config()
-                    resolved_provider = resolve_provider_config(
-                        repo_config,
-                        global_config,
-                        default_engine=self.review_engine.default_provider_name,
-                    )
-
-                    settings_config = repo_config or global_config
-                    api_url = resolved_provider.api_url
-                    api_key = resolved_provider.api_key
-                    wire_api = resolved_provider.wire_api
-                    engine = resolved_provider.engine or engine
-                    model = resolved_provider.model or model
-                    config_source = (
-                        "repo_config"
-                        if not resolved_provider.inherit_global and repo_config is not None
-                        else "repo_config"
-                    )
+                    if not repo_config.credential or not repo_config.credential.is_active:
+                        failed = await db_service.create_analysis_run(
+                            kind="review",
+                            repository_id=repository_id,
+                            external_number=pr_number,
+                            trigger_type=trigger_type,
+                            repository_config_id=repo_config.id,
+                            external_title=pr_title,
+                            external_author=pr_author,
+                            source_branch=head_branch,
+                            target_branch=base_branch,
+                            head_sha=head_sha,
+                        )
+                        await db_service.complete_analysis_run(
+                            failed.id,
+                            status="failed",
+                            overall_success=False,
+                            error_message="credential_unavailable",
+                        )
+                        await AuditService(db_service).record_failure(
+                            actor_id=actor_user_id,
+                            action="trigger_analysis",
+                            resource_type="analysis_run",
+                            resource_id=failed.id,
+                            error="credential_unavailable",
+                            context={"repository_id": repository_id, "source": "webhook"},
+                        )
+                        raise RuntimeError("credential_unavailable")
+                    settings_config = repo_config
+                    api_url = repo_config.api_url
+                    api_key = repo_config.api_key
+                    wire_api = repo_config.wire_api
+                    engine = repo_config.engine or engine
+                    model = repo_config.model or model
+                    config_source = "repo_config"
 
                     if settings_config:
                         if focus_areas is None:
@@ -586,22 +637,27 @@ class WebhookHandler:
                     if features is None:
                         features = ["comment"]
 
-                    review_session = await db_service.create_review_session(
+                    review_run = await db_service.create_analysis_run(
+                        kind="review",
                         repository_id=repository_id,
-                        pr_number=pr_number,
+                        external_number=pr_number,
                         trigger_type=trigger_type,
-                        engine=engine,
-                        model=model,
-                        config_source=config_source,
-                        pr_title=pr_title,
-                        pr_author=pr_author,
-                        head_branch=head_branch,
-                        base_branch=base_branch,
+                        effective_engine=engine,
+                        effective_model=model,
+                        repository_config_id=repo_config.id,
+                        credential_id=repo_config.credential_id,
+                        external_title=pr_title,
+                        external_author=pr_author,
+                        source_branch=head_branch,
+                        target_branch=base_branch,
                         head_sha=head_sha,
-                        enabled_features=features,
-                        focus_areas=focus_areas,
+                        result_payload={
+                            "enabled_features": features,
+                            "focus_areas": focus_areas,
+                            "config_source": config_source,
+                        },
                     )
-                    review_session_id = review_session.id
+                    review_run_id = review_run.id
 
             if focus_areas is None:
                 focus_areas = runtime_settings.get("default_review_focus", settings.default_review_focus)
@@ -656,14 +712,14 @@ class WebhookHandler:
                     gitea_api_calls += 1
 
                 # 更新数据库记录
-                if self.database and review_session_id:
+                if self.database and review_run_id:
                     async with self.database.session() as session:
                         db_service = DBService(session)
-                        await db_service.update_review_session(
-                            review_session_id,
+                        await db_service.complete_analysis_run(
+                            review_run_id,
+                            status="failed",
                             overall_success=False,
                             error_message="无法获取PR diff",
-                            completed=True,
                         )
                 return False
 
@@ -699,17 +755,14 @@ class WebhookHandler:
                     gitea_api_calls += 1
 
                 # 更新数据库记录
-                if self.database and review_session_id:
+                if self.database and review_run_id:
                     async with self.database.session() as session:
                         db_service = DBService(session)
-                        await db_service.update_review_session(
-                            review_session_id,
-                            engine=engine,
-                            model=model,
-                            config_source=config_source,
+                        await db_service.complete_analysis_run(
+                            review_run_id,
+                            status="failed",
                             overall_success=False,
                             error_message=analysis_error,
-                            completed=True,
                         )
                 return False
 
@@ -721,8 +774,13 @@ class WebhookHandler:
                 try:
                     async with self.database.session() as session:
                         _db = DBService(session)
-                        _fs = await _db.create_forge_session(repository_id, "review")
-                        forge_session_str_id = _fs.session_id
+                        _fs = await _db.create_provider_run(
+                            repository_id,
+                            "review",
+                            provider="forge",
+                            analysis_run_id=review_run_id,
+                        )
+                        provider_run_session_id = _fs.session_id
                 except Exception as _fse:
                     logger.warning("创建 ForgeSession 失败（非致命）: %s", _fse)
 
@@ -763,31 +821,31 @@ class WebhookHandler:
                     gitea_api_calls += 1
 
                 # 更新数据库记录
-                if self.database and review_session_id:
+                if self.database and review_run_id:
                     async with self.database.session() as session:
                         db_service = DBService(session)
-                        await db_service.update_review_session(
-                            review_session_id,
-                            engine=engine,
-                            model=model,
-                            config_source=config_source,
-                            analysis_mode=analysis_mode,
-                            diff_size_bytes=diff_size,
+                        await db_service.complete_analysis_run(
+                            review_run_id,
+                            status="failed",
                             overall_success=False,
+                            result_payload={
+                                "analysis_mode": analysis_mode,
+                                "diff_size_bytes": diff_size,
+                                "config_source": config_source,
+                            },
                             error_message=analysis_error,
-                            completed=True,
                         )
 
                 # 完成 ForgeSession（失败）
-                if forge_session_str_id and self.database:
+                if provider_run_session_id and self.database:
                     try:
                         async with self.database.session() as session:
                             _db = DBService(session)
-                            await _db.complete_forge_session(
-                                forge_session_str_id,
+                            await _db.complete_provider_run(
+                                provider_run_session_id,
                                 status="failed",
                                 model=model,
-                                review_session_id=review_session_id,
+                                analysis_run_id=review_run_id,
                                 error=analysis_error,
                             )
                     except Exception as _fse:
@@ -855,23 +913,25 @@ class WebhookHandler:
                 gitea_api_calls += 1
 
             # 更新数据库记录
-            if self.database and review_session_id:
+            if self.database and review_run_id:
                 async with self.database.session() as session:
                     db_service = DBService(session)
 
                     # 更新审查会话
-                    await db_service.update_review_session(
-                        review_session_id,
-                        engine=analysis_result.provider_name or engine,
-                        model=(analysis_result.usage_metadata.get("model") or model),
-                        config_source=config_source,
-                        analysis_mode=analysis_mode,
-                        diff_size_bytes=diff_size,
+                    await db_service.complete_analysis_run(
+                        review_run_id,
+                        status="completed" if success else "failed",
                         overall_severity=analysis_result.overall_severity,
                         summary_markdown=summary_markdown,
-                        inline_comments_count=len(analysis_result.inline_comments),
                         overall_success=success,
-                        completed=True,
+                        result_payload={
+                            "config_source": config_source,
+                            "analysis_mode": analysis_mode,
+                            "diff_size_bytes": diff_size,
+                            "inline_comments_count": len(analysis_result.inline_comments),
+                            "enabled_features": features,
+                            "focus_areas": focus_areas,
+                        },
                     )
 
                     # 保存行级评论
@@ -887,16 +947,16 @@ class WebhookHandler:
                             }
                             for c in analysis_result.inline_comments
                         ]
-                        await db_service.save_inline_comments(
-                            review_session_id, comments_data
+                        await db_service.save_analysis_annotations(
+                            review_run_id, comments_data
                         )
 
                     # 记录使用量
                     if repository_id:
                         meta = analysis_result.usage_metadata
-                        await db_service.record_usage(
+                        await db_service.record_usage_event(
                             repository_id=repository_id,
-                            review_session_id=review_session_id,
+                            analysis_run_id=review_run_id,
                             user_id=actor_user_id,
                             estimated_input_tokens=meta.get("input_tokens", 0),
                             estimated_output_tokens=meta.get("output_tokens", 0),
@@ -912,7 +972,7 @@ class WebhookHandler:
                         )
 
             # 完成 ForgeSession（成功）
-            if forge_session_str_id and self.database:
+            if provider_run_session_id and self.database:
                 try:
                     import json as _json
 
@@ -920,8 +980,8 @@ class WebhookHandler:
                     _msgs = meta.get("forge_messages") or []
                     async with self.database.session() as session:
                         _db = DBService(session)
-                        await _db.complete_forge_session(
-                            forge_session_str_id,
+                        await _db.complete_provider_run(
+                            provider_run_session_id,
                             status="completed",
                             model=meta.get("model") or model,
                             turns=meta.get("turns", 0),
@@ -931,7 +991,7 @@ class WebhookHandler:
                             output_tokens=meta.get("output_tokens", 0),
                             cache_creation_input_tokens=meta.get("cache_creation_input_tokens", 0),
                             cache_read_input_tokens=meta.get("cache_read_input_tokens", 0),
-                            review_session_id=review_session_id,
+                            analysis_run_id=review_run_id,
                         )
                 except Exception as _fse:
                     logger.warning("完成 ForgeSession 失败（非致命）: %s", _fse)
@@ -943,28 +1003,28 @@ class WebhookHandler:
             logger.error(f"执行审查异常: {e}", exc_info=True)
 
             # 更新数据库记录
-            if self.database and review_session_id:
+            if self.database and review_run_id:
                 try:
                     async with self.database.session() as session:
                         db_service = DBService(session)
-                        await db_service.update_review_session(
-                            review_session_id,
+                        await db_service.complete_analysis_run(
+                            review_run_id,
+                            status="failed",
                             overall_success=False,
                             error_message=str(e),
-                            completed=True,
                         )
                 except Exception as db_error:
                     logger.error(f"更新数据库记录失败: {db_error}")
 
             # 完成 ForgeSession（异常）
-            if forge_session_str_id and self.database:
+            if provider_run_session_id and self.database:
                 try:
                     async with self.database.session() as session:
                         _db = DBService(session)
-                        await _db.complete_forge_session(
-                            forge_session_str_id,
+                        await _db.complete_provider_run(
+                            provider_run_session_id,
                             status="failed",
-                            review_session_id=review_session_id,
+                            analysis_run_id=review_run_id,
                             error=str(e),
                         )
                 except Exception as _fse:
@@ -1035,7 +1095,10 @@ class WebhookHandler:
             repo = await db_service.get_repository(owner, repo_name)
             if not repo:
                 return True
-            return bool(repo.issue_enabled and repo.issue_auto_on_open)
+            feature = await db_service.get_repository_feature(repo.id, "issue")
+            if not feature:
+                return True
+            return bool(feature.enabled and feature.auto_on_open)
 
     async def _is_issue_manual_enabled(
         self, owner: Optional[str], repo_name: Optional[str]
@@ -1049,4 +1112,7 @@ class WebhookHandler:
             repo = await db_service.get_repository(owner, repo_name)
             if not repo:
                 return True
-            return bool(repo.issue_enabled and repo.issue_manual_command_enabled)
+            feature = await db_service.get_repository_feature(repo.id, "issue")
+            if not feature:
+                return True
+            return bool(feature.enabled and feature.manual_command_enabled)

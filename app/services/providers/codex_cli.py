@@ -15,7 +15,6 @@ import asyncio
 import json
 import logging
 import os
-import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -228,7 +227,7 @@ JSON结构示例：
             'approval_policy = "never"',
             "",
             f"[model_providers.{_PROVIDER_SECTION_NAME}]",
-            f'name = "Gitea PR Review"',
+            'name = "Gitea PR Review"',
         ]
 
         if api_url:

@@ -27,7 +27,7 @@ export default function Home() {
     else setLoading(true);
 
     try {
-      const res = await apiFetch('/api/repos');
+      const res = await apiFetch('/api/v2/repos');
       if (res.status === 401) {
         setNeedsAuth(true);
         setRepos([]);

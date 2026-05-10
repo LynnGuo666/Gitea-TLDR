@@ -1,445 +1,180 @@
 import Head from 'next/head';
-import { useCallback, useContext, useEffect, useState } from 'react';
-import { Button, Chip, Input, Select, SelectItem, Tab, Tabs, addToast } from '@heroui/react';
-import { ArrowRightLeft, Bot } from 'lucide-react';
-import { AuthContext } from '../lib/auth';
-import { apiFetch } from '../lib/api';
+import { useEffect, useState } from 'react';
+import { Button, Input, Select, SelectItem, Textarea } from '@heroui/react';
 import PageHeader from '../components/PageHeader';
-import { GlobalReviewConfig, ProviderInfo } from '../lib/types';
+import SectionHeader from '../components/SectionHeader';
+import { apiFetch } from '../lib/api';
+import { ConfigTemplate, ProviderCredential } from '../lib/types';
 
-interface GlobalIssueConfig {
-  configured: boolean;
-  engine?: string;
-  model?: string;
-  api_url?: string;
-  has_api_key?: boolean;
-  custom_prompt?: string;
-  default_focus?: string[];
-}
+const scenarios = ['review', 'issue'];
 
 export default function PreferencesPage() {
-  const { status: authStatus } = useContext(AuthContext);
-  const [globalProvider, setGlobalProvider] = useState<GlobalReviewConfig | null>(null);
-  const [globalProviderLoading, setGlobalProviderLoading] = useState(true);
-  const [globalProviderSaving, setGlobalProviderSaving] = useState(false);
-  const [globalBaseUrl, setGlobalBaseUrl] = useState('');
-  const [globalAuthToken, setGlobalAuthToken] = useState('');
-  const [globalModel, setGlobalModel] = useState('');
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState('claude_code');
+  const [credentials, setCredentials] = useState<ProviderCredential[]>([]);
+  const [templates, setTemplates] = useState<ConfigTemplate[]>([]);
+  const [credentialForm, setCredentialForm] = useState({ name: '', provider: 'anthropic', api_url: '', api_key: '' });
+  const [templateForm, setTemplateForm] = useState({
+    scenario: 'review',
+    name: '',
+    engine: 'claude_code',
+    model: '',
+    credential_id: '',
+    wire_api: '',
+    temperature: '',
+    max_tokens: '',
+    custom_prompt: '',
+    focus: '',
+    features: 'comment',
+    is_default: false,
+  });
+  const [loading, setLoading] = useState(true);
 
-  const [globalIssue, setGlobalIssue] = useState<GlobalIssueConfig | null>(null);
-  const [globalIssueLoading, setGlobalIssueLoading] = useState(true);
-  const [globalIssueSaving, setGlobalIssueSaving] = useState(false);
-  const [globalIssueApiUrl, setGlobalIssueApiUrl] = useState('');
-  const [globalIssueApiKey, setGlobalIssueApiKey] = useState('');
-  const [globalIssueModel, setGlobalIssueModel] = useState('');
-  const [globalIssueCustomPrompt, setGlobalIssueCustomPrompt] = useState('');
-  const [activeTab, setActiveTab] = useState<string>('review');
-
-  const syncFromIssue = () => {
-    setGlobalBaseUrl(globalIssueApiUrl);
-    setGlobalModel(globalIssueModel);
+  const load = async () => {
+    setLoading(true);
+    const [credRes, tmplRes] = await Promise.all([
+      apiFetch('/api/v2/provider-credentials'),
+      apiFetch('/api/v2/config-templates'),
+    ]);
+    if (credRes.ok) setCredentials((await credRes.json()).credentials || []);
+    if (tmplRes.ok) setTemplates((await tmplRes.json()).templates || []);
+    setLoading(false);
   };
-
-  const syncFromReview = () => {
-    setGlobalIssueApiUrl(globalBaseUrl);
-    setGlobalIssueModel(globalModel);
-  };
-
-  const fetchGlobalProvider = useCallback(async () => {
-    if (!authStatus.loggedIn) {
-      setGlobalProvider(null);
-      setGlobalProviderLoading(false);
-      return;
-    }
-
-    setGlobalProviderLoading(true);
-    try {
-      const res = await apiFetch('/api/config/global?type=review');
-      if (!res.ok) {
-        setGlobalProvider(null);
-        return;
-      }
-      const data: GlobalReviewConfig = await res.json();
-      setGlobalProvider(data);
-      setGlobalBaseUrl(data.api_url || '');
-      setGlobalModel(data.model || '');
-      if (data.engine) {
-        setSelectedProvider(data.engine);
-      }
-    } catch (error) {
-      console.error('Failed to fetch global provider config:', error);
-      setGlobalProvider(null);
-    } finally {
-      setGlobalProviderLoading(false);
-    }
-  }, [authStatus.loggedIn]);
-
-  const fetchGlobalIssue = useCallback(async () => {
-    if (!authStatus.loggedIn) {
-      setGlobalIssue(null);
-      setGlobalIssueLoading(false);
-      return;
-    }
-
-    setGlobalIssueLoading(true);
-    try {
-      const res = await apiFetch('/api/config/global?type=issue');
-      if (!res.ok) {
-        setGlobalIssue(null);
-        return;
-      }
-      const data = await res.json();
-      setGlobalIssue(data);
-      setGlobalIssueApiUrl(data.api_url || '');
-      setGlobalIssueModel(data.model || '');
-      setGlobalIssueCustomPrompt(data.custom_prompt || '');
-    } catch (error) {
-      console.error('Failed to fetch global issue config:', error);
-      setGlobalIssue(null);
-    } finally {
-      setGlobalIssueLoading(false);
-    }
-  }, [authStatus.loggedIn]);
 
   useEffect(() => {
-    const fetchProviders = async () => {
-      try {
-        const res = await apiFetch('/api/providers');
-        if (!res.ok) {
-          return;
-        }
-        const data = await res.json();
-        setProviders(data.providers || []);
-      } catch {
-        setProviders([]);
-      }
-    };
+    void load();
+  }, []);
 
-    fetchProviders();
-    fetchGlobalProvider();
-    fetchGlobalIssue();
-  }, [fetchGlobalProvider, fetchGlobalIssue]);
-
-  const saveGlobalReviewConfig = async () => {
-    if (!authStatus.loggedIn) {
-      addToast({ title: '请先登录后再配置', color: 'warning' });
-      return;
-    }
-
-    if (selectedProvider === 'claude_code' && !globalBaseUrl.trim()) {
-      addToast({ title: 'Claude Code 必须配置 Base URL', color: 'warning' });
-      return;
-    }
-
-    setGlobalProviderSaving(true);
-    try {
-      const res = await apiFetch('/api/config/global?type=review', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          engine: selectedProvider,
-          model: globalModel || null,
-          api_url: globalBaseUrl || null,
-          api_key: globalAuthToken || null,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        addToast({ title: data.detail || '保存失败', color: 'danger' });
-        return;
-      }
-
-      addToast({ title: '个人设置已保存', color: 'success' });
-      setGlobalAuthToken('');
-      if (data.engine) {
-        setSelectedProvider(data.engine);
-      }
-      setGlobalProvider({
-        configured: !!(data.api_url || data.has_api_key),
-        api_url: data.api_url,
-        engine: data.engine,
-        model: data.model,
-        has_api_key: data.has_api_key,
-      });
-    } catch {
-      addToast({ title: '无法连接后端', color: 'danger' });
-    } finally {
-      setGlobalProviderSaving(false);
+  const createCredential = async () => {
+    const res = await apiFetch('/api/v2/provider-credentials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: credentialForm.name,
+        provider: credentialForm.provider,
+        api_url: credentialForm.api_url || null,
+        api_key: credentialForm.api_key || null,
+      }),
+    });
+    if (res.ok) {
+      setCredentialForm({ name: '', provider: 'anthropic', api_url: '', api_key: '' });
+      await load();
     }
   };
 
-  const saveGlobalIssueConfig = async () => {
-    if (!authStatus.loggedIn) {
-      addToast({ title: '请先登录后再配置', color: 'warning' });
-      return;
-    }
+  const rotateCredential = async (id: number) => {
+    const apiKey = window.prompt('输入新的 API Key');
+    if (!apiKey) return;
+    const res = await apiFetch(`/api/v2/provider-credentials/${id}/rotate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey }),
+    });
+    if (res.ok) await load();
+  };
 
-    setGlobalIssueSaving(true);
-    try {
-      const res = await apiFetch('/api/config/global?type=issue', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          engine: 'forge',
-          api_url: globalIssueApiUrl || null,
-          api_key: globalIssueApiKey || null,
-          model: globalIssueModel || null,
-          custom_prompt: globalIssueCustomPrompt || null,
-        }),
-      });
+  const deleteCredential = async (id: number) => {
+    const res = await apiFetch(`/api/v2/provider-credentials/${id}`, { method: 'DELETE' });
+    if (res.ok) await load();
+  };
 
-      const data = await res.json();
-      if (!res.ok) {
-        addToast({ title: data.detail || '保存失败', color: 'danger' });
-        return;
-      }
-
-      addToast({ title: '全局 Issue 配置已保存', color: 'success' });
-      setGlobalIssueApiKey('');
-      setGlobalIssue({
-        configured: !!(data.api_url || data.has_api_key),
-        api_url: data.api_url,
-        engine: data.engine,
-        model: data.model,
-        has_api_key: data.has_api_key,
-        custom_prompt: data.custom_prompt,
-        default_focus: data.default_focus,
-      });
-    } catch {
-      addToast({ title: '无法连接后端', color: 'danger' });
-    } finally {
-      setGlobalIssueSaving(false);
+  const createTemplate = async () => {
+    const res = await apiFetch('/api/v2/config-templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        scenario: templateForm.scenario,
+        name: templateForm.name,
+        engine: templateForm.engine,
+        model: templateForm.model || null,
+        credential_id: templateForm.credential_id ? Number(templateForm.credential_id) : null,
+        wire_api: templateForm.wire_api || null,
+        temperature: templateForm.temperature ? Number(templateForm.temperature) : null,
+        max_tokens: templateForm.max_tokens ? Number(templateForm.max_tokens) : null,
+        custom_prompt: templateForm.custom_prompt || null,
+        focus: templateForm.focus.split(',').map((item) => item.trim()).filter(Boolean),
+        features: templateForm.features.split(',').map((item) => item.trim()).filter(Boolean),
+        is_default: templateForm.is_default,
+      }),
+    });
+    if (res.ok) {
+      setTemplateForm({ ...templateForm, name: '', model: '', custom_prompt: '' });
+      await load();
     }
   };
 
-  const providerPlaceholders: Record<string, { baseUrl: string; apiKey: string }> = {
-    claude_code: {
-      baseUrl: '必须填写 Claude API Base URL',
-      apiKey: 'sk-ant-...',
-    },
-    codex_cli: {
-      baseUrl: 'https://api.openai.com (留空使用默认)',
-      apiKey: 'sk-...',
-    },
-    forge: {
-      baseUrl: 'https://api.anthropic.com (留空使用全局 FORGE_BASE_URL)',
-      apiKey: 'sk-ant-...',
-    },
+  const deleteTemplate = async (id: number) => {
+    const res = await apiFetch(`/api/v2/config-templates/${id}`, { method: 'DELETE' });
+    if (res.ok) await load();
   };
-
-  const currentPlaceholders = providerPlaceholders[selectedProvider] ?? providerPlaceholders.claude_code;
-  const modelPlaceholders: Record<string, string> = {
-    claude_code: '例如: claude-3-7-sonnet-20250219',
-    codex_cli: '例如: gpt-5.3-codex',
-    forge: '例如: claude-sonnet-4-20250514',
-  };
-  const currentModelPlaceholder = modelPlaceholders[selectedProvider] ?? '例如: claude-sonnet-4-20250514';
 
   return (
     <>
       <Head>
-        <title>个人设置 - LCPU AI Reviewer</title>
+        <title>配置模板 - Gitea TLDR</title>
       </Head>
-      <div className="max-w-[1100px] mx-auto">
-        <div className="pb-4">
-          <PageHeader title="个人设置" subtitle="维护全局 AI 审查默认引擎和凭据" />
-        </div>
+      <div className="max-w-[1100px] mx-auto flex flex-col gap-8">
+        <PageHeader title="配置模板" subtitle="管理 Provider 凭证与可复制到仓库的配置模板" />
 
-        <div className="border-t border-divider/60 pt-5">
-          <div className="flex items-center gap-3 mb-1">
-            <Bot size={18} className="text-default-500" />
-            <Tabs
-              selectedKey={activeTab}
-              onSelectionChange={(k) => setActiveTab(String(k))}
-              aria-label="配置类型"
-            >
-              <Tab
-                key="review"
-                title={
-                  <span className="flex items-center gap-2">
-                    AI 审查配置
-                    {globalProvider?.has_api_key && (
-                      <Chip size="sm" variant="flat" color="success">已配置</Chip>
-                    )}
-                  </span>
-                }
-              />
-              <Tab
-                key="issue"
-                title={
-                  <span className="flex items-center gap-2">
-                    Issue 分析配置
-                    {globalIssue?.has_api_key && (
-                      <Chip size="sm" variant="flat" color="success">已配置</Chip>
-                    )}
-                  </span>
-                }
-              />
-            </Tabs>
+        <section className="border-t border-divider pt-5">
+          <SectionHeader title="Provider 凭证" />
+          <div className="grid gap-3 md:grid-cols-4 mt-4">
+            <Input label="名称" value={credentialForm.name} onValueChange={(name) => setCredentialForm({ ...credentialForm, name })} />
+            <Input label="Provider" value={credentialForm.provider} onValueChange={(provider) => setCredentialForm({ ...credentialForm, provider })} />
+            <Input label="API URL" value={credentialForm.api_url} onValueChange={(api_url) => setCredentialForm({ ...credentialForm, api_url })} />
+            <Input label="API Key" type="password" value={credentialForm.api_key} onValueChange={(api_key) => setCredentialForm({ ...credentialForm, api_key })} />
           </div>
+          <Button className="mt-3" color="primary" onPress={createCredential} isDisabled={!credentialForm.name || loading}>
+            新建凭证
+          </Button>
+          <div className="mt-5 grid gap-3">
+            {credentials.map((credential) => (
+              <div key={credential.id} className="flex items-center justify-between border-b border-divider py-3">
+                <div>
+                  <div className="font-medium">{credential.name}</div>
+                  <div className="text-sm text-default-500">{credential.provider} · {credential.api_url || '默认 API'} · {credential.has_api_key ? '已保存 Key' : '未保存 Key'}</div>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="flat" onPress={() => rotateCredential(credential.id)}>轮换</Button>
+                  <Button size="sm" color="danger" variant="light" onPress={() => deleteCredential(credential.id)}>删除</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-          {activeTab === 'review' && (
-            <div className="mt-4">
-              {!authStatus.loggedIn ? (
-                <p className="text-default-500 m-0">登录后可配置全局 AI 审查设置</p>
-              ) : globalProviderLoading ? (
-                <p className="text-default-500 m-0">加载中...</p>
-              ) : (
-                <>
-                  {(globalIssueApiUrl !== '' || globalIssue?.has_api_key) && (
-                    <div className="mb-4 flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        startContent={<ArrowRightLeft size={14} />}
-                        onPress={syncFromIssue}
-                      >
-                        从 Issue 分析配置同步
-                      </Button>
-                      <span className="text-default-400 text-xs">（同步 Base URL 和 Model ID，API Key 需单独填写）</span>
-                    </div>
-                  )}
-                  <div className="flex flex-col gap-3">
-                    {providers.length > 0 ? (
-                      <Select
-                        label="审查引擎"
-                        selectedKeys={new Set([selectedProvider])}
-                        onSelectionChange={(keys) => {
-                          if (keys === 'all') return;
-                          const key = Array.from(keys)[0] as string;
-                          if (key) setSelectedProvider(key);
-                        }}
-                        variant="bordered"
-                        aria-label="选择审查引擎"
-                      >
-                        {providers.map((provider) => (
-                          <SelectItem key={provider.name}>{provider.label}</SelectItem>
-                        ))}
-                      </Select>
-                    ) : null}
-                    <Input
-                      label="Base URL"
-                      value={globalBaseUrl}
-                      onValueChange={setGlobalBaseUrl}
-                      placeholder={currentPlaceholders.baseUrl}
-                      variant="bordered"
-                    />
-                    <Input
-                      label="Model ID（可选）"
-                      value={globalModel}
-                      onValueChange={setGlobalModel}
-                      placeholder={currentModelPlaceholder}
-                      variant="bordered"
-                    />
-                    <Input
-                      label="API Key"
-                      type="password"
-                      value={globalAuthToken}
-                      onValueChange={setGlobalAuthToken}
-                      placeholder={
-                        globalProvider?.has_api_key
-                          ? '已配置（输入新值覆盖）'
-                          : currentPlaceholders.apiKey
-                      }
-                      variant="bordered"
-                    />
-                  </div>
-                  <div className="mt-4 flex items-center gap-3 flex-wrap">
-                    <Button
-                      color="primary"
-                      onPress={saveGlobalReviewConfig}
-                      isDisabled={globalProviderSaving}
-                      isLoading={globalProviderSaving}
-                    >
-                      保存审查配置
-                    </Button>
-                    <span className="text-default-400 text-xs">
-                      作为仓库默认值使用；仓库页可关闭继承并单独覆盖
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'issue' && (
-            <div className="mt-4">
-              {!authStatus.loggedIn ? (
-                <p className="text-default-500 m-0">登录后可配置全局 Issue 分析设置</p>
-              ) : globalIssueLoading ? (
-                <p className="text-default-500 m-0">加载中...</p>
-              ) : (
-                <>
-                  <p className="text-default-500 text-sm mb-4">Issue 分析使用 Forge 引擎，在此配置全局默认 API 凭据和模型</p>
-                  {(globalBaseUrl !== '' || globalProvider?.has_api_key) && (
-                    <div className="mb-4 flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        startContent={<ArrowRightLeft size={14} />}
-                        onPress={syncFromReview}
-                      >
-                        从 AI 审查配置同步
-                      </Button>
-                      <span className="text-default-400 text-xs">（同步 Base URL 和 Model ID，API Key 需单独填写）</span>
-                    </div>
-                  )}
-                  <div className="flex flex-col gap-3">
-                    <Input
-                      label="Base URL"
-                      value={globalIssueApiUrl}
-                      onValueChange={setGlobalIssueApiUrl}
-                      placeholder="https://api.anthropic.com"
-                      variant="bordered"
-                    />
-                    <Input
-                      label="Model ID"
-                      value={globalIssueModel}
-                      onValueChange={setGlobalIssueModel}
-                      placeholder="claude-sonnet-4-20250514"
-                      variant="bordered"
-                    />
-                    <Input
-                      label="API Key"
-                      type="password"
-                      value={globalIssueApiKey}
-                      onValueChange={setGlobalIssueApiKey}
-                      placeholder={
-                        globalIssue?.has_api_key
-                          ? '已配置（输入新值覆盖）'
-                          : 'sk-ant-...'
-                      }
-                      variant="bordered"
-                    />
-                    <Input
-                      label="自定义 Prompt"
-                      value={globalIssueCustomPrompt}
-                      onValueChange={setGlobalIssueCustomPrompt}
-                      placeholder="可选"
-                      variant="bordered"
-                    />
-                  </div>
-                  <div className="mt-4 flex items-center gap-3 flex-wrap">
-                    <Button
-                      color="primary"
-                      onPress={saveGlobalIssueConfig}
-                      isDisabled={globalIssueSaving}
-                      isLoading={globalIssueSaving}
-                    >
-                      保存 Issue 配置
-                    </Button>
-                    <span className="text-default-400 text-xs">
-                      仓库可在仓库设置页关闭继承并覆盖这些配置
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+        <section className="border-t border-divider pt-5">
+          <SectionHeader title="配置模板" />
+          <div className="grid gap-3 md:grid-cols-3 mt-4">
+            <Select label="场景" selectedKeys={new Set([templateForm.scenario])} onSelectionChange={(keys) => setTemplateForm({ ...templateForm, scenario: String(Array.from(keys)[0] || 'review') })}>
+              {scenarios.map((scenario) => <SelectItem key={scenario}>{scenario}</SelectItem>)}
+            </Select>
+            <Input label="模板名称" value={templateForm.name} onValueChange={(name) => setTemplateForm({ ...templateForm, name })} />
+            <Input label="Engine" value={templateForm.engine} onValueChange={(engine) => setTemplateForm({ ...templateForm, engine })} />
+            <Input label="Model" value={templateForm.model} onValueChange={(model) => setTemplateForm({ ...templateForm, model })} />
+            <Select label="凭证" selectedKeys={templateForm.credential_id ? new Set([templateForm.credential_id]) : new Set([])} onSelectionChange={(keys) => setTemplateForm({ ...templateForm, credential_id: String(Array.from(keys)[0] || '') })}>
+              {credentials.map((credential) => <SelectItem key={String(credential.id)}>{credential.name}</SelectItem>)}
+            </Select>
+            <Input label="Wire API" value={templateForm.wire_api} onValueChange={(wire_api) => setTemplateForm({ ...templateForm, wire_api })} />
+            <Input label="Temperature" value={templateForm.temperature} onValueChange={(temperature) => setTemplateForm({ ...templateForm, temperature })} />
+            <Input label="Max tokens" value={templateForm.max_tokens} onValueChange={(max_tokens) => setTemplateForm({ ...templateForm, max_tokens })} />
+            <Input label="Features" value={templateForm.features} onValueChange={(features) => setTemplateForm({ ...templateForm, features })} />
+          </div>
+          <Textarea className="mt-3" label="Focus，逗号分隔" value={templateForm.focus} onValueChange={(focus) => setTemplateForm({ ...templateForm, focus })} />
+          <Textarea className="mt-3" label="Custom prompt" value={templateForm.custom_prompt} onValueChange={(custom_prompt) => setTemplateForm({ ...templateForm, custom_prompt })} />
+          <Button className="mt-3" color="primary" onPress={createTemplate} isDisabled={!templateForm.name || loading}>
+            新建模板
+          </Button>
+          <div className="mt-5 grid gap-3">
+            {templates.map((template) => (
+              <div key={template.id} className="flex items-center justify-between border-b border-divider py-3">
+                <div>
+                  <div className="font-medium">{template.name} <span className="text-xs text-default-500">/{template.scenario}</span></div>
+                  <div className="text-sm text-default-500">{template.engine} · {template.model || '未指定模型'} · credential #{template.credential_id || '无'}</div>
+                </div>
+                <Button size="sm" color="danger" variant="light" onPress={() => deleteTemplate(template.id)}>删除</Button>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </>
   );

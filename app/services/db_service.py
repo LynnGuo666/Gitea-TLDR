@@ -20,6 +20,7 @@ from app.models import (
     Actor,
     AnalysisAnnotation,
     AnalysisRun,
+    AppSetting,
     AuditEvent,
     ConfigTemplate,
     ProviderCredential,
@@ -69,6 +70,84 @@ class DBService:
         self.session.add(actor)
         await self.session.flush()
         return actor
+
+    async def list_actors(
+        self,
+        *,
+        role: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Actor]:
+        stmt = select(Actor)
+        if role:
+            stmt = stmt.where(Actor.role == role)
+        if is_active is not None:
+            stmt = stmt.where(Actor.is_active == is_active)
+        result = await self.session.execute(
+            stmt.order_by(Actor.updated_at.desc()).limit(limit).offset(offset)
+        )
+        return list(result.scalars().all())
+
+    async def update_actor(self, actor_id: int, **fields: Any) -> Optional[Actor]:
+        actor = await self.session.get(Actor, actor_id)
+        if not actor:
+            return None
+        for key, value in fields.items():
+            if key == "permissions":
+                actor.permissions_json = _json(value or [])
+            elif hasattr(actor, key) and value is not None:
+                setattr(actor, key, value)
+        await self.session.flush()
+        return actor
+
+    # ==================== App settings ====================
+
+    async def list_app_settings(self, category: Optional[str] = None) -> list[AppSetting]:
+        stmt = select(AppSetting)
+        if category:
+            stmt = stmt.where(AppSetting.category == category)
+        result = await self.session.execute(stmt.order_by(AppSetting.category, AppSetting.key))
+        return list(result.scalars().all())
+
+    async def update_app_setting(
+        self,
+        key: str,
+        value: Any,
+        *,
+        category: str = "general",
+        description: Optional[str] = None,
+        actor_id: Optional[int] = None,
+    ) -> AppSetting:
+        result = await self.session.execute(select(AppSetting).where(AppSetting.key == key))
+        setting = result.scalar_one_or_none()
+        if not setting:
+            setting = AppSetting(
+                key=key,
+                category=category,
+                value_json=_json(value),
+                description=description,
+                updated_by_actor_id=actor_id,
+            )
+            self.session.add(setting)
+        else:
+            setting.value_json = _json(value)
+            if category:
+                setting.category = category
+            if description is not None:
+                setting.description = description
+            setting.updated_by_actor_id = actor_id
+        await self.session.flush()
+        return setting
+
+    async def delete_app_setting(self, key: str) -> bool:
+        result = await self.session.execute(select(AppSetting).where(AppSetting.key == key))
+        setting = result.scalar_one_or_none()
+        if not setting:
+            return False
+        await self.session.delete(setting)
+        await self.session.flush()
+        return True
 
     # ==================== Repository ====================
 
@@ -152,6 +231,17 @@ class DBService:
         self.session.add(feature)
         await self.session.flush()
         return feature
+
+    async def get_repository_feature(
+        self, repository_id: int, scenario: str
+    ) -> Optional[RepositoryFeature]:
+        result = await self.session.execute(
+            select(RepositoryFeature).where(
+                RepositoryFeature.repository_id == repository_id,
+                RepositoryFeature.scenario == scenario,
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def update_issue_settings(
         self,
@@ -431,19 +521,6 @@ class DBService:
         await self.session.flush()
         return cfg
 
-    # 旧内部配置读取适配：不再 fallback，只返回仓库独立配置。
-    async def get_repo_specific_model_config(self, repository_id: int):
-        return await self.get_repository_config(repository_id, "review")
-
-    async def get_repo_specific_issue_config(self, repository_id: int):
-        return await self.get_repository_config(repository_id, "issue")
-
-    async def get_global_model_config(self):
-        return None
-
-    async def get_global_issue_config(self):
-        return None
-
     # ==================== Runs ====================
 
     async def create_analysis_run(
@@ -521,6 +598,22 @@ class DBService:
         await self.session.flush()
         return run
 
+    async def update_analysis_run(self, run_id: int, **fields: Any) -> Optional[AnalysisRun]:
+        run = await self.session.get(AnalysisRun, run_id)
+        if not run:
+            return None
+        payload = run.get_analysis_payload()
+        payload_update = fields.pop("result_payload", None)
+        if payload_update:
+            payload.update(payload_update)
+        for key, value in fields.items():
+            if hasattr(run, key) and value is not None:
+                setattr(run, key, value)
+        if payload_update is not None:
+            run.result_payload_json = _json(payload)
+        await self.session.flush()
+        return run
+
     async def list_analysis_runs(
         self,
         *,
@@ -552,117 +645,23 @@ class DBService:
         )
         return result.scalar_one_or_none()
 
-    # 旧内部方法适配
-    async def create_review_session(self, repository_id: int, pr_number: int, trigger_type: str, **kwargs):
-        return await self.create_analysis_run(
-            kind="review",
-            repository_id=repository_id,
-            external_number=pr_number,
-            trigger_type=trigger_type,
-            external_title=kwargs.get("pr_title"),
-            external_author=kwargs.get("pr_author"),
-            source_branch=kwargs.get("head_branch"),
-            target_branch=kwargs.get("base_branch"),
-            head_sha=kwargs.get("head_sha"),
-            effective_engine=kwargs.get("engine"),
-            effective_model=kwargs.get("model"),
-            result_payload={
-                "enabled_features": kwargs.get("enabled_features") or [],
-                "focus_areas": kwargs.get("focus_areas") or [],
-                "config_source": kwargs.get("config_source"),
-            },
+    async def get_review_run_by_head(
+        self, repository_id: int, pr_number: int, head_sha: str
+    ) -> Optional[AnalysisRun]:
+        result = await self.session.execute(
+            select(AnalysisRun)
+            .where(
+                AnalysisRun.kind == "review",
+                AnalysisRun.repository_id == repository_id,
+                AnalysisRun.external_number == pr_number,
+                AnalysisRun.head_sha == head_sha,
+            )
+            .order_by(AnalysisRun.started_at.desc())
+            .limit(1)
         )
+        return result.scalar_one_or_none()
 
-    async def update_review_session(self, session_id: int, completed: bool = False, **kwargs):
-        run = await self.session.get(AnalysisRun, session_id)
-        if not run:
-            return None
-        payload = run.get_analysis_payload()
-        for key in ["analysis_mode", "diff_size_bytes", "inline_comments_count"]:
-            if kwargs.get(key) is not None:
-                payload[key] = kwargs[key]
-        if kwargs.get("config_source") is not None:
-            payload["config_source"] = kwargs["config_source"]
-        if not completed:
-            run.status = "running"
-            run.result_payload_json = _json(payload)
-            if kwargs.get("error_message") is not None:
-                run.error_message = kwargs["error_message"]
-            await self.session.flush()
-            return run
-        return await self.complete_analysis_run(
-            session_id,
-            status="completed" if kwargs.get("overall_success") else "failed",
-            overall_success=kwargs.get("overall_success"),
-            overall_severity=kwargs.get("overall_severity"),
-            summary_markdown=kwargs.get("summary_markdown"),
-            result_payload=payload,
-            error_message=kwargs.get("error_message"),
-        )
-
-    async def create_issue_session(self, repository_id: int, issue_number: int, trigger_type: str, **kwargs):
-        return await self.create_analysis_run(
-            kind="issue",
-            repository_id=repository_id,
-            external_number=issue_number,
-            trigger_type=trigger_type,
-            external_title=kwargs.get("issue_title"),
-            external_author=kwargs.get("issue_author"),
-            external_state=kwargs.get("issue_state"),
-            source_comment_id=kwargs.get("source_comment_id"),
-            bot_comment_id=kwargs.get("bot_comment_id"),
-            effective_engine=kwargs.get("engine"),
-            effective_model=kwargs.get("model"),
-            result_payload={"config_source": kwargs.get("config_source")},
-        )
-
-    async def update_issue_session(self, session_id: int, completed: bool = False, **kwargs):
-        run = await self.session.get(AnalysisRun, session_id)
-        if not run:
-            return None
-        payload = run.get_analysis_payload()
-        if kwargs.get("analysis_payload"):
-            payload.update(kwargs["analysis_payload"])
-        if kwargs.get("config_source") is not None:
-            payload["config_source"] = kwargs["config_source"]
-        if not completed:
-            run.status = "running"
-            run.result_payload_json = _json(payload)
-            if kwargs.get("error_message") is not None:
-                run.error_message = kwargs["error_message"]
-            await self.session.flush()
-            return run
-        return await self.complete_analysis_run(
-            session_id,
-            status="completed" if kwargs.get("overall_success") else "failed",
-            overall_success=kwargs.get("overall_success"),
-            overall_severity=kwargs.get("overall_severity"),
-            summary_markdown=kwargs.get("summary_markdown"),
-            result_payload=payload,
-            error_message=kwargs.get("error_message"),
-        )
-
-    async def get_review_session(self, session_id: int):
-        run = await self.get_analysis_run(session_id)
-        return run if run and run.kind == "review" else None
-
-    async def get_issue_session(self, session_id: int):
-        run = await self.get_analysis_run(session_id)
-        return run if run and run.kind == "issue" else None
-
-    async def list_review_sessions(self, **kwargs):
-        return await self.list_analysis_runs(kind="review", **kwargs)
-
-    async def list_issue_sessions(self, **kwargs):
-        return await self.list_analysis_runs(kind="issue", **kwargs)
-
-    async def list_review_sessions_by_repo_ids(self, repository_ids: list[int], **kwargs):
-        return await self.list_analysis_runs(kind="review", repository_ids=repository_ids, **kwargs)
-
-    async def list_issue_sessions_by_repo_ids(self, repository_ids: list[int], **kwargs):
-        return await self.list_analysis_runs(kind="issue", repository_ids=repository_ids, **kwargs)
-
-    async def get_in_flight_issue_session(self, repository_id: int, issue_number: int):
+    async def get_in_flight_issue_run(self, repository_id: int, issue_number: int):
         stmt = select(AnalysisRun).where(
             AnalysisRun.kind == "issue",
             AnalysisRun.repository_id == repository_id,
@@ -672,7 +671,9 @@ class DBService:
         result = await self.session.execute(stmt.order_by(AnalysisRun.started_at.desc()).limit(1))
         return result.scalar_one_or_none()
 
-    async def get_recent_successful_issue_session(self, repository_id: int, issue_number: int, within_seconds: int):
+    async def get_recent_successful_issue_run(
+        self, repository_id: int, issue_number: int, within_seconds: int
+    ):
         threshold = _now() - timedelta(seconds=within_seconds)
         stmt = select(AnalysisRun).where(
             AnalysisRun.kind == "issue",
@@ -686,11 +687,13 @@ class DBService:
 
     # ==================== Annotations ====================
 
-    async def save_inline_comments(self, review_session_id: int, comments: list[dict[str, Any]]):
+    async def save_analysis_annotations(
+        self, analysis_run_id: int, comments: list[dict[str, Any]]
+    ):
         saved = []
         for item in comments:
             annotation = AnalysisAnnotation(
-                analysis_run_id=review_session_id,
+                analysis_run_id=analysis_run_id,
                 annotation_type="inline_comment",
                 file_path=item.get("path", ""),
                 new_line=item.get("new_line"),
@@ -705,11 +708,10 @@ class DBService:
         await self.session.flush()
         return saved
 
-    async def get_inline_comments(self, review_session_id: int):
+    async def list_analysis_annotations(self, analysis_run_id: int):
         result = await self.session.execute(
             select(AnalysisAnnotation).where(
-                AnalysisAnnotation.analysis_run_id == review_session_id,
-                AnalysisAnnotation.annotation_type == "inline_comment",
+                AnalysisAnnotation.analysis_run_id == analysis_run_id,
             )
         )
         return list(result.scalars().all())
@@ -747,21 +749,13 @@ class DBService:
         run.output_tokens = kwargs.get("output_tokens", 0)
         run.cache_creation_input_tokens = kwargs.get("cache_creation_input_tokens", 0)
         run.cache_read_input_tokens = kwargs.get("cache_read_input_tokens", 0)
-        if kwargs.get("review_session_id") is not None:
-            run.analysis_run_id = kwargs["review_session_id"]
-        if kwargs.get("issue_session_id") is not None:
-            run.analysis_run_id = kwargs["issue_session_id"]
+        if kwargs.get("analysis_run_id") is not None:
+            run.analysis_run_id = kwargs["analysis_run_id"]
         run.error_message = kwargs.get("error")
         run.completed_at = _now()
         run.duration_seconds = (run.completed_at - run.started_at).total_seconds()
         await self.session.flush()
         return run
-
-    async def create_forge_session(self, repository_id: Optional[int], scenario: str):
-        return await self.create_provider_run(repository_id, scenario, provider="forge")
-
-    async def complete_forge_session(self, session_id: str, **kwargs):
-        return await self.complete_provider_run(session_id, **kwargs)
 
     async def list_provider_runs(self, provider: Optional[str] = None, scenario: Optional[str] = None, limit: int = 50, offset: int = 0, repository_ids: Optional[list[int]] = None):
         stmt = select(ProviderRun).options(selectinload(ProviderRun.repository))
@@ -787,7 +781,7 @@ class DBService:
 
     async def record_usage_event(self, repository_id: int, **kwargs):
         event = UsageEvent(
-            analysis_run_id=kwargs.get("analysis_run_id") or kwargs.get("review_session_id") or kwargs.get("issue_session_id"),
+            analysis_run_id=kwargs.get("analysis_run_id"),
             provider_run_id=kwargs.get("provider_run_id"),
             repository_id=repository_id,
             actor_id=kwargs.get("actor_id") or kwargs.get("user_id"),
@@ -805,9 +799,6 @@ class DBService:
         self.session.add(event)
         await self.session.flush()
         return event
-
-    async def record_usage(self, repository_id: int, **kwargs):
-        return await self.record_usage_event(repository_id, **kwargs)
 
     async def list_usage_events(self, repository_id: Optional[int] = None, actor_id: Optional[int] = None, start_date: Optional[date] = None, end_date: Optional[date] = None):
         stmt = select(UsageEvent)
@@ -903,25 +894,42 @@ class DBService:
         result = await self.session.execute(stmt.order_by(WebhookEvent.created_at.asc()))
         return list(result.scalars().all())
 
-    async def create_webhook_log(self, *args, **kwargs):
-        return await self.create_webhook_event(*args, **kwargs)
+    async def list_webhook_events(
+        self,
+        *,
+        repository_id: Optional[int] = None,
+        status: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[WebhookEvent]:
+        stmt = select(WebhookEvent)
+        if repository_id is not None:
+            stmt = stmt.where(WebhookEvent.repository_id == repository_id)
+        if status:
+            stmt = stmt.where(WebhookEvent.status == status)
+        result = await self.session.execute(
+            stmt.order_by(WebhookEvent.created_at.desc()).limit(limit).offset(offset)
+        )
+        return list(result.scalars().all())
 
-    async def update_webhook_log(self, log_id: int, **kwargs):
-        return await self.update_webhook_event(log_id, **kwargs)
-
-    async def get_pending_webhook_logs(self, *args, **kwargs):
-        return await self.list_pending_webhook_events(*args, **kwargs)
+    async def get_webhook_event(self, event_id: int) -> Optional[WebhookEvent]:
+        return await self.session.get(WebhookEvent, event_id)
 
     # ==================== Audit ====================
 
-    async def record_audit(self, *, actor_id: Optional[int], actor_type: str, action: str, resource_type: str, resource_id: Optional[int] = None, status: str = "success", before: Any = None, after: Any = None, changed_fields: Optional[list[str]] = None, sensitive_fields: Optional[list[str]] = None, source: str = "api", error_message: Optional[str] = None):
+    async def record_audit(self, *, actor_id: Optional[int], actor_type: str, action: str, resource_type: str, resource_id: Optional[int] = None, repository_id: Optional[int] = None, namespace_id: Optional[int] = None, request_id: Optional[str] = None, source: str = "api", ip_address: Optional[str] = None, user_agent: Optional[str] = None, status: str = "success", before: Any = None, after: Any = None, changed_fields: Optional[list[str]] = None, sensitive_fields: Optional[list[str]] = None, error_message: Optional[str] = None):
         event = AuditEvent(
             actor_id=actor_id,
             actor_type=actor_type,
             action=action,
             resource_type=resource_type,
             resource_id=resource_id,
+            repository_id=repository_id,
+            namespace_id=namespace_id,
+            request_id=request_id,
             source=source,
+            ip_address=ip_address,
+            user_agent=user_agent,
             before_json=_json(before) if before is not None else None,
             after_json=_json(after) if after is not None else None,
             changed_fields_json=_json(changed_fields or []),

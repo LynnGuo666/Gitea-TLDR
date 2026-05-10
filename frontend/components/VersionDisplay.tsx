@@ -22,7 +22,7 @@ export function VersionDisplay({ compact = false, inline = false }: VersionDispl
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch('/api/version')
+    apiFetch('/api/v2/version')
       .then((res) => res.json())
       .then((data) => {
         setVersionInfo({

@@ -123,7 +123,7 @@ def build_app(
         "/api/repositories",
     ],
 )
-def test_admin_endpoints_require_auth(path: str):
+def test_old_admin_endpoints_are_removed(path: str):
     client = build_app(
         auth_status={"loggedIn": False, "user": None},
         auth_manager=DummyAuthManager(session=None, user_client=None),
@@ -131,7 +131,7 @@ def test_admin_endpoints_require_auth(path: str):
     )
 
     resp = client.get(path)
-    assert resp.status_code == 401
+    assert resp.status_code == 404
 
 
 def test_my_reviews_fails_closed_when_gitea_unavailable():
@@ -145,36 +145,10 @@ def test_my_reviews_fails_closed_when_gitea_unavailable():
     )
 
     resp = client.get("/api/my/reviews")
-    assert resp.status_code == 502
-    assert "Gitea" in resp.json().get("detail", "")
+    assert resp.status_code == 404
 
 
-def test_my_review_detail_returns_404_for_inaccessible_repo(monkeypatch: pytest.MonkeyPatch):
-    class FakeRepo:
-        def __init__(self, repo_id: int):
-            self.id = repo_id
-
-    class FakeReview:
-        def __init__(self, repository_id: int):
-            self.repository_id = repository_id
-
-    class FakeDBService:
-        def __init__(self, session):
-            self.session = session
-
-        async def get_repository(self, owner: str, repo_name: str):
-            if owner == "alice" and repo_name == "repo-a":
-                return FakeRepo(1)
-            return None
-
-        async def get_review_session(self, review_id: int):
-            return FakeReview(2)
-
-        async def get_inline_comments(self, review_id: int):
-            return []
-
-    monkeypatch.setattr("app.services.db_service.DBService", FakeDBService)
-
+def test_old_my_review_detail_endpoint_is_removed():
     client = build_app(
         auth_status={"loggedIn": True, "user": {"username": "alice"}},
         auth_manager=DummyAuthManager(
@@ -190,70 +164,7 @@ def test_my_review_detail_returns_404_for_inaccessible_repo(monkeypatch: pytest.
     assert resp.status_code == 404
 
 
-def test_my_reviews_only_returns_accessible_repositories(monkeypatch: pytest.MonkeyPatch):
-    class FakeRepo:
-        def __init__(self, repo_id: int):
-            self.id = repo_id
-
-    class FakeRepositoryRef:
-        owner = "alice"
-        repo_name = "repo-a"
-
-    class FakeReview:
-        id = 7
-        repository_id = 1
-        repository = FakeRepositoryRef()
-        usage_stat = SimpleNamespace(
-            estimated_input_tokens=120,
-            estimated_output_tokens=30,
-            cache_creation_input_tokens=10,
-            cache_read_input_tokens=5,
-        )
-        pr_number = 10
-        pr_title = "Fix bug"
-        pr_author = "alice"
-        trigger_type = "manual"
-        engine = "claude_code"
-        analysis_mode = "simple"
-        model = "model-x"
-        config_source = "repo_config"
-        overall_severity = "low"
-        overall_success = True
-        error_message = None
-        inline_comments_count = 0
-        started_at = None
-        completed_at = None
-        duration_seconds = 1.0
-
-        @staticmethod
-        def get_features():
-            return ["comment"]
-
-        @staticmethod
-        def get_focus():
-            return ["quality"]
-
-    class FakeDBService:
-        def __init__(self, session):
-            self.session = session
-
-        async def get_repository(self, owner: str, repo_name: str):
-            if owner == "alice" and repo_name == "repo-a":
-                return FakeRepo(1)
-            return None
-
-        async def list_review_sessions_by_repo_ids(
-            self,
-            repository_ids,
-            success=None,
-            limit=50,
-            offset=0,
-        ):
-            assert repository_ids == [1]
-            return [FakeReview()]
-
-    monkeypatch.setattr("app.services.db_service.DBService", FakeDBService)
-
+def test_old_my_reviews_endpoint_is_removed():
     client = build_app(
         auth_status={"loggedIn": True, "user": {"username": "alice"}},
         auth_manager=DummyAuthManager(
@@ -269,13 +180,7 @@ def test_my_reviews_only_returns_accessible_repositories(monkeypatch: pytest.Mon
     )
 
     resp = client.get("/api/my/reviews")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["total"] == 1
-    assert body["reviews"][0]["repo_full_name"] == "alice/repo-a"
-    assert body["reviews"][0]["estimated_input_tokens"] == 120
-    assert body["reviews"][0]["estimated_output_tokens"] == 30
-    assert body["reviews"][0]["total_tokens"] == 150
+    assert resp.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -337,7 +242,7 @@ def test_gitea_client_debug_log_does_not_print_secret(caplog: pytest.LogCaptureF
 # ==================== 新增安全测试 ====================
 
 def test_provider_global_write_requires_admin():
-    """非 admin 用户 PUT /api/config/global?type=review 应返回 401（未配置 admin 时依赖链抛 401）"""
+    """旧全局配置写入端点已删除。"""
     client = build_app(
         auth_status={"loggedIn": False, "user": None},
         auth_manager=DummyAuthManager(session=None, user_client=None),
@@ -345,12 +250,11 @@ def test_provider_global_write_requires_admin():
     )
 
     resp = client.put("/api/config/global?type=review", json={"engine": "claude_code"})
-    # admin_required 在无 admin DB 时会抛 401/403
-    assert resp.status_code in (401, 403)
+    assert resp.status_code == 404
 
 
 def test_repo_provider_config_write_requires_repo_admin(monkeypatch: pytest.MonkeyPatch):
-    """无仓库 admin 权限的已登录用户 PUT /api/repos/.../config?type=review 应返回 403"""
+    """旧仓库配置写入端点已删除。"""
 
     class NonAdminClient:
         async def check_repo_permissions(self, owner, repo):
@@ -376,11 +280,11 @@ def test_repo_provider_config_write_requires_repo_admin(monkeypatch: pytest.Monk
         "/api/repos/owner/repo/config?type=review",
         json={"engine": "claude_code"},
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 404
 
 
 def test_review_settings_write_requires_repo_admin(monkeypatch: pytest.MonkeyPatch):
-    """无仓库 admin 权限的已登录用户 PUT /api/repos/.../review-settings 应返回 403"""
+    """旧 review-settings 写入端点已删除。"""
 
     class NonAdminClient:
         async def check_repo_permissions(self, owner, repo):
@@ -406,11 +310,11 @@ def test_review_settings_write_requires_repo_admin(monkeypatch: pytest.MonkeyPat
         "/api/repos/owner/repo/review-settings",
         json={"default_focus": ["security"]},
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 404
 
 
 def test_stats_requires_login():
-    """未登录用户 GET /api/stats 应返回 401"""
+    """旧 stats 端点已删除。"""
     client = build_app(
         auth_status={"loggedIn": False, "user": None},
         auth_manager=DummyAuthManager(session=None, user_client=None),
@@ -418,68 +322,10 @@ def test_stats_requires_login():
     )
 
     resp = client.get("/api/stats")
-    assert resp.status_code == 401
+    assert resp.status_code == 404
 
 
-def test_repo_provider_config_uses_global_model_when_repo_only_has_review_settings(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    class FakeRepo:
-        id = 1
-
-    class FakeConfig:
-        def __init__(
-            self,
-            *,
-            repository_id,
-            engine,
-            model=None,
-            api_url=None,
-            api_key=None,
-            wire_api=None,
-            default_focus=None,
-            default_features=None,
-        ):
-            self.repository_id = repository_id
-            self.engine = engine
-            self.model = model
-            self.api_url = api_url
-            self.api_key = api_key
-            self.wire_api = wire_api
-            self.default_focus = default_focus
-            self.default_features = default_features
-            self.max_tokens = None
-            self.temperature = None
-            self.custom_prompt = None
-
-    repo_config = FakeConfig(
-        repository_id=1,
-        engine="claude_code",
-        default_focus='["security"]',
-    )
-    global_config = FakeConfig(
-        repository_id=None,
-        engine="forge",
-        model="claude-sonnet-4-20250514",
-        api_url="https://api.example.com",
-    )
-
-    class FakeDBService:
-        def __init__(self, session):
-            self.session = session
-
-        async def get_repository(self, owner: str, repo_name: str):
-            return FakeRepo()
-
-        async def get_global_model_config(self):
-            return global_config
-
-        async def get_repo_specific_model_config(self, repository_id: int):
-            assert repository_id == 1
-            return repo_config
-
-    monkeypatch.setattr("app.services.db_service.DBService", FakeDBService)
-
+def test_old_repo_provider_config_read_endpoint_is_removed():
     client = build_app(
         auth_status={"loggedIn": True, "user": {"username": "alice"}},
         auth_manager=DummyAuthManager(
@@ -492,90 +338,21 @@ def test_repo_provider_config_uses_global_model_when_repo_only_has_review_settin
     )
 
     resp = client.get("/api/repos/alice/repo-a/config?type=review")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["inherit_global"] is True
-    assert body["engine"] == "forge"
-    assert body["model"] == "claude-sonnet-4-20250514"
+    assert resp.status_code == 404
 
 
-def test_inherit_global_preserves_repo_review_settings_instead_of_deleting_config(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    class AdminClient:
-        async def check_repo_permissions(self, owner, repo):
-            return {"admin": True, "push": True, "pull": True}
-
-        async def is_organization(self, owner):
-            return False
-
-    class AdminAuthManager(DummyAuthManager):
-        def build_user_client(self, session):
-            return AdminClient()
-
-    class FakeSession:
-        async def flush(self):
-            return None
-
-    class FakeDatabase:
-        @asynccontextmanager
-        async def session(self):
-            yield FakeSession()
-
-    class FakeRepo:
-        id = 1
-
-    class FakeConfig:
-        def __init__(self):
-            self.repository_id = 1
-            self.engine = "forge"
-            self.model = "repo-model"
-            self.api_url = "https://repo.example.com"
-            self.api_key = None
-            self.wire_api = "responses"
-            self.default_focus = '["security"]'
-            self.default_features = '["comment"]'
-            self.max_tokens = None
-            self.temperature = None
-            self.custom_prompt = None
-
-    repo_config = FakeConfig()
-    deleted: list[int] = []
-
-    class FakeDBService:
-        def __init__(self, session):
-            self.session = session
-
-        async def get_repository(self, owner: str, repo_name: str):
-            return FakeRepo()
-
-        async def get_repo_specific_model_config(self, repository_id: int):
-            return repo_config
-
-        async def delete_repo_model_config(self, repository_id: int):
-            deleted.append(repository_id)
-            return True
-
-        async def get_global_model_config(self):
-            return None
-
-    monkeypatch.setattr("app.services.db_service.DBService", FakeDBService)
-
+def test_old_inherit_global_write_endpoint_is_removed():
     client = build_app(
         auth_status={"loggedIn": True, "user": {"username": "alice"}},
-        auth_manager=AdminAuthManager(
+        auth_manager=DummyAuthManager(
             session=DummySessionData("alice"),
             user_client=None,
         ),
-        database=FakeDatabase(),
+        database=DummyDatabase(),
     )
 
     resp = client.put(
         "/api/repos/owner/repo/config?type=review",
         json={"inherit_global": True},
     )
-    assert resp.status_code == 200
-    assert deleted == []
-    assert repo_config.default_focus == '["security"]'
-    assert repo_config.model is None
-    assert repo_config.api_url is None
+    assert resp.status_code == 404

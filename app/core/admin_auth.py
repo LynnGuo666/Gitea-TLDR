@@ -27,7 +27,7 @@ async def get_admin_user(session: AsyncSession, username: str) -> Optional[User]
         User.external_provider == "gitea",
         User.external_username == username,
         User.role.in_(["admin", "super_admin"]),
-        User.is_active == True,
+        User.is_active.is_(True),
     )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()

@@ -3,7 +3,6 @@ Claude Code CLI Provider 实现
 """
 
 import asyncio
-import json
 import logging
 import os
 import re

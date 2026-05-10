@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 import re
 from collections import Counter
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 try:  # jieba 为中文分词提供支持，未安装时退化成纯英文正则
@@ -21,11 +22,8 @@ from app.core import settings
 from app.core.database import Database
 from app.models import DEFAULT_ISSUE_FOCUS
 from app.services.db_service import DBService
+from app.services.audit_service import AuditService
 from app.services.gitea_client import GiteaClient
-from app.services.issue_config_resolver import (
-    ResolvedIssueConfig,
-    resolve_issue_config,
-)
 from app.services.providers.base import IssueResult
 from app.services.providers.forge.provider import (
     DEFAULT_FORGE_BASE_URL,
@@ -92,6 +90,19 @@ _STOP_WORDS = {
 }
 
 
+@dataclass
+class ResolvedIssueConfig:
+    engine: str
+    model: Optional[str]
+    api_url: Optional[str]
+    api_key: Optional[str]
+    wire_api: Optional[str]
+    temperature: Optional[float]
+    max_tokens: Optional[int]
+    custom_prompt: Optional[str]
+    default_focus: List[str] = field(default_factory=lambda: list(DEFAULT_ISSUE_FOCUS))
+
+
 class IssueAnalysisService:
     """负责编排 Issue 分析主链路。"""
 
@@ -115,7 +126,7 @@ class IssueAnalysisService:
         focus_areas: Optional[List[str]] = None,
     ) -> bool:
         """分析普通 Issue。"""
-        issue_session_id: Optional[int] = None
+        issue_run_id: Optional[int] = None
         repository_id: Optional[int] = None
         actor_user_id: Optional[int] = None
         gitea_api_calls = 0
@@ -149,7 +160,7 @@ class IssueAnalysisService:
                 db_service = DBService(session)
                 repo = await db_service.get_repository(owner, repo_name)
                 if repo:
-                    in_flight = await db_service.get_in_flight_issue_session(
+                    in_flight = await db_service.get_in_flight_issue_run(
                         repo.id, issue_number
                     )
                     if in_flight:
@@ -161,7 +172,7 @@ class IssueAnalysisService:
                             in_flight.id,
                         )
                         return True
-                    recent = await db_service.get_recent_successful_issue_session(
+                    recent = await db_service.get_recent_successful_issue_run(
                         repo.id, issue_number, DUPLICATE_WINDOW_SECONDS
                     )
                     if recent:
@@ -179,7 +190,7 @@ class IssueAnalysisService:
             (
                 repository_id,
                 actor_user_id,
-                issue_session_id,
+                issue_run_id,
                 resolved_config,
                 config_source,
                 effective_focus,
@@ -202,11 +213,11 @@ class IssueAnalysisService:
             )
             gitea_api_calls += 1
 
-            if self.database and issue_session_id and bot_comment_id is not None:
+            if self.database and issue_run_id and bot_comment_id is not None:
                 async with self.database.session() as session:
                     db_service = DBService(session)
-                    await db_service.update_issue_session(
-                        issue_session_id,
+                    await db_service.update_analysis_run(
+                        issue_run_id,
                         bot_comment_id=bot_comment_id,
                     )
 
@@ -253,13 +264,18 @@ class IssueAnalysisService:
             provider = ForgeProvider()
 
             # Forge 场景：在调用前创建 ForgeSession（status="running"）
-            forge_session_str_id: Optional[str] = None
+            provider_run_session_id: Optional[str] = None
             if self.database and repository_id:
                 try:
                     async with self.database.session() as session:
                         _db_fs = DBService(session)
-                        _fs = await _db_fs.create_forge_session(repository_id, "issue")
-                        forge_session_str_id = _fs.session_id
+                        _fs = await _db_fs.create_provider_run(
+                            repository_id,
+                            "issue",
+                            provider="forge",
+                            analysis_run_id=issue_run_id,
+                        )
+                        provider_run_session_id = _fs.session_id
                 except Exception as _fse:
                     logger.warning("创建 ForgeSession 失败（非致命）: %s", _fse)
 
@@ -279,7 +295,7 @@ class IssueAnalysisService:
                     max_turns=max(1, int(getattr(settings, "forge_max_turns", 5) or 5)),
                 )
             finally:
-                if forge_session_str_id and self.database:
+                if provider_run_session_id and self.database:
                     try:
                         import json as _json
 
@@ -287,8 +303,8 @@ class IssueAnalysisService:
                         _msgs = _meta.get("forge_messages") or []
                         async with self.database.session() as session:
                             _db_fs = DBService(session)
-                            await _db_fs.complete_forge_session(
-                                forge_session_str_id,
+                            await _db_fs.complete_provider_run(
+                                provider_run_session_id,
                                 status="completed" if result is not None else "failed",
                                 model=_meta.get("model") or (result.model if result else None),
                                 turns=_meta.get("turns", 0),
@@ -298,7 +314,7 @@ class IssueAnalysisService:
                                 output_tokens=_meta.get("output_tokens", 0),
                                 cache_creation_input_tokens=_meta.get("cache_creation_input_tokens", 0),
                                 cache_read_input_tokens=_meta.get("cache_read_input_tokens", 0),
-                                issue_session_id=issue_session_id,
+                                analysis_run_id=issue_run_id,
                                 error=provider.last_error if result is None else None,
                             )
                     except Exception as _fse2:
@@ -336,30 +352,26 @@ class IssueAnalysisService:
                     owner, repo_name, issue_number, analysis_payload
                 )
 
-            if self.database and issue_session_id and repository_id:
+            if self.database and issue_run_id and repository_id:
                 async with self.database.session() as session:
                     db_service = DBService(session)
-                    await db_service.update_issue_session(
-                        issue_session_id,
-                        engine=resolved_config.engine or "forge",
-                        model=result.model,
-                        config_source=config_source,
-                        issue_state=issue_state,
-                        bot_comment_id=bot_comment_id,
+                    await db_service.complete_analysis_run(
+                        issue_run_id,
+                        status="completed" if success else "failed",
                         overall_severity=analysis_payload.get("overall_severity"),
                         summary_markdown=analysis_payload.get("summary_markdown", ""),
-                        analysis_payload={
+                        result_payload={
                             **analysis_payload,
                             "fallback_mode": result.fallback_mode,
                             "focus_areas": effective_focus,
+                            "config_source": config_source,
                         },
                         overall_success=success,
-                        completed=True,
                     )
                     usage = result.usage_metadata
-                    await db_service.record_usage(
+                    await db_service.record_usage_event(
                         repository_id=repository_id,
-                        issue_session_id=issue_session_id,
+                        analysis_run_id=issue_run_id,
                         user_id=actor_user_id,
                         estimated_input_tokens=usage.get("input_tokens", 0),
                         estimated_output_tokens=usage.get("output_tokens", 0),
@@ -389,15 +401,15 @@ class IssueAnalysisService:
                     owner, repo_name, issue_number, failure_body
                 )
 
-            if self.database and issue_session_id:
+            if self.database and issue_run_id:
                 try:
                     async with self.database.session() as session:
                         db_service = DBService(session)
-                        await db_service.update_issue_session(
-                            issue_session_id,
+                        await db_service.complete_analysis_run(
+                            issue_run_id,
+                            status="failed",
                             overall_success=False,
                             error_message=str(e),
-                            completed=True,
                         )
                 except Exception as db_error:
                     logger.error("更新 Issue 分析会话失败: %s", db_error)
@@ -419,25 +431,10 @@ class IssueAnalysisService:
     ) -> tuple[int, Optional[int], Optional[int], ResolvedIssueConfig, str, List[str]]:
         repository_id = 0
         actor_user_id: Optional[int] = None
-        issue_session_id: Optional[int] = None
+        issue_run_id: Optional[int] = None
 
-        default_engine = (
-            getattr(settings, "default_provider", None) or "forge"
-        )
-
-        base_resolved = ResolvedIssueConfig(
-            inherit_global=True,
-            engine=default_engine,
-            model=getattr(settings, "forge_model", DEFAULT_FORGE_MODEL),
-            api_url=getattr(settings, "forge_base_url", DEFAULT_FORGE_BASE_URL),
-            api_key=getattr(settings, "forge_api_key", "") or None,
-            wire_api=None,
-            temperature=None,
-            max_tokens=None,
-            custom_prompt=None,
-            default_focus=list(DEFAULT_ISSUE_FOCUS),
-        )
-        config_source = "global_default"
+        default_engine = getattr(settings, "default_provider", None) or "forge"
+        config_source = "repo_config"
 
         if not self.database:
             raise RuntimeError(
@@ -453,49 +450,101 @@ class IssueAnalysisService:
                 actor_user = await db_service.get_or_create_user_by_username(actor_username)
                 actor_user_id = actor_user.id
 
-            repo_issue_config = await db_service.get_repo_specific_issue_config(
-                repository_id
-            )
+            repo_issue_config = await db_service.get_repository_config(repository_id, "issue")
             if repo_issue_config is None:
+                failed = await db_service.create_analysis_run(
+                    kind="issue",
+                    repository_id=repository_id,
+                    external_number=issue_number,
+                    trigger_type=trigger_type,
+                    external_title=issue_title,
+                    external_author=issue_author,
+                    external_state=issue_state,
+                    source_comment_id=source_comment_id,
+                )
+                await db_service.complete_analysis_run(
+                    failed.id,
+                    status="failed",
+                    overall_success=False,
+                    error_message="configuration_required",
+                )
+                await AuditService(db_service).record_failure(
+                    actor_id=actor_user_id,
+                    action="trigger_analysis",
+                    resource_type="analysis_run",
+                    resource_id=failed.id,
+                    error="configuration_required",
+                    context={"repository_id": repository_id, "source": "webhook"},
+                )
                 raise RuntimeError(
                     f"configuration_required: 仓库 {owner}/{repo_name} 尚未初始化 issue 配置"
                 )
-            global_issue_config = await db_service.get_global_issue_config()
-            resolved = resolve_issue_config(
-                repo_issue_config,
-                global_issue_config,
-                default_engine=default_engine,
+            if not repo_issue_config.credential or not repo_issue_config.credential.is_active:
+                failed = await db_service.create_analysis_run(
+                    kind="issue",
+                    repository_id=repository_id,
+                    external_number=issue_number,
+                    trigger_type=trigger_type,
+                    repository_config_id=repo_issue_config.id,
+                    external_title=issue_title,
+                    external_author=issue_author,
+                    external_state=issue_state,
+                    source_comment_id=source_comment_id,
+                )
+                await db_service.complete_analysis_run(
+                    failed.id,
+                    status="failed",
+                    overall_success=False,
+                    error_message="credential_unavailable",
+                )
+                await AuditService(db_service).record_failure(
+                    actor_id=actor_user_id,
+                    action="trigger_analysis",
+                    resource_type="analysis_run",
+                    resource_id=failed.id,
+                    error="credential_unavailable",
+                    context={"repository_id": repository_id, "source": "webhook"},
+                )
+                raise RuntimeError("credential_unavailable")
+            resolved = ResolvedIssueConfig(
+                engine=repo_issue_config.engine or default_engine,
+                model=repo_issue_config.model,
+                api_url=repo_issue_config.api_url,
+                api_key=repo_issue_config.api_key,
+                wire_api=repo_issue_config.wire_api,
+                temperature=repo_issue_config.temperature,
+                max_tokens=repo_issue_config.max_tokens,
+                custom_prompt=repo_issue_config.custom_prompt,
+                default_focus=repo_issue_config.get_focus() or list(DEFAULT_ISSUE_FOCUS),
             )
-
-            if repo_issue_config is not None and not resolved.inherit_global:
-                config_source = "repo_config"
-            else:
-                config_source = "repo_config"
 
             effective_focus = list(
                 focus_areas
                 if focus_areas
-                else (resolved.default_focus or base_resolved.default_focus)
+                else (resolved.default_focus or list(DEFAULT_ISSUE_FOCUS))
             )
 
-            issue_session = await db_service.create_issue_session(
+            issue_run = await db_service.create_analysis_run(
+                kind="issue",
                 repository_id=repository_id,
-                issue_number=issue_number,
+                external_number=issue_number,
                 trigger_type=trigger_type,
-                engine=resolved.engine,
-                model=resolved.model,
-                config_source=config_source,
-                issue_title=issue_title,
-                issue_author=issue_author,
-                issue_state=issue_state,
+                effective_engine=resolved.engine,
+                effective_model=resolved.model,
+                repository_config_id=repo_issue_config.id,
+                credential_id=repo_issue_config.credential_id,
+                result_payload={"config_source": config_source},
+                external_title=issue_title,
+                external_author=issue_author,
+                external_state=issue_state,
                 source_comment_id=source_comment_id,
             )
-            issue_session_id = issue_session.id
+            issue_run_id = issue_run.id
 
         return (
             repository_id,
             actor_user_id,
-            issue_session_id,
+            issue_run_id,
             resolved,
             config_source,
             effective_focus,

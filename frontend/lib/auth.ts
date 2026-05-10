@@ -41,7 +41,7 @@ export const AuthContext = createContext<AuthContextValue>({
 });
 
 export async function fetchAuthStatus(): Promise<AuthStatus> {
-  const res = await apiFetch('/api/auth/status', { credentials: 'include' });
+  const res = await apiFetch('/api/v2/auth/status', { credentials: 'include' });
   if (!res.ok) {
     throw new Error('无法加载登录状态');
   }
@@ -54,7 +54,7 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
 }
 
 export async function beginOAuthLogin(): Promise<void> {
-  const res = await apiFetch('/api/auth/login-url', { credentials: 'include' });
+  const res = await apiFetch('/api/v2/auth/login-url', { credentials: 'include' });
   if (!res.ok) {
     throw new Error('无法获取登录链接');
   }
@@ -67,7 +67,7 @@ export async function beginOAuthLogin(): Promise<void> {
 }
 
 export async function fetchAdminStatus(): Promise<AdminStatus> {
-  const res = await apiFetch('/api/auth/admin-status', { credentials: 'include' });
+  const res = await apiFetch('/api/v2/auth/admin-status', { credentials: 'include' });
   if (!res.ok) {
     throw new Error('无法加载管理员状态');
   }
@@ -81,5 +81,5 @@ export async function fetchAdminStatus(): Promise<AdminStatus> {
 }
 
 export async function requestLogout(): Promise<void> {
-  await apiFetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+  await apiFetch('/api/v2/auth/logout', { method: 'POST', credentials: 'include' });
 }

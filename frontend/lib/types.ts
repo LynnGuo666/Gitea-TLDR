@@ -1,4 +1,4 @@
-export type Repo = {
+export type Repository = {
   id: number;
   name: string;
   owner: { username?: string; login?: string; full_name?: string };
@@ -8,6 +8,8 @@ export type Repo = {
   is_active?: boolean;
 };
 
+export type Repo = Repository;
+
 export type PublicConfig = {
   gitea_url: string;
   bot_username?: string | null;
@@ -15,26 +17,202 @@ export type PublicConfig = {
   oauth_enabled?: boolean;
 };
 
-export type RepoReviewConfig = {
-  configured: boolean;
-  api_url?: string | null;
-  engine?: string | null;
-  model?: string | null;
-  has_api_key: boolean;
-  inherit_global: boolean;
-  has_global_config: boolean;
-  global_api_url?: string | null;
-  global_has_api_key: boolean;
-  global_engine?: string | null;
-  global_model?: string | null;
+export type Actor = {
+  id: number;
+  external_provider: string;
+  external_username: string;
+  display_name: string | null;
+  email: string | null;
+  role: string;
+  permissions: string[];
+  is_active: boolean;
+  last_login_at: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
-export type GlobalReviewConfig = {
-  configured: boolean;
-  api_url?: string | null;
-  engine?: string | null;
-  model?: string | null;
+export type RepositoryFeature = {
+  id: number;
+  repository_id: number;
+  scenario: string;
+  enabled: boolean;
+  auto_on_open: boolean;
+  manual_command_enabled: boolean;
+};
+
+export type ProviderCredential = {
+  id: number;
+  scope_type: string;
+  scope_key: string;
+  name: string;
+  provider: string;
+  api_url: string | null;
   has_api_key: boolean;
+  is_active: boolean;
+  last_used_at: string | null;
+};
+
+export type ConfigTemplate = {
+  id: number;
+  scope_type: string;
+  scope_key: string;
+  scenario: 'review' | 'issue' | string;
+  name: string;
+  engine: string;
+  model: string | null;
+  credential_id: number | null;
+  wire_api: string | null;
+  temperature: number | null;
+  max_tokens: number | null;
+  custom_prompt: string | null;
+  focus: string[];
+  features: string[];
+  is_default: boolean;
+  is_active: boolean;
+  updated_at: string | null;
+};
+
+export type RepositoryConfiguration = {
+  id: number;
+  repository_id: number;
+  scenario: 'review' | 'issue' | string;
+  source_template_id: number | null;
+  template_version_copied_at: string | null;
+  engine: string;
+  model: string | null;
+  credential_id: number | null;
+  credential_name: string | null;
+  api_url: string | null;
+  has_api_key: boolean;
+  wire_api: string | null;
+  temperature: number | null;
+  max_tokens: number | null;
+  custom_prompt: string | null;
+  focus: string[];
+  features: string[];
+  is_active: boolean;
+};
+
+export type AnalysisAnnotation = {
+  id: number;
+  analysis_run_id: number;
+  annotation_type: string;
+  file_path: string | null;
+  new_line: number | null;
+  old_line: number | null;
+  severity: string | null;
+  body: string;
+  suggestion: string | null;
+  created_at: string | null;
+};
+
+export type AnalysisRunSummary = {
+  id: number;
+  kind: 'review' | 'issue' | string;
+  repository_id: number;
+  repo_full_name: string | null;
+  external_number: number;
+  external_title: string | null;
+  external_author: string | null;
+  status: string;
+  trigger_type: string;
+  effective_engine: string | null;
+  effective_model: string | null;
+  overall_success: boolean | null;
+  overall_severity: string | null;
+  summary_markdown: string | null;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_seconds: number | null;
+};
+
+export type AnalysisRunDetail = AnalysisRunSummary & {
+  result_payload: Record<string, unknown>;
+  analysis_payload: Record<string, unknown>;
+  annotations?: AnalysisAnnotation[];
+};
+
+export type ProviderRunSummary = {
+  id: number;
+  analysis_run_id: number | null;
+  repository_id: number | null;
+  provider: string;
+  provider_session_id: string;
+  scenario: string;
+  status: string;
+  model: string | null;
+  turns: number;
+  tool_calls_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  error_message: string | null;
+  repo_full_name: string | null;
+};
+
+export type ProviderRunDetail = ProviderRunSummary & {
+  messages: unknown[];
+};
+
+export type UsageEvent = {
+  id: number;
+  analysis_run_id: number | null;
+  repository_id: number;
+  actor_id: number | null;
+  event_date: string;
+  provider: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+  gitea_api_calls: number;
+  provider_api_calls: number;
+  clone_operations: number;
+};
+
+export type UsageSummary = {
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_gitea_calls: number;
+  total_claude_calls?: number;
+  total_provider_calls: number;
+  total_clones?: number;
+  total_clone_operations: number;
+  record_count: number;
+  run_count: number;
+};
+
+export type UsageResponse = {
+  summary: UsageSummary;
+  events: UsageEvent[];
+};
+
+export type AuditEvent = {
+  id: number;
+  actor_id: number | null;
+  actor_type?: string;
+  action: string;
+  resource_type: string;
+  resource_id: number | null;
+  repository_id?: number | null;
+  status: string;
+  error_message?: string | null;
+  created_at: string;
+};
+
+export type AppSetting = {
+  id: number;
+  key: string;
+  category: string;
+  value: unknown;
+  description: string | null;
+  updated_by_actor_id: number | null;
+  updated_at: string | null;
 };
 
 export type ProviderInfo = {
@@ -56,155 +234,4 @@ export type ChangelogEntry = {
 export type ChangelogResponse = {
   version: string;
   history: ChangelogEntry[];
-};
-
-export type UsageSummary = {
-  total_input_tokens: number;
-  total_output_tokens: number;
-  total_gitea_calls: number;
-  total_claude_calls: number;
-  total_provider_calls: number;
-  total_clones: number;
-  record_count: number;
-};
-
-export type IssueAnalysisItem = {
-  id: number;
-  repository_id: number;
-  repo_full_name: string | null;
-  issue_number: number;
-  issue_title: string | null;
-  issue_author: string | null;
-  issue_state: string | null;
-  trigger_type: string;
-  engine: string | null;
-  model: string | null;
-  config_source: string | null;
-  overall_severity: string | null;
-  overall_success: boolean | null;
-  error_message: string | null;
-  related_issue_count: number;
-  solution_count: number;
-  started_at: string | null;
-  completed_at: string | null;
-  duration_seconds: number | null;
-  estimated_input_tokens: number;
-  estimated_output_tokens: number;
-  cache_creation_input_tokens: number;
-  cache_read_input_tokens: number;
-  total_tokens: number;
-};
-
-export type RelatedIssue = {
-  number: number;
-  title: string;
-  state: string;
-  url: string;
-  similarity_reason: string;
-  suggested_reference: string;
-};
-
-export type SolutionSuggestion = {
-  title: string;
-  summary: string;
-  steps: string[];
-};
-
-export type IssueAnalysisDetail = IssueAnalysisItem & {
-  source_comment_id: number | null;
-  bot_comment_id: number | null;
-  summary_markdown: string | null;
-  analysis_payload: Record<string, unknown>;
-  related_issues: RelatedIssue[];
-  solution_suggestions: SolutionSuggestion[];
-  related_files: string[];
-  next_actions: string[];
-  fallback_mode?: 'tool' | 'text_json' | 'raw_text';
-  focus_areas?: string[];
-};
-
-export type IssueConfigPayload = {
-  inherit_global: boolean;
-  has_global_config: boolean;
-  configured: boolean;
-  engine: string;
-  model: string | null;
-  api_url: string | null;
-  has_api_key: boolean;
-  temperature: number | null;
-  max_tokens: number | null;
-  custom_prompt: string | null;
-  default_focus: string[];
-  global_engine: string | null;
-  global_model: string | null;
-  global_api_url: string | null;
-  global_has_api_key: boolean;
-};
-
-export type IssueConfigUpdateRequest = {
-  engine?: string;
-  model?: string | null;
-  api_url?: string | null;
-  api_key?: string | null;
-  wire_api?: string | null;
-  temperature?: number | null;
-  max_tokens?: number | null;
-  custom_prompt?: string | null;
-  default_focus?: string[];
-  inherit_global?: boolean;
-};
-
-// ==================== Forge 会话类型 ====================
-
-export type ForgeMessageContentBlock =
-  | { type: 'text'; text: string }
-  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-  | { type: 'tool_result'; tool_use_id: string; content: string | unknown[]; is_error?: boolean };
-
-export type ForgeMessage = {
-  role: 'user' | 'assistant';
-  content: ForgeMessageContentBlock[] | string;
-};
-
-export type ForgeSessionReviewInfo = {
-  id: number;
-  pr_number: number | null;
-  pr_title: string | null;
-};
-
-export type ForgeSessionIssueInfo = {
-  id: number;
-  issue_number: number | null;
-  issue_title: string | null;
-};
-
-export type ForgeSessionSummary = {
-  session_id: string;
-  scenario: 'review' | 'issue' | string;
-  status: 'running' | 'completed' | 'failed' | string;
-  model: string | null;
-  turns: number;
-  tool_calls_count: number;
-  input_tokens: number;
-  output_tokens: number;
-  cache_creation_input_tokens: number;
-  cache_read_input_tokens: number;
-  started_at: string | null;
-  completed_at: string | null;
-  duration_seconds: number | null;
-  error: string | null;
-  repo_full_name: string | null;
-  review_session: ForgeSessionReviewInfo | null;
-  issue_session: ForgeSessionIssueInfo | null;
-};
-
-export type ForgeSessionDetail = ForgeSessionSummary & {
-  messages: ForgeMessage[];
-};
-
-export type ForgeSessionsResponse = {
-  sessions: ForgeSessionSummary[];
-  total: number;
-  limit: number;
-  offset: number;
 };

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from typing import Any
 import sys
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -92,94 +92,15 @@ def build_test_client() -> TestClient:
     return TestClient(app)
 
 
-def test_get_issue_settings_returns_defaults_when_repo_missing(monkeypatch):
-    class FakeDBService:
-        def __init__(self, session):
-            del session
-
-        async def get_repository(self, owner: str, repo_name: str):
-            assert owner == "alice"
-            assert repo_name == "repo-a"
-            return None
-
-    monkeypatch.setattr("app.services.db_service.DBService", FakeDBService)
-
+def test_old_issue_settings_endpoint_is_removed():
     client = build_test_client()
     response = client.get("/api/repos/alice/repo-a/issue-settings")
 
-    assert response.status_code == 200
-    assert response.json() == {
-        "issue_enabled": True,
-        "auto_on_open": True,
-        "manual_command_enabled": True,
-    }
+    assert response.status_code == 404
 
 
-def test_list_my_issues_only_returns_accessible_repositories(monkeypatch):
-    class FakeRepo:
-        def __init__(self, repo_id: int):
-            self.id = repo_id
-
-    class FakeRepositoryRef:
-        owner = "alice"
-        repo_name = "repo-a"
-
-    class FakeIssue:
-        id = 3
-        repository_id = 1
-        repository = FakeRepositoryRef()
-        usage_stats = [
-            SimpleNamespace(
-                estimated_input_tokens=10,
-                estimated_output_tokens=5,
-                cache_creation_input_tokens=0,
-                cache_read_input_tokens=0,
-            )
-        ]
-        issue_number = 77
-        issue_title = "Timeout on sync"
-        issue_author = "alice"
-        issue_state = "open"
-        trigger_type = "manual"
-        engine = "forge"
-        model = "claude-test"
-        config_source = "repo_config"
-        overall_severity = "medium"
-        overall_success = True
-        error_message = None
-        started_at = None
-        completed_at = None
-        duration_seconds = 3.2
-
-        @staticmethod
-        def get_analysis_payload():
-            return {
-                "related_issues": [{"number": 11}],
-                "solution_suggestions": [{"title": "修复", "summary": "x", "steps": ["a"]}],
-            }
-
-    class FakeDBService:
-        def __init__(self, session):
-            del session
-
-        async def get_repository(self, owner: str, repo_name: str):
-            if owner == "alice" and repo_name == "repo-a":
-                return FakeRepo(1)
-            return None
-
-        async def list_issue_sessions_by_repo_ids(self, repository_ids, success=None, limit=50, offset=0):
-            assert repository_ids == [1]
-            del success, limit, offset
-            return [FakeIssue()]
-
-    monkeypatch.setattr("app.services.db_service.DBService", FakeDBService)
-
+def test_old_my_issues_endpoint_is_removed():
     client = build_test_client()
     response = client.get("/api/my/issues")
 
-    assert response.status_code == 200
-    data = response.json()
-    assert data["total"] == 1
-    assert data["issues"][0]["issue_number"] == 77
-    assert data["issues"][0]["related_issue_count"] == 1
-    assert data["issues"][0]["solution_count"] == 1
+    assert response.status_code == 404

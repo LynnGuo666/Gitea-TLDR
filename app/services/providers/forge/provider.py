@@ -65,10 +65,12 @@ class ForgeProvider(ReviewProvider):
             )
             return None
 
-        resolved_url = api_url or getattr(
-            settings, "forge_base_url", DEFAULT_FORGE_BASE_URL
+        resolved_url = str(
+            api_url or getattr(settings, "forge_base_url", DEFAULT_FORGE_BASE_URL)
         )
-        resolved_model = model or getattr(settings, "forge_model", DEFAULT_FORGE_MODEL)
+        resolved_model = str(
+            model or getattr(settings, "forge_model", DEFAULT_FORGE_MODEL)
+        )
         resolved_max_turns = max(1, int(getattr(settings, "forge_max_turns", 5) or 5))
 
         client = AnthropicClient(api_key=resolved_key, base_url=resolved_url)
@@ -211,10 +213,12 @@ class ForgeProvider(ReviewProvider):
             )
             return None
 
-        resolved_url = api_url or getattr(
-            settings, "forge_base_url", DEFAULT_FORGE_BASE_URL
+        resolved_url = str(
+            api_url or getattr(settings, "forge_base_url", DEFAULT_FORGE_BASE_URL)
         )
-        resolved_model = model or getattr(settings, "forge_model", DEFAULT_FORGE_MODEL)
+        resolved_model = str(
+            model or getattr(settings, "forge_model", DEFAULT_FORGE_MODEL)
+        )
         resolved_max_turns = max(
             1,
             int(

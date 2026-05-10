@@ -22,8 +22,8 @@ export default function SettingsPage() {
       setLoading(true);
       try {
         const [configRes, statsRes] = await Promise.all([
-          apiFetch('/api/config/public'),
-          apiFetch('/api/stats'),
+          apiFetch('/api/v2/config/public'),
+          apiFetch('/api/v2/usage'),
         ]);
 
         if (configRes.ok) {
@@ -49,7 +49,7 @@ export default function SettingsPage() {
 
   const refreshStats = async () => {
     try {
-      const statsRes = await apiFetch('/api/stats');
+      const statsRes = await apiFetch('/api/v2/usage');
       if (statsRes.ok) {
         const statsData = await statsRes.json();
         setStats(statsData.summary);

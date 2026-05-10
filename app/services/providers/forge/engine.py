@@ -21,7 +21,6 @@ from .types import (
     ForgeToolResult,
     ForgeUsage,
     Scenario,
-    ToolDefinition,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,11 +57,8 @@ class ForgeEngine:
         total_usage = ForgeUsage()
         accumulated_text = ""
         total_tool_calls = 0
-        turns = 0
 
         for turn_index in range(1, self.max_turns + 1):
-            turns = turn_index
-
             try:
                 serialized_tools = [self._tool_to_api_format(tool) for tool in tools]
                 response_data, turn_usage = await self.client.create_message(
