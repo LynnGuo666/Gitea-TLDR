@@ -52,32 +52,10 @@ export type ProviderCredential = {
   last_used_at: string | null;
 };
 
-export type ConfigTemplate = {
-  id: number;
-  scope_type: string;
-  scope_key: string;
-  scenario: 'review' | 'issue' | string;
-  name: string;
-  engine: string;
-  model: string | null;
-  credential_id: number | null;
-  wire_api: string | null;
-  temperature: number | null;
-  max_tokens: number | null;
-  custom_prompt: string | null;
-  focus: string[];
-  features: string[];
-  is_default: boolean;
-  is_active: boolean;
-  updated_at: string | null;
-};
-
 export type RepositoryConfiguration = {
   id: number;
   repository_id: number;
   scenario: 'review' | 'issue' | string;
-  source_template_id: number | null;
-  template_version_copied_at: string | null;
   engine: string;
   model: string | null;
   credential_id: number | null;

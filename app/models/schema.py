@@ -246,41 +246,6 @@ class ProviderCredential(Base, TimestampMixin):
         self.api_key_enc = encryption_service.encrypt(value) if value else value
 
 
-class ConfigTemplate(Base, TimestampMixin):
-    """配置模板，只用于复制到仓库配置。"""
-
-    __tablename__ = "config_templates"
-    __table_args__ = (
-        UniqueConstraint(
-            "scope_key", "scenario", "name", name="uq_config_templates_scope_scenario"
-        ),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    scope_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    scope_key: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    namespace_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("namespaces.id", ondelete="SET NULL"), nullable=True
-    )
-    scenario: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    name: Mapped[str] = mapped_column(String(150), nullable=False)
-    engine: Mapped[str] = mapped_column(String(100), nullable=False)
-    model: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    credential_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("provider_credentials.id", ondelete="SET NULL"), nullable=True
-    )
-    wire_api: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    temperature: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    max_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    custom_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    focus_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    features_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_by_actor_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("actors.id", ondelete="SET NULL"), nullable=True
-    )
-
 
 class RepositoryConfig(Base, TimestampMixin):
     """仓库真正运行时使用的独立配置。"""
@@ -299,12 +264,6 @@ class RepositoryConfig(Base, TimestampMixin):
         index=True,
     )
     scenario: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    source_template_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("config_templates.id", ondelete="SET NULL"), nullable=True
-    )
-    template_version_copied_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, nullable=True
-    )
     engine: Mapped[str] = mapped_column(String(100), nullable=False)
     model: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     credential_id: Mapped[Optional[int]] = mapped_column(

@@ -11,7 +11,7 @@ from datetime import date
 from typing import Any, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.core import (
     __release_date__,
@@ -44,45 +44,6 @@ class ProviderCredentialUpdatePayload(BaseModel):
 class ProviderCredentialRotatePayload(BaseModel):
     api_key: str
 
-
-class ConfigTemplatePayload(BaseModel):
-    scenario: str
-    name: str
-    engine: str
-    model: Optional[str] = None
-    credential_id: Optional[int] = None
-    wire_api: Optional[str] = None
-    temperature: Optional[float] = None
-    max_tokens: Optional[int] = None
-    custom_prompt: Optional[str] = None
-    focus: list[str] = Field(default_factory=list)
-    features: list[str] = Field(default_factory=list)
-    is_default: bool = False
-
-
-class ConfigTemplateUpdatePayload(BaseModel):
-    scenario: Optional[str] = None
-    name: Optional[str] = None
-    engine: Optional[str] = None
-    model: Optional[str] = None
-    credential_id: Optional[int] = None
-    wire_api: Optional[str] = None
-    temperature: Optional[float] = None
-    max_tokens: Optional[int] = None
-    custom_prompt: Optional[str] = None
-    focus: Optional[list[str]] = None
-    features: Optional[list[str]] = None
-    is_default: Optional[bool] = None
-    is_active: Optional[bool] = None
-
-
-class RepositoryConfigFromTemplatePayload(BaseModel):
-    scenario: str
-    template_id: Optional[int] = None
-
-
-class ApplyTemplatePayload(BaseModel):
-    template_id: int
 
 
 class RepositoryConfigUpdatePayload(BaseModel):
@@ -169,39 +130,12 @@ def _serialize_app_setting(setting) -> dict[str, Any]:
     }
 
 
-def _serialize_template(template) -> dict[str, Any]:
-    return {
-        "id": template.id,
-        "scope_type": template.scope_type,
-        "scope_key": template.scope_key,
-        "scenario": template.scenario,
-        "name": template.name,
-        "engine": template.engine,
-        "model": template.model,
-        "credential_id": template.credential_id,
-        "wire_api": template.wire_api,
-        "temperature": template.temperature,
-        "max_tokens": template.max_tokens,
-        "custom_prompt": template.custom_prompt,
-        "focus": _loads_list(template.focus_json),
-        "features": _loads_list(template.features_json),
-        "is_default": template.is_default,
-        "is_active": template.is_active,
-        "updated_at": template.updated_at.isoformat() if template.updated_at else None,
-    }
-
 
 def _serialize_repo_config(config) -> dict[str, Any]:
     return {
         "id": config.id,
         "repository_id": config.repository_id,
         "scenario": config.scenario,
-        "source_template_id": config.source_template_id,
-        "template_version_copied_at": (
-            config.template_version_copied_at.isoformat()
-            if config.template_version_copied_at
-            else None
-        ),
         "engine": config.engine,
         "model": config.model,
         "credential_id": config.credential_id,
@@ -529,8 +463,14 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
         return {"repos": [_serialize_repo(repo) for repo in repos]}
 
     @router.get("/repos/{owner}/{repo}/permissions")
-    async def get_repo_permissions(owner: str, repo: str):
-        perms = await context.gitea_client.check_repo_permissions(owner, repo)
+    async def get_repo_permissions(owner: str, repo: str, request: Request):
+        session = await context.auth_manager.get_session_async(
+            request, getattr(request.state, "database", None)
+        )
+        if not session:
+            raise HTTPException(status_code=401, detail="未登录")
+        user_client = context.auth_manager.build_user_client(session)
+        perms = await user_client.check_repo_permissions(owner, repo)
         if perms is None:
             raise HTTPException(status_code=502, detail="无法从 Gitea 获取仓库权限")
         return perms
@@ -681,60 +621,6 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             )
             return {"success": True}
 
-    @router.get("/config-templates")
-    async def list_config_templates(request: Request, scenario: Optional[str] = None):
-        async with request.state.database.session() as session:
-            service = DBService(session)
-            return {"templates": [_serialize_template(t) for t in await service.list_config_templates(scenario)]}
-
-    @router.post("/config-templates")
-    async def create_config_template(payload: ConfigTemplatePayload, request: Request):
-        async with request.state.database.session() as session:
-            service = DBService(session)
-            template = await service.create_config_template(**payload.model_dump())
-            audit = AuditService(service)
-            await audit.record_success(
-                action="create",
-                resource_type="config_template",
-                resource_id=template.id,
-                after=_serialize_template(template),
-            )
-            return _serialize_template(template)
-
-    @router.put("/config-templates/{template_id}")
-    async def update_config_template(template_id: int, payload: ConfigTemplateUpdatePayload, request: Request):
-        async with request.state.database.session() as session:
-            service = DBService(session)
-            template = await service.update_config_template(
-                template_id,
-                **payload.model_dump(exclude_unset=True),
-            )
-            if not template:
-                raise HTTPException(status_code=404, detail="模板不存在")
-            audit = AuditService(service)
-            await audit.record_success(
-                action="update",
-                resource_type="config_template",
-                resource_id=template.id,
-                after=_serialize_template(template),
-            )
-            return _serialize_template(template)
-
-    @router.delete("/config-templates/{template_id}")
-    async def delete_config_template(template_id: int, request: Request):
-        async with request.state.database.session() as session:
-            service = DBService(session)
-            deleted = await service.delete_config_template(template_id)
-            if not deleted:
-                raise HTTPException(status_code=404, detail="模板不存在")
-            audit = AuditService(service)
-            await audit.record_success(
-                action="delete",
-                resource_type="config_template",
-                resource_id=template_id,
-            )
-            return {"success": True}
-
     @router.get("/repos/{owner}/{repo}/configurations")
     async def get_repo_configuration(owner: str, repo: str, scenario: str, request: Request):
         async with request.state.database.session() as session:
@@ -745,24 +631,6 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             config = await service.get_repository_config(repo_obj.id, scenario)
             if not config:
                 raise HTTPException(status_code=404, detail="configuration_required")
-            return _serialize_repo_config(config)
-
-    @router.post("/repos/{owner}/{repo}/configurations/from-template")
-    async def create_repo_config_from_template(owner: str, repo: str, payload: RepositoryConfigFromTemplatePayload, request: Request):
-        async with request.state.database.session() as session:
-            service = DBService(session)
-            repo_obj = await service.get_or_create_repository(owner, repo)
-            config = await service.create_repository_config_from_template(
-                repo_obj.id, payload.scenario, payload.template_id
-            )
-            audit = AuditService(service)
-            await audit.record_success(
-                action="create",
-                resource_type="repository_config",
-                resource_id=config.id,
-                after=_serialize_repo_config(config),
-                context={"repository_id": repo_obj.id},
-            )
             return _serialize_repo_config(config)
 
     @router.put("/repos/{owner}/{repo}/configurations/{scenario}")
@@ -778,24 +646,6 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             audit = AuditService(service)
             await audit.record_success(
                 action="update",
-                resource_type="repository_config",
-                resource_id=config.id,
-                after=_serialize_repo_config(config),
-                context={"repository_id": repo_obj.id},
-            )
-            return _serialize_repo_config(config)
-
-    @router.post("/repos/{owner}/{repo}/configurations/{scenario}/apply-template")
-    async def apply_template(owner: str, repo: str, scenario: str, payload: ApplyTemplatePayload, request: Request):
-        async with request.state.database.session() as session:
-            service = DBService(session)
-            repo_obj = await service.get_or_create_repository(owner, repo)
-            config = await service.apply_template_to_repository_config(
-                repo_obj.id, scenario, payload.template_id
-            )
-            audit = AuditService(service)
-            await audit.record_success(
-                action="apply_template",
                 resource_type="repository_config",
                 resource_id=config.id,
                 after=_serialize_repo_config(config),

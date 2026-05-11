@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "2.0.5"
+__version__ = "2.0.6"
 __release_date__ = "2026-05-11"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,15 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.0.6": {
+        "date": "2026-05-11",
+        "changes": [
+            "移除：删除 ConfigTemplate（系统级可复用模板）层，仓库配置回归直接管理方式，无需从模板初始化",
+            "移除：清理前后端全部模板相关端点（GET/POST/PUT/DELETE /config-templates、from-template、apply-template）",
+            "修复：/repos/{owner}/{repo}/permissions 改为使用当前登录用户的 OAuth token 进行权限检查，修复始终返回 admin=true 导致只读模式从未生效的 bug",
+            "迁移：新增 Alembic 迁移 e1f2a3b4c5d6，DROP config_templates 表并删除 repository_configs 的 source_template_id / template_version_copied_at 字段",
+        ],
+    },
     "2.0.5": {
         "date": "2026-05-11",
         "changes": [

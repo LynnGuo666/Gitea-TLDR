@@ -22,7 +22,6 @@ from app.models import (
     AnalysisRun,
     AppSetting,
     AuditEvent,
-    ConfigTemplate,
     ProviderCredential,
     ProviderRun,
     Repository,
@@ -345,89 +344,6 @@ class DBService:
         await self.session.flush()
         return True
 
-    async def list_config_templates(
-        self, scenario: Optional[str] = None
-    ) -> list[ConfigTemplate]:
-        stmt = select(ConfigTemplate).where(ConfigTemplate.is_active.is_(True))
-        if scenario:
-            stmt = stmt.where(ConfigTemplate.scenario == scenario)
-        stmt = stmt.order_by(ConfigTemplate.scenario, ConfigTemplate.name)
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
-
-    async def get_default_template(self, scenario: str) -> Optional[ConfigTemplate]:
-        stmt = select(ConfigTemplate).where(
-            ConfigTemplate.scenario == scenario,
-            ConfigTemplate.scope_key == "system",
-            ConfigTemplate.is_default.is_(True),
-            ConfigTemplate.is_active.is_(True),
-        )
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
-
-    async def create_config_template(
-        self,
-        *,
-        scenario: str,
-        name: str,
-        engine: str,
-        model: Optional[str] = None,
-        credential_id: Optional[int] = None,
-        wire_api: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        custom_prompt: Optional[str] = None,
-        focus: Optional[list[str]] = None,
-        features: Optional[list[str]] = None,
-        is_default: bool = False,
-        actor_id: Optional[int] = None,
-    ) -> ConfigTemplate:
-        template = ConfigTemplate(
-            scope_type="system",
-            scope_key="system",
-            scenario=scenario,
-            name=name,
-            engine=engine,
-            model=model,
-            credential_id=credential_id,
-            wire_api=wire_api,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            custom_prompt=custom_prompt,
-            focus_json=_json(focus or []),
-            features_json=_json(features or []),
-            is_default=is_default,
-            is_active=True,
-            created_by_actor_id=actor_id,
-        )
-        self.session.add(template)
-        await self.session.flush()
-        return template
-
-    async def update_config_template(
-        self, template_id: int, **fields: Any
-    ) -> Optional[ConfigTemplate]:
-        template = await self.session.get(ConfigTemplate, template_id)
-        if not template:
-            return None
-        for key, value in fields.items():
-            if key == "focus":
-                template.focus_json = _json(value or [])
-            elif key == "features":
-                template.features_json = _json(value or [])
-            elif hasattr(template, key) and value is not None:
-                setattr(template, key, value)
-        await self.session.flush()
-        return template
-
-    async def delete_config_template(self, template_id: int) -> bool:
-        template = await self.session.get(ConfigTemplate, template_id)
-        if not template:
-            return False
-        await self.session.delete(template)
-        await self.session.flush()
-        return True
-
     async def get_repository_config(
         self, repository_id: int, scenario: str
     ) -> Optional[RepositoryConfig]:
@@ -442,44 +358,6 @@ class DBService:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def create_repository_config_from_template(
-        self,
-        repository_id: int,
-        scenario: str,
-        template_id: Optional[int] = None,
-        actor_id: Optional[int] = None,
-    ) -> RepositoryConfig:
-        template = (
-            await self.session.get(ConfigTemplate, template_id)
-            if template_id
-            else await self.get_default_template(scenario)
-        )
-        if not template:
-            raise ValueError("config_template_not_found")
-        existing = await self.get_repository_config(repository_id, scenario)
-        if existing:
-            return existing
-        cfg = RepositoryConfig(
-            repository_id=repository_id,
-            scenario=scenario,
-            source_template_id=template.id,
-            template_version_copied_at=template.updated_at,
-            engine=template.engine,
-            model=template.model,
-            credential_id=template.credential_id,
-            wire_api=template.wire_api,
-            temperature=template.temperature,
-            max_tokens=template.max_tokens,
-            custom_prompt=template.custom_prompt,
-            focus_json=template.focus_json,
-            features_json=template.features_json,
-            is_active=True,
-            created_by_actor_id=actor_id,
-        )
-        self.session.add(cfg)
-        await self.session.flush()
-        return cfg
-
     async def update_repository_config(
         self, repository_id: int, scenario: str, **fields: Any
     ) -> RepositoryConfig:
@@ -493,31 +371,6 @@ class DBService:
                 cfg.features_json = _json(value or [])
             elif hasattr(cfg, key) and value is not None:
                 setattr(cfg, key, value)
-        await self.session.flush()
-        return cfg
-
-    async def apply_template_to_repository_config(
-        self, repository_id: int, scenario: str, template_id: int
-    ) -> RepositoryConfig:
-        template = await self.session.get(ConfigTemplate, template_id)
-        if not template:
-            raise ValueError("config_template_not_found")
-        cfg = await self.get_repository_config(repository_id, scenario)
-        if not cfg:
-            return await self.create_repository_config_from_template(
-                repository_id, scenario, template_id
-            )
-        cfg.source_template_id = template.id
-        cfg.template_version_copied_at = template.updated_at
-        cfg.engine = template.engine
-        cfg.model = template.model
-        cfg.credential_id = template.credential_id
-        cfg.wire_api = template.wire_api
-        cfg.temperature = template.temperature
-        cfg.max_tokens = template.max_tokens
-        cfg.custom_prompt = template.custom_prompt
-        cfg.focus_json = template.focus_json
-        cfg.features_json = template.features_json
         await self.session.flush()
         return cfg
 

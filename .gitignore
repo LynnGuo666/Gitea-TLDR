@@ -78,4 +78,5 @@ agents/
 .claude/
 /frontend/tsconfig.tsbuildinfo
 .factory/
-.sisyphus/Clawd-Code/
+.sisyphus/
+Clawd-Code/
