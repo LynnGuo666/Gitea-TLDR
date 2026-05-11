@@ -342,7 +342,7 @@ def _serialize_webhook_event(event) -> dict[str, Any]:
     }
 
 
-def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
+def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRouter]:
     router = APIRouter()
     public_router = APIRouter()
 
@@ -427,6 +427,13 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             code, state, response, getattr(request.state, "database", None)
         )
         return response
+
+    # 兼容旧 callback 地址 /api/auth/callback（OAuth app 配置未更新时使用）
+    legacy_auth_router = APIRouter()
+
+    @legacy_auth_router.get("/auth/callback", include_in_schema=False)
+    async def legacy_auth_callback(code: str, state: str, request: Request):
+        return await auth_callback(code, state, request)
 
     @router.post("/auth/logout")
     async def logout(request: Request):
@@ -982,4 +989,4 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter]:
             background_tasks.add_task(context.webhook_handler.handle_issue_comment, payload)
         return {"status": "accepted", "api": "v2"}
 
-    return router, public_router
+    return router, public_router, legacy_auth_router

@@ -324,9 +324,10 @@ def create_app() -> FastAPI:
     app.state.context = context
 
     # 只有 HTTP API 带 /v2，内部模型/服务直接使用最终命名。
-    api_router, public_router = create_api_router(context)
+    api_router, public_router, legacy_auth_router = create_api_router(context)
     app.include_router(public_router)
     app.include_router(api_router, prefix="/api/v2")
+    app.include_router(legacy_auth_router, prefix="/api")
 
     frontend_out_dir = Path(__file__).resolve().parent.parent / "frontend" / "out"
     if frontend_out_dir.exists():

@@ -4,6 +4,12 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [2.0.2] - 2026-05-11
+
+### 修复 (Fixed)
+
+- **OAuth 回调兼容**: 新增 `/api/auth/callback` 兼容路由，解决 Gitea OAuth app 配置的旧回调地址在 API v2 迁移后失效的问题
+
 ## [2.0.1] - 2026-05-10
 
 ### 收口 (Finalization)

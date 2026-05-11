@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "2.0.1"
-__release_date__ = "2026-05-10"
+__version__ = "2.0.2"
+__release_date__ = "2026-05-11"
 __author__ = "LynnGuo666"
 
 
@@ -17,6 +17,12 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.0.2": {
+        "date": "2026-05-11",
+        "changes": [
+            "修复：新增 /api/auth/callback 兼容路由，解决 Gitea OAuth app 配置的旧回调地址在 API v2 迁移后失效的问题",
+        ],
+    },
     "2.0.1": {
         "date": "2026-05-10",
         "changes": [
