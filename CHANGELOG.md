@@ -4,6 +4,19 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [2.0.4] - 2026-05-11
+
+### 测试 (Tests)
+
+- **测试套件重写**: 整体重写 pytest 测试，消除 `test_issue_routes` / `test_security_hardening` 中的重复 Dummy 类定义，共享常量与工厂类统一移至 `conftest.py`
+- **AuthManager 单元测试**: 新增 `test_auth_unit.py`，覆盖 OAuth state 管理、callback 完整流程（monkeypatch `_exchange_code` / `_fetch_user`）、会话过期与 logout
+- **GiteaClient 单元测试**: 新增 `test_gitea_client.py`，覆盖 PR 列表、仓库分页、权限检查、webhook 创建/更新、评论、review 及 `_redact_mapping` 脱敏
+- **真实 OAuth 集成测试**: 新增 `test_oauth_live.py`，标记 `live`，需 `-s` 手动运行，验证完整授权 → token → `/api/v1/user` 链路
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `2.0.4`
+
 ## [2.0.3] - 2026-05-11
 
 ### 修复 (Fixed)

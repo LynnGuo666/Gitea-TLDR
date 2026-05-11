@@ -5,6 +5,10 @@ import inspect
 import os
 import sys
 import types
+from contextlib import asynccontextmanager
+from typing import Any
+
+from fastapi import HTTPException, Request, Response
 
 
 if "nacl" not in sys.modules:
@@ -81,3 +85,138 @@ def pytest_pyfunc_call(pyfuncitem):
     }
     asyncio.run(test_func(**func_args))
     return True
+
+
+# ---------------------------------------------------------------------------
+# 共享测试常量（符合 Gitea API 文档格式）
+# ---------------------------------------------------------------------------
+
+FAKE_USER_RESPONSE: dict[str, Any] = {
+    "id": 1,
+    "login": "alice",
+    "username": "alice",
+    "full_name": "Alice Tester",
+    "email": "alice@example.com",
+    "avatar_url": "https://git.example.com/avatars/1",
+    "is_admin": False,
+    "active": True,
+}
+
+FAKE_TOKEN_RESPONSE: dict[str, Any] = {
+    "access_token": "fake-access-token-value",
+    "token_type": "bearer",
+    "expires_in": 3600,
+    "refresh_token": "fake-refresh-token",
+    "scope": "read:user write:repository",
+}
+
+FAKE_REPO: dict[str, Any] = {
+    "id": 42,
+    "name": "repo-a",
+    "full_name": "alice/repo-a",
+    "owner": {"id": 1, "login": "alice", "username": "alice"},
+    "private": False,
+    "description": "",
+    "permissions": {"admin": True, "push": True, "pull": True},
+}
+
+FAKE_PR: dict[str, Any] = {
+    "id": 100,
+    "number": 1,
+    "title": "Test PR",
+    "state": "open",
+    "user": {"id": 1, "login": "alice", "username": "alice"},
+    "head": {"label": "feat", "ref": "feat", "sha": "abc123"},
+    "base": {"label": "main", "ref": "main", "sha": "xyz789"},
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z",
+    "merged": False,
+    "draft": False,
+    "comments": 0,
+    "additions": 10,
+    "deletions": 2,
+    "changed_files": 1,
+}
+
+
+# ---------------------------------------------------------------------------
+# 共享 Dummy 类
+# ---------------------------------------------------------------------------
+
+
+class DummySessionData:
+    def __init__(self, username: str = "alice") -> None:
+        self.user = {"username": username}
+
+
+class DummyUserClient:
+    def __init__(self, repos: list[dict[str, Any]] | None = None) -> None:
+        self._repos = repos
+
+    async def list_user_repos(self) -> list[dict[str, Any]] | None:
+        return self._repos
+
+
+class DummyAuthManager:
+    def __init__(
+        self,
+        session: DummySessionData | None = None,
+        user_client: DummyUserClient | None = None,
+        enabled: bool = True,
+    ) -> None:
+        self.enabled = enabled
+        self._session = session
+        self._user_client = user_client
+
+    def require_session(self, request: Request) -> DummySessionData:
+        if self._session is None:
+            raise HTTPException(status_code=401, detail="请先登录")
+        return self._session
+
+    def get_session(self, request: Request) -> DummySessionData | None:
+        return self._session
+
+    async def get_session_async(
+        self, request: Request, database: Any = None
+    ) -> DummySessionData | None:
+        return self._session
+
+    def build_user_client(self, session: DummySessionData) -> DummyUserClient:
+        if self._user_client is None:
+            raise HTTPException(status_code=502, detail="missing test client")
+        return self._user_client
+
+    def get_status_payload(self, request: Request) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "logged_in": self._session is not None,
+            "user": self._session.user if self._session else None,
+        }
+
+    async def logout_async(
+        self, request: Request, response: Response, database: Any = None
+    ) -> None:
+        response.delete_cookie(key="gitea_session", path="/")
+
+    def build_authorize_url(self) -> str:
+        return "https://git.example.com/login/oauth/authorize?client_id=test&state=abc"
+
+
+class DummyDatabase:
+    @asynccontextmanager
+    async def session(self):  # type: ignore[override]
+        yield object()
+
+
+class DummyRepoRegistry:
+    async def get_secret_async(self, *_: Any) -> None:
+        return None
+
+    async def set_secret_async(self, *_: Any) -> None:
+        pass
+
+    def set_secret(self, *_: Any) -> None:
+        pass
+
+    def delete_secret(self, *_: Any) -> None:
+        pass

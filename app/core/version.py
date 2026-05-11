@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "2.0.3"
+__version__ = "2.0.4"
 __release_date__ = "2026-05-11"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,16 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.0.4": {
+        "date": "2026-05-11",
+        "changes": [
+            "测试：整体重写 pytest 测试套件，消除 test_issue_routes / test_security_hardening 中的重复 Dummy 类定义，共享常量与工厂类统一移至 conftest.py",
+            "测试：新增 test_auth_unit.py，覆盖 AuthManager 的 OAuth state 管理、callback 完整流程、会话过期与 logout",
+            "测试：新增 test_gitea_client.py，覆盖 GiteaClient 的 PR 列表、仓库分页、权限检查、webhook 创建/更新、评论、review 及敏感字段脱敏",
+            "测试：新增 test_oauth_live.py，提供真实 OAuth 集成测试（标记 live，需 -s 手动运行，验证完整授权→token→/api/v1/user 链路）",
+            "维护：pytest.ini 注册 live marker，同步更新前后端版本号到 2.0.4",
+        ],
+    },
     "2.0.3": {
         "date": "2026-05-11",
         "changes": [

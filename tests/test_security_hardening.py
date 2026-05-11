@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -17,62 +16,13 @@ if str(PROJECT_ROOT) not in sys.path:
 from app.api.routes import create_api_router
 from app.services.gitea_client import GiteaClient
 from app.services.repo_manager import RepoManager
-
-
-class DummyUserClient:
-    def __init__(self, repos: list[dict[str, Any]] | None):
-        self._repos = repos
-
-    async def list_user_repos(self):
-        return self._repos
-
-
-class DummySessionData:
-    def __init__(self, username: str = "alice"):
-        self.user = {"username": username}
-
-
-class DummyAuthManager:
-    def __init__(self, session: DummySessionData | None, user_client: DummyUserClient | None):
-        self._session = session
-        self._user_client = user_client
-        self.enabled = True
-
-    def require_session(self, request: Request):
-        if self._session is None:
-            raise HTTPException(status_code=401, detail="请先登录")
-        return self._session
-
-    def build_user_client(self, session: DummySessionData):
-        if self._user_client is None:
-            raise HTTPException(status_code=502, detail="missing test client")
-        return self._user_client
-
-    def get_session(self, request: Request):
-        return self._session
-
-    def get_status_payload(self, request: Request):
-        return {"enabled": True, "logged_in": self._session is not None, "user": self._session.user if self._session else None}
-
-
-class DummyDatabase:
-    @asynccontextmanager
-    async def session(self):
-        yield object()
-
-
-class DummyRepoRegistry:
-    async def get_secret_async(self, *_):
-        return None
-
-    async def set_secret_async(self, *_):
-        pass
-
-    def set_secret(self, *_):
-        pass
-
-    def delete_secret(self, *_):
-        pass
+from tests.conftest import (
+    DummyAuthManager,
+    DummyDatabase,
+    DummyRepoRegistry,
+    DummySessionData,
+    DummyUserClient,
+)
 
 
 def build_app(
@@ -102,14 +52,15 @@ def build_app(
     app = FastAPI()
 
     @app.middleware("http")
-    async def test_state_middleware(request: Request, call_next):
+    async def test_state_middleware(request: Request, call_next: Any) -> Any:
         request.state.auth_status = auth_status
         request.state.database = database
         return await call_next(request)
 
-    api_router, public_router = create_api_router(context)
+    api_router, public_router, legacy_auth_router = create_api_router(context)
     app.include_router(public_router)
     app.include_router(api_router, prefix="/api")
+    app.include_router(legacy_auth_router, prefix="/api")
 
     return TestClient(app)
 
@@ -123,18 +74,16 @@ def build_app(
         "/api/repositories",
     ],
 )
-def test_old_admin_endpoints_are_removed(path: str):
+def test_old_admin_endpoints_are_removed(path: str) -> None:
     client = build_app(
         auth_status={"loggedIn": False, "user": None},
         auth_manager=DummyAuthManager(session=None, user_client=None),
         database=DummyDatabase(),
     )
-
-    resp = client.get(path)
-    assert resp.status_code == 404
+    assert client.get(path).status_code == 404
 
 
-def test_my_reviews_fails_closed_when_gitea_unavailable():
+def test_my_reviews_fails_closed_when_gitea_unavailable() -> None:
     client = build_app(
         auth_status={"loggedIn": True, "user": {"username": "alice"}},
         auth_manager=DummyAuthManager(
@@ -143,12 +92,10 @@ def test_my_reviews_fails_closed_when_gitea_unavailable():
         ),
         database=DummyDatabase(),
     )
-
-    resp = client.get("/api/my/reviews")
-    assert resp.status_code == 404
+    assert client.get("/api/my/reviews").status_code == 404
 
 
-def test_old_my_review_detail_endpoint_is_removed():
+def test_old_my_review_detail_endpoint_is_removed() -> None:
     client = build_app(
         auth_status={"loggedIn": True, "user": {"username": "alice"}},
         auth_manager=DummyAuthManager(
@@ -159,12 +106,10 @@ def test_old_my_review_detail_endpoint_is_removed():
         ),
         database=DummyDatabase(),
     )
-
-    resp = client.get("/api/my/reviews/123")
-    assert resp.status_code == 404
+    assert client.get("/api/my/reviews/123").status_code == 404
 
 
-def test_old_my_reviews_endpoint_is_removed():
+def test_old_my_reviews_endpoint_is_removed() -> None:
     client = build_app(
         auth_status={"loggedIn": True, "user": {"username": "alice"}},
         auth_manager=DummyAuthManager(
@@ -178,28 +123,33 @@ def test_old_my_reviews_endpoint_is_removed():
         ),
         database=DummyDatabase(),
     )
-
-    resp = client.get("/api/my/reviews")
-    assert resp.status_code == 404
+    assert client.get("/api/my/reviews").status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_clone_repository_never_puts_token_in_command(monkeypatch: pytest.MonkeyPatch, tmp_path):
+async def test_clone_repository_never_puts_token_in_command(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    import asyncio as _asyncio
+
     manager = RepoManager(str(tmp_path))
     captured: dict[str, Any] = {}
 
     class FakeProcess:
         returncode = 0
 
-        async def communicate(self):
+        async def communicate(self) -> tuple[bytes, bytes]:
             return b"", b""
 
-    async def fake_create_subprocess_exec(*args, **kwargs):
+    async def fake_create_subprocess_exec(*args: Any, **kwargs: Any) -> FakeProcess:
         captured["args"] = args
         captured["env"] = kwargs.get("env", {})
         return FakeProcess()
 
-    monkeypatch.setattr("app.services.repo_manager.asyncio.create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(
+        "app.services.repo_manager.asyncio.create_subprocess_exec",
+        fake_create_subprocess_exec,
+    )
 
     token = "secret-token-value"
     result = await manager.clone_repository(
@@ -218,11 +168,17 @@ async def test_clone_repository_never_puts_token_in_command(monkeypatch: pytest.
     assert captured["env"].get("GITEA_TOKEN") == token
 
 
-def test_gitea_client_debug_log_does_not_print_secret(caplog: pytest.LogCaptureFixture):
+def test_gitea_client_debug_log_does_not_print_secret(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     client = GiteaClient("https://gitea.example.com", "tok", debug=True)
 
     with caplog.at_level("DEBUG"):
-        client._log_debug("POST", "https://gitea.example.com/api/v1/hooks", json={"secret": "abc", "name": "demo"})
+        client._log_debug(
+            "POST",
+            "https://gitea.example.com/api/v1/hooks",
+            json={"secret": "abc", "name": "demo"},
+        )
 
     assert "abc" not in caplog.text
     assert "请求体字段" in caplog.text
@@ -239,32 +195,32 @@ def test_gitea_client_debug_log_does_not_print_secret(caplog: pytest.LogCaptureF
     assert redacted["normal"] == "ok"
 
 
-# ==================== 新增安全测试 ====================
-
-def test_provider_global_write_requires_admin():
-    """旧全局配置写入端点已删除。"""
+def test_provider_global_write_requires_admin() -> None:
     client = build_app(
         auth_status={"loggedIn": False, "user": None},
         auth_manager=DummyAuthManager(session=None, user_client=None),
         database=DummyDatabase(),
     )
+    assert (
+        client.put("/api/config/global?type=review", json={"engine": "claude_code"}).status_code
+        == 404
+    )
 
-    resp = client.put("/api/config/global?type=review", json={"engine": "claude_code"})
-    assert resp.status_code == 404
 
-
-def test_repo_provider_config_write_requires_repo_admin(monkeypatch: pytest.MonkeyPatch):
-    """旧仓库配置写入端点已删除。"""
-
+def test_repo_provider_config_write_requires_repo_admin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class NonAdminClient:
-        async def check_repo_permissions(self, owner, repo):
+        async def check_repo_permissions(
+            self, owner: str, repo: str
+        ) -> dict[str, bool]:
             return {"admin": False, "push": True, "pull": True}
 
-        async def is_organization(self, owner):
+        async def is_organization(self, owner: str) -> bool:
             return False
 
     class NonAdminAuthManager(DummyAuthManager):
-        def build_user_client(self, session):
+        def build_user_client(self, session: Any) -> NonAdminClient:
             return NonAdminClient()
 
     client = build_app(
@@ -275,26 +231,29 @@ def test_repo_provider_config_write_requires_repo_admin(monkeypatch: pytest.Monk
         ),
         database=DummyDatabase(),
     )
-
-    resp = client.put(
-        "/api/repos/owner/repo/config?type=review",
-        json={"engine": "claude_code"},
+    assert (
+        client.put(
+            "/api/repos/owner/repo/config?type=review",
+            json={"engine": "claude_code"},
+        ).status_code
+        == 404
     )
-    assert resp.status_code == 404
 
 
-def test_review_settings_write_requires_repo_admin(monkeypatch: pytest.MonkeyPatch):
-    """旧 review-settings 写入端点已删除。"""
-
+def test_review_settings_write_requires_repo_admin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class NonAdminClient:
-        async def check_repo_permissions(self, owner, repo):
+        async def check_repo_permissions(
+            self, owner: str, repo: str
+        ) -> dict[str, bool]:
             return {"admin": False, "push": True, "pull": True}
 
-        async def is_organization(self, owner):
+        async def is_organization(self, owner: str) -> bool:
             return False
 
     class NonAdminAuthManager(DummyAuthManager):
-        def build_user_client(self, session):
+        def build_user_client(self, session: Any) -> NonAdminClient:
             return NonAdminClient()
 
     client = build_app(
@@ -305,27 +264,25 @@ def test_review_settings_write_requires_repo_admin(monkeypatch: pytest.MonkeyPat
         ),
         database=DummyDatabase(),
     )
-
-    resp = client.put(
-        "/api/repos/owner/repo/review-settings",
-        json={"default_focus": ["security"]},
+    assert (
+        client.put(
+            "/api/repos/owner/repo/review-settings",
+            json={"default_focus": ["security"]},
+        ).status_code
+        == 404
     )
-    assert resp.status_code == 404
 
 
-def test_stats_requires_login():
-    """旧 stats 端点已删除。"""
+def test_stats_requires_login() -> None:
     client = build_app(
         auth_status={"loggedIn": False, "user": None},
         auth_manager=DummyAuthManager(session=None, user_client=None),
         database=DummyDatabase(),
     )
-
-    resp = client.get("/api/stats")
-    assert resp.status_code == 404
+    assert client.get("/api/stats").status_code == 404
 
 
-def test_old_repo_provider_config_read_endpoint_is_removed():
+def test_old_repo_provider_config_read_endpoint_is_removed() -> None:
     client = build_app(
         auth_status={"loggedIn": True, "user": {"username": "alice"}},
         auth_manager=DummyAuthManager(
@@ -336,12 +293,10 @@ def test_old_repo_provider_config_read_endpoint_is_removed():
         ),
         database=DummyDatabase(),
     )
-
-    resp = client.get("/api/repos/alice/repo-a/config?type=review")
-    assert resp.status_code == 404
+    assert client.get("/api/repos/alice/repo-a/config?type=review").status_code == 404
 
 
-def test_old_inherit_global_write_endpoint_is_removed():
+def test_old_inherit_global_write_endpoint_is_removed() -> None:
     client = build_app(
         auth_status={"loggedIn": True, "user": {"username": "alice"}},
         auth_manager=DummyAuthManager(
@@ -350,9 +305,10 @@ def test_old_inherit_global_write_endpoint_is_removed():
         ),
         database=DummyDatabase(),
     )
-
-    resp = client.put(
-        "/api/repos/owner/repo/config?type=review",
-        json={"inherit_global": True},
+    assert (
+        client.put(
+            "/api/repos/owner/repo/config?type=review",
+            json={"inherit_global": True},
+        ).status_code
+        == 404
     )
-    assert resp.status_code == 404
