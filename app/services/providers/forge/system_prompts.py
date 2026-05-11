@@ -1,13 +1,19 @@
 """Forge 系统提示词构建器"""
 
+import re
 from typing import Any, Dict, List, Optional
 
-FOCUS_MAP = {
-    "quality": "代码质量和最佳实践",
-    "security": "安全漏洞（SQL注入、XSS、命令注入等）",
-    "performance": "性能问题和优化建议",
-    "logic": "逻辑错误和潜在 bug",
-}
+from ..shared_prompts import FOCUS_MAP
+
+_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+
+
+def _detect_language_instruction(pr_info: dict) -> str:
+    title = pr_info.get("title") or ""
+    body = pr_info.get("body") or ""
+    if _CJK_RE.search(title) or _CJK_RE.search(body):
+        return "请用中文回复。\n\n"
+    return "Please reply in English.\n\n"
 
 
 ISSUE_FOCUS_MAP = {
@@ -20,19 +26,27 @@ ISSUE_FOCUS_MAP = {
 DEFAULT_ISSUE_FOCUS_TEXT = "、".join(ISSUE_FOCUS_MAP.values())
 
 
+_DEFAULT_REVIEW_FOCUS_TEXT = "、".join(FOCUS_MAP.values())
+
+
 def build_review_system_prompt(
     focus_areas: List[str],
     pr_info: dict,
     custom_prompt: Optional[str] = None,
 ) -> str:
-    focus_text = "、".join(FOCUS_MAP.get(f, f) for f in focus_areas)
+    lang_instruction = _detect_language_instruction(pr_info)
+    if focus_areas:
+        focus_text = "、".join(FOCUS_MAP.get(f, f) for f in focus_areas)
+    else:
+        focus_text = _DEFAULT_REVIEW_FOCUS_TEXT
+
     pr_title = pr_info.get("title", "N/A")
     pr_body = (pr_info.get("body") or "无描述")[:2000]
     pr_author = (pr_info.get("user") or {}).get("login", "未知")
     pr_branch = (pr_info.get("head") or {}).get("ref", "N/A")
     base_branch = (pr_info.get("base") or {}).get("ref", "N/A")
 
-    prompt = f"""你是一位专业的代码审查专家。你正在审查一个 Pull Request。
+    prompt = f"""{lang_instruction}你是一位专业的代码审查专家。你正在审查一个 Pull Request。
 
 ## 审查重点
 {focus_text}
@@ -57,7 +71,13 @@ def build_review_system_prompt(
 - 对无法定位的建议，不要编造行号
 - 严重级别必须与实际情况匹配
 - 建议必须可执行，包含具体代码示例
-- 最多提交 5 条 inline_comments，专注于最重要的发现"""
+- 最多提交 5 条 inline_comments，专注于最重要的发现
+
+## 严禁行为
+- 禁止编造不存在于 diff 的行号或文件路径
+- 禁止对无法确定的问题给出"可能有问题"的模糊建议
+- 禁止因格式/命名风格问题将 severity 提升至 high 以上
+- 禁止在未读取文件的情况下评论文件内容"""
 
     if custom_prompt and custom_prompt.strip():
         prompt += f"\n\n## 额外审查要求\n{custom_prompt.strip()}"

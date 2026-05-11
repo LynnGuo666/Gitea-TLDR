@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "2.0.2"
+__version__ = "2.0.3"
 __release_date__ = "2026-05-11"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,14 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.0.3": {
+        "date": "2026-05-11",
+        "changes": [
+            "修复：list_user_repos 改为分页拉取（每页 50 条循环），超过 20 个仓库时全部仓库均可正常显示",
+            "修复：OAuth scope 从 read:repository 改为 write:repository，使 Gitea 返回完整 permissions 对象（含 admin 字段），已登录用户需退出重新授权",
+            "修复：list_config_templates 加 is_active 过滤，非活跃模板不再出现在仓库配置下拉选项中",
+        ],
+    },
     "2.0.2": {
         "date": "2026-05-11",
         "changes": [

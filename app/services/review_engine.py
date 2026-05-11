@@ -42,6 +42,7 @@ class ReviewEngine:
         self._default_provider = self.registry.create(
             default_provider, cli_path=cli_path, debug=debug
         )
+        self._provider_cache: Dict[str, ReviewProvider] = {}
         self.last_error: Optional[str] = None
 
     @property
@@ -112,7 +113,13 @@ class ReviewEngine:
         Returns:
             ReviewProvider 类型结果。
         """
-        if name and name != self.default_provider_name:
+        if not name or name == self.default_provider_name:
+            logger.debug("使用 provider: %s (默认)", self.default_provider_name)
+            return self._default_provider
+        if name not in self._provider_cache:
             cli_path = self._cli_paths.get(name, name)
-            return self.registry.create(name, cli_path=cli_path, debug=self.debug)
-        return self._default_provider
+            self._provider_cache[name] = self.registry.create(
+                name, cli_path=cli_path, debug=self.debug
+            )
+        logger.debug("使用 provider: %s", name)
+        return self._provider_cache[name]

@@ -102,7 +102,7 @@ class Settings(BaseSettings):
         None, description="OAuth回调地址，通常指向 /api/auth/callback"
     )
     oauth_scopes: list[str] | str = Field(
-        default_factory=lambda: ["read:user", "read:repository"],
+        default_factory=lambda: ["read:user", "write:repository"],
         description="OAuth申请的scope列表",
     )
     session_cookie_name: str = Field("gitea_session", description="会话Cookie名称")

@@ -582,16 +582,28 @@ class GiteaClient:
             return None
 
     async def list_user_repos(self) -> Optional[List[Dict[str, Any]]]:
-        """列出当前token可访问的仓库"""
+        """列出当前token可访问的仓库（分页拉取全部）"""
 
         url = f"{self.base_url}/api/v1/user/repos"
+        all_repos: List[Dict[str, Any]] = []
+        page = 1
+        limit = 50
         try:
-            self._log_debug("GET", url)
             async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.get(url, headers=self.headers)
-                self._log_response(response)
-                response.raise_for_status()
-                return response.json()
+                while True:
+                    params = {"limit": limit, "page": page}
+                    self._log_debug("GET", url)
+                    response = await client.get(url, headers=self.headers, params=params)
+                    self._log_response(response)
+                    response.raise_for_status()
+                    batch: List[Dict[str, Any]] = response.json()
+                    if not batch:
+                        break
+                    all_repos.extend(batch)
+                    if len(batch) < limit:
+                        break
+                    page += 1
+            return all_repos
         except Exception as e:
             logger.error(f"获取仓库列表失败: {e}")
             return None

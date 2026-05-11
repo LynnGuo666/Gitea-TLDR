@@ -348,7 +348,7 @@ class DBService:
     async def list_config_templates(
         self, scenario: Optional[str] = None
     ) -> list[ConfigTemplate]:
-        stmt = select(ConfigTemplate)
+        stmt = select(ConfigTemplate).where(ConfigTemplate.is_active.is_(True))
         if scenario:
             stmt = stmt.where(ConfigTemplate.scenario == scenario)
         stmt = stmt.order_by(ConfigTemplate.scenario, ConfigTemplate.name)

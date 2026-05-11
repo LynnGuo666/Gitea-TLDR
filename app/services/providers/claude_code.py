@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from app.core import settings, runtime_settings
 from .base import InlineComment, ReviewProvider, ReviewResult
+from .shared_prompts import build_cli_review_prompt
 from .parsing import (
     extract_json_payload as _shared_extract_json,
     parse_inline_comment as _shared_parse_inline,
@@ -122,74 +123,7 @@ class ClaudeCodeProvider(ReviewProvider):
         diff_content: str,
         custom_prompt: Optional[str] = None,
     ) -> str:
-        """处理审查prompt相关逻辑。
-
-        Args:
-            focus_areas: 审查关注点列表。
-            pr_info: PR 基本信息。
-            diff_content: PR 差异内容。
-            custom_prompt: 自定义提示词。
-
-        Returns:
-            字符串结果。
-        """
-        focus_map = {
-            "quality": "代码质量和最佳实践",
-            "security": "安全漏洞（SQL注入、XSS、命令注入等）",
-            "performance": "性能问题和优化建议",
-            "logic": "逻辑错误和潜在bug",
-        }
-
-        focus_text = "、".join([focus_map.get(f, f) for f in focus_areas])
-
-        prompt = f"""请审查以下Pull Request的代码变更。
-
-**PR信息：**
-- 标题: {pr_info.get("title", "N/A")}
-- 描述: {pr_info.get("body", "N/A")}
-- 作者: {pr_info.get("user", {}).get("login", "N/A")}
-
-**审查重点：**
-{focus_text}
-
-**代码变更（diff）：**
-```diff
-{diff_content}
-```
-
-请完成以下审查任务：
-1. **总体评价**：描述本次变更的整体风险、积极影响
-2. **发现的问题**：按严重程度列出（严重/中等/轻微），解释原因
-3. **改进建议**：给出可执行的修改建议
-4. **优点**：指出值得保留或学习的实现
-
-输出要求（必须严格遵守）：
-- 最终输出为单个JSON对象，不要包含额外文本、注释或代码块标记
-- `summary_markdown` 字段使用Markdown编写上述内容，结构清晰
-- `overall_severity` 取值：critical/high/medium/low/info
-- `inline_comments` 最多5条，逐条包含精确的 `path`、`new_line` (新增行号) 或 `old_line` (删除行号)、`comment`，可选 `suggestion` 与 `severity`
-- `suggestion` 字段如果包含代码，必须使用 Markdown 代码块格式（```语言...```）
-- 对无法定位的建议，省略该条，确保所有行号与diff一致
-
-JSON结构示例：
-{{
-  "summary_markdown": "### 总体评价\\n...",
-  "overall_severity": "medium",
-  "inline_comments": [
-    {{
-      "path": "app/main.py",
-      "new_line": 123,
-      "old_line": null,
-      "severity": "high",
-      "comment": "描述问题与影响",
-      "suggestion": "建议修改为：\\n```python\\nresult = safe_function(user_input)\\n```"
-    }}
-  ]
-}}
-"""
-        if custom_prompt and custom_prompt.strip():
-            prompt += f"\n\n**额外审查要求：**\n{custom_prompt.strip()}"
-        return prompt
+        return build_cli_review_prompt(focus_areas, pr_info, diff_content, custom_prompt)
 
     def _resolve_api_url(self, api_url: Optional[str]) -> Optional[str]:
         """规范化本次调用的 API 地址。

@@ -4,6 +4,18 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [2.0.3] - 2026-05-11
+
+### 修复 (Fixed)
+
+- **仓库列表分页**: `list_user_repos` 改为分页循环拉取（每页 50 条），超过 20 个仓库时全部仓库现在均可正常显示
+- **OAuth 权限完整性**: OAuth scope 从 `read:repository` 改为 `write:repository`，使 Gitea 在返回仓库列表时包含完整 `permissions` 对象（含 `admin` 字段），修复所有仓库显示"只读"的问题；已登录用户需退出后重新授权
+- **配置模板过滤**: `list_config_templates` 加 `is_active=True` 过滤条件，非活跃模板不再出现在仓库配置页的下拉选项中
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `2.0.3`
+
 ## [2.0.2] - 2026-05-11
 
 ### 修复 (Fixed)
