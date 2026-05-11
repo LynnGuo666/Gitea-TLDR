@@ -528,6 +528,13 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             raise HTTPException(status_code=502, detail="无法从 Gitea 获取仓库列表")
         return {"repos": [_serialize_repo(repo) for repo in repos]}
 
+    @router.get("/repos/{owner}/{repo}/permissions")
+    async def get_repo_permissions(owner: str, repo: str):
+        perms = await context.gitea_client.check_repo_permissions(owner, repo)
+        if perms is None:
+            raise HTTPException(status_code=502, detail="无法从 Gitea 获取仓库权限")
+        return perms
+
     @router.get("/repos/{owner}/{repo}/pulls")
     async def list_pulls(owner: str, repo: str, state: str = "all", limit: int = 10):
         pulls = await context.gitea_client.list_pull_requests(owner, repo, state=state, limit=limit)

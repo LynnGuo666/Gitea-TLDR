@@ -1,7 +1,7 @@
 import Head from 'next/head';
 import { useContext, useEffect, useState, useMemo } from 'react';
 import { Button, Input, Select, SelectItem } from '@heroui/react';
-import { Search, RefreshCw } from 'lucide-react';
+import { Search, RefreshCw, AlertTriangle } from 'lucide-react';
 import RepoList from '../components/RepoList';
 import PageHeader from '../components/PageHeader';
 import { RepoSkeleton } from '../components/ui';
@@ -87,6 +87,8 @@ export default function Home() {
     ? '同步中...'
     : `${filteredRepos.length} 个仓库${debouncedSearch ? ` (筛选自 ${repos.length})` : ''}`;
 
+  const allReposReadOnly = !loading && repos.length > 0 && repos.every((r) => !r.permissions?.admin);
+
   return (
     <>
       <Head>
@@ -152,6 +154,18 @@ export default function Home() {
               </div>
             }
           />
+
+          {allReposReadOnly && (
+            <div className="rounded-md border border-warning/50 bg-warning/10 p-4 text-sm text-warning-700 flex items-start gap-3">
+              <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+              <div>
+                <strong>所有仓库均显示为只读。</strong>
+                这通常是因为 Gitea Token 缺少 <code className="px-1 bg-warning/20 rounded">write:repository</code> 权限。
+                请在 Gitea 中重新生成具有 repository 读写权限的 Access Token，然后更新 .env 中的 <code className="px-1 bg-warning/20 rounded">GITEA_TOKEN</code>。
+                如使用 OAuth 登录，请退出后重新授权。
+              </div>
+            </div>
+          )}
 
           {!needsAuth && !loading && (
             <div className="flex sm:hidden items-center gap-2">

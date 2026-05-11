@@ -1,7 +1,7 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Input, Select, SelectItem, Textarea } from '@heroui/react';
+import { Button, Chip, Input, Select, SelectItem, Textarea } from '@heroui/react';
 import PageHeader from '../../../components/PageHeader';
 import SectionHeader from '../../../components/SectionHeader';
 import { apiFetch } from '../../../lib/api';
@@ -24,6 +24,8 @@ export default function RepoPage() {
   const [templates, setTemplates] = useState<ConfigTemplate[]>([]);
   const [credentials, setCredentials] = useState<ProviderCredential[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [hasAdmin, setHasAdmin] = useState<boolean | null>(null);
+  const [permissionsLoading, setPermissionsLoading] = useState(true);
   const [form, setForm] = useState({
     engine: '',
     model: '',
@@ -40,6 +42,7 @@ export default function RepoPage() {
   const scenarioTemplates = useMemo(() => templates.filter((item) => item.scenario === scenario), [templates, scenario]);
   const sourceTemplate = templates.find((item) => item.id === config?.source_template_id);
   const behindTemplate = isTemplateBehind(config, sourceTemplate);
+  const isReadOnly = hasAdmin === false;
 
   const loadStatic = async () => {
     const [templateRes, credentialRes] = await Promise.all([
@@ -48,6 +51,24 @@ export default function RepoPage() {
     ]);
     if (templateRes.ok) setTemplates((await templateRes.json()).templates || []);
     if (credentialRes.ok) setCredentials((await credentialRes.json()).credentials || []);
+  };
+
+  const loadPermissions = async () => {
+    if (!owner || !repo) return;
+    setPermissionsLoading(true);
+    try {
+      const res = await apiFetch(`/api/v2/repos/${owner}/${repo}/permissions`);
+      if (res.ok) {
+        const perms = await res.json();
+        setHasAdmin(perms.admin ?? false);
+      } else {
+        setHasAdmin(null);
+      }
+    } catch {
+      setHasAdmin(null);
+    } finally {
+      setPermissionsLoading(false);
+    }
   };
 
   const loadConfig = async () => {
@@ -79,6 +100,7 @@ export default function RepoPage() {
   useEffect(() => {
     if (!router.isReady) return;
     void loadStatic();
+    void loadPermissions();
   }, [router.isReady]);
 
   useEffect(() => {
@@ -136,6 +158,13 @@ export default function RepoPage() {
       <div className="max-w-[1100px] mx-auto flex flex-col gap-8">
         <PageHeader title={`${owner}/${repo}`} subtitle="仓库独立配置，运行时不会从全局 fallback" />
 
+        {isReadOnly && (
+          <div className="rounded-md border border-default-300 bg-default-50 p-4 text-sm text-default-600 flex items-center gap-3">
+            <Chip size="sm" variant="flat" color="default">只读</Chip>
+            你没有此仓库的管理权限，配置为只读查看。如需修改请联系仓库管理员。
+          </div>
+        )}
+
         <section className="border-t border-divider pt-5">
           <div className="flex items-center justify-between gap-3">
             <SectionHeader title="场景配置" />
@@ -146,39 +175,41 @@ export default function RepoPage() {
           </div>
 
           <div className="mt-4 flex flex-wrap items-end gap-3">
-            <Select label="模板" className="max-w-xs" selectedKeys={selectedTemplateId ? new Set([selectedTemplateId]) : new Set([])} onSelectionChange={(keys) => setSelectedTemplateId(String(Array.from(keys)[0] || ''))}>
+            <Select label="模板" className="max-w-xs" isDisabled={isReadOnly} selectedKeys={selectedTemplateId ? new Set([selectedTemplateId]) : new Set([])} onSelectionChange={(keys) => setSelectedTemplateId(String(Array.from(keys)[0] || ''))}>
               {scenarioTemplates.map((template) => <SelectItem key={String(template.id)}>{template.name}</SelectItem>)}
             </Select>
             {configurationRequired ? (
-              <Button color="primary" onPress={createFromTemplate} isDisabled={!scenarioTemplates.length}>从模板初始化配置</Button>
+              <Button color="primary" onPress={createFromTemplate} isDisabled={isReadOnly || !scenarioTemplates.length}>从模板初始化配置</Button>
             ) : (
-              <Button variant="flat" onPress={applyTemplate} isDisabled={!selectedTemplateId && !config?.source_template_id}>应用模板</Button>
+              <Button variant="flat" onPress={applyTemplate} isDisabled={isReadOnly || (!selectedTemplateId && !config?.source_template_id)}>应用模板</Button>
             )}
           </div>
 
-          {configurationRequired ? (
+          {permissionsLoading ? (
+            <div className="mt-6 text-sm text-default-400">加载权限…</div>
+          ) : configurationRequired ? (
             <div className="mt-6 rounded-md border border-warning/50 bg-warning/10 p-4 text-sm text-warning-700">
               configuration_required：这个仓库还没有 {scenario} 配置，请先从模板初始化。
             </div>
           ) : config ? (
             <div className="mt-6 flex flex-col gap-4">
               <div className="grid gap-3 md:grid-cols-3">
-                <Input label="Engine" value={form.engine} onValueChange={(engine) => setForm({ ...form, engine })} />
-                <Input label="Model" value={form.model} onValueChange={(model) => setForm({ ...form, model })} />
-                <Select label="凭证" selectedKeys={form.credential_id ? new Set([form.credential_id]) : new Set([])} onSelectionChange={(keys) => setForm({ ...form, credential_id: String(Array.from(keys)[0] || '') })}>
+                <Input label="Engine" value={form.engine} isDisabled={isReadOnly} onValueChange={(engine) => setForm({ ...form, engine })} />
+                <Input label="Model" value={form.model} isDisabled={isReadOnly} onValueChange={(model) => setForm({ ...form, model })} />
+                <Select label="凭证" isDisabled={isReadOnly} selectedKeys={form.credential_id ? new Set([form.credential_id]) : new Set([])} onSelectionChange={(keys) => setForm({ ...form, credential_id: String(Array.from(keys)[0] || '') })}>
                   {credentials.map((credential) => <SelectItem key={String(credential.id)}>{credential.name}</SelectItem>)}
                 </Select>
-                <Input label="Wire API" value={form.wire_api} onValueChange={(wire_api) => setForm({ ...form, wire_api })} />
-                <Input label="Temperature" value={form.temperature} onValueChange={(temperature) => setForm({ ...form, temperature })} />
-                <Input label="Max tokens" value={form.max_tokens} onValueChange={(max_tokens) => setForm({ ...form, max_tokens })} />
+                <Input label="Wire API" value={form.wire_api} isDisabled={isReadOnly} onValueChange={(wire_api) => setForm({ ...form, wire_api })} />
+                <Input label="Temperature" value={form.temperature} isDisabled={isReadOnly} onValueChange={(temperature) => setForm({ ...form, temperature })} />
+                <Input label="Max tokens" value={form.max_tokens} isDisabled={isReadOnly} onValueChange={(max_tokens) => setForm({ ...form, max_tokens })} />
               </div>
-              <Textarea label="Focus，逗号分隔" value={form.focus} onValueChange={(focus) => setForm({ ...form, focus })} />
-              <Textarea label="Features，逗号分隔" value={form.features} onValueChange={(features) => setForm({ ...form, features })} />
-              <Textarea label="Custom prompt" value={form.custom_prompt} onValueChange={(custom_prompt) => setForm({ ...form, custom_prompt })} />
+              <Textarea label="Focus，逗号分隔" value={form.focus} isDisabled={isReadOnly} onValueChange={(focus) => setForm({ ...form, focus })} />
+              <Textarea label="Features，逗号分隔" value={form.features} isDisabled={isReadOnly} onValueChange={(features) => setForm({ ...form, features })} />
+              <Textarea label="Custom prompt" value={form.custom_prompt} isDisabled={isReadOnly} onValueChange={(custom_prompt) => setForm({ ...form, custom_prompt })} />
               <div className="text-sm text-default-500">
                 模板 #{config.source_template_id || '无'} · 复制时间 {config.template_version_copied_at || '未知'} · {behindTemplate ? '落后模板' : '与模板同步或无模板版本'}
               </div>
-              <Button color="primary" onPress={saveConfig}>保存仓库配置</Button>
+              <Button color="primary" onPress={saveConfig} isDisabled={isReadOnly}>保存仓库配置</Button>
             </div>
           ) : null}
         </section>
