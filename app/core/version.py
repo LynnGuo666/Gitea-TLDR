@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "2.0.4"
+__version__ = "2.0.5"
 __release_date__ = "2026-05-11"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,12 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.0.5": {
+        "date": "2026-05-11",
+        "changes": [
+            '修复：只读仓库现可点击进入查看详情，不再阻止跳转；权限判断逻辑维持 admin 为准（仅 admin 可管理配置）',
+        ],
+    },
     "2.0.4": {
         "date": "2026-05-11",
         "changes": [

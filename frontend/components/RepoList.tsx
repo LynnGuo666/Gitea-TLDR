@@ -36,9 +36,7 @@ function RepoList({ repos }: RepoListProps) {
           animationFillMode: 'both' as const,
         };
 
-        const itemClassName = `group flex items-center gap-4 p-4 sm:p-5 bg-content1 rounded-xl no-underline text-foreground shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 ${
-          isReadOnly ? 'cursor-default' : 'cursor-pointer'
-        }`;
+        const itemClassName = `group flex items-center gap-4 p-4 sm:p-5 bg-content1 rounded-xl no-underline text-foreground shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer`;
 
         const content = (
           <>
@@ -62,22 +60,12 @@ function RepoList({ repos }: RepoListProps) {
                 </div>
               </div>
             </div>
-            {!isReadOnly && (
-              <ChevronRight
-                size={20}
-                className="text-default-400 shrink-0 transition-transform group-hover:text-primary group-hover:translate-x-1"
-              />
-            )}
+            <ChevronRight
+              size={20}
+              className="text-default-400 shrink-0 transition-transform group-hover:text-primary group-hover:translate-x-1"
+            />
           </>
         );
-
-        if (isReadOnly) {
-          return (
-            <div key={repo.id} className={itemClassName} style={itemStyle}>
-              {content}
-            </div>
-          );
-        }
 
         return (
           <Link key={repo.id} href={`/repo/${owner}/${repo.name}`} className={itemClassName} style={itemStyle}>
