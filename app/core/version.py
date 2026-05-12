@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "2.0.6"
-__release_date__ = "2026-05-11"
+__version__ = "2.0.7"
+__release_date__ = "2026-05-13"
 __author__ = "LynnGuo666"
 
 
@@ -17,6 +17,12 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.0.7": {
+        "date": "2026-05-13",
+        "changes": [
+            "功能：仓库配置页面恢复 4-Tab 布局（自动审查 / 审查方向 / 场景配置 / 最新 PR），替代原单页平铺表单",
+        ],
+    },
     "2.0.6": {
         "date": "2026-05-11",
         "changes": [
