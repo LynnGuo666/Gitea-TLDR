@@ -4,11 +4,11 @@ services:
     pull_policy: always
     container_name: gitea-pr-reviewer
     env_file:
-      - .env
+      - ../.env
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
-      - ./docker-entrypoint.sh:/docker-entrypoint.sh:ro
+      - ./docker/docker-entrypoint.sh:/docker-entrypoint.sh:ro
       - ./review-workspace:/app/review-workspace
     restart: unless-stopped
     healthcheck:

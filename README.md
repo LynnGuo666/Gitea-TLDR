@@ -108,7 +108,7 @@ X-Review-Focus: quality,security,performance,logic
 ```bash
 # Docker Compose（推荐）
 cp .env.example .env
-docker compose up -d
+docker compose -f docker/docker-compose.yml up -d
 
 # 或拉取预构建镜像
 docker pull ghcr.io/lynnguo666/gitea-tldr:main

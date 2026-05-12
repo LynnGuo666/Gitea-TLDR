@@ -13,6 +13,7 @@ echo "版本: $VERSION"
 # 构建镜像
 docker build \
   --build-arg VERSION=$VERSION \
+  -f docker/Dockerfile \
   -t gitea-pr-reviewer:$VERSION \
   -t gitea-pr-reviewer:latest \
   .
@@ -23,4 +24,4 @@ echo "运行镜像："
 echo "  docker run -d -p 8000:8000 --env-file .env gitea-pr-reviewer:latest"
 echo ""
 echo "或使用 docker-compose："
-echo "  docker-compose up -d"
+echo "  docker compose -f docker/docker-compose.yml up -d"

@@ -16,9 +16,8 @@ Branch: `main`
 ├── alembic/             # DB migrations
 ├── scripts/             # Operational scripts
 ├── agents/plan/         # Planned architecture constraints
-├── build.sh             # Local image build entry
-├── docker-compose.yml   # Runtime orchestration
-└── AGENTS.md            # Root contract + hierarchy index
+├── docker/              # Docker build & orchestration
+├── AGENTS.md            # Root contract + hierarchy index
 ```
 
 ## HIERARCHY
@@ -73,7 +72,7 @@ ruff check app && mypy app && pytest
 cd frontend && npm run lint && npx tsc --noEmit && npm run build
 
 # Docker end-to-end
-docker compose up --build
+docker compose -f docker/docker-compose.yml up --build
 ```
 
 ## RELEASE CHECKLIST
