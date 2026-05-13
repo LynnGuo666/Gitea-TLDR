@@ -34,7 +34,7 @@ def build_cli_review_prompt(
     lang_instruction = _detect_language_instruction(pr_info)
     focus_text = "、".join([FOCUS_MAP.get(f, f) for f in focus_areas])
 
-    prompt = f"""{lang_instruction}你是一位专业的代码审查专家。请按以下步骤审查 Pull Request 的代码变更。
+    prompt = f"""{lang_instruction}你是一位专业的代码审查专家。请严格按以下步骤审查 Pull Request 的代码变更。
 
 **PR 信息：**
 - 标题: {pr_info.get("title", "N/A")}
@@ -49,49 +49,71 @@ def build_cli_review_prompt(
 {diff_content}
 ```
 
-**审查步骤：**
+---
+
+**审查步骤（按顺序执行）：**
 
 Step 1 — 推断变更意图
-分析 diff 的整体模式，用 1-2 句概括作者目标，例如："修复 JWT 刷新后用户被强制登出的问题"。
+分析 diff 的整体模式，用 1-2 句概括作者的核心目标。意图必须具体，不得泛化。
+- 好的表述："修复 JWT exp 字段未校验导致刷新令牌永不过期的 bug"
+- 不好的表述："改进了代码质量"、"修复了一些问题"
 
-Step 2 — 生成 pr_overview_markdown
-包含以下内容（纯文字，无 Mermaid）：
-- 变更意图（Step 1 推断结果）
-- 整体风险：`critical / high / medium / low / info` + 一句理由
-- 变更范围概述（涉及哪些模块/文件）
+Step 2 — 生成 pr_overview_markdown（纯文字，不含 Mermaid）
+包含：
+- **意图**：Step 1 的结论（1-2 句）
+- **风险等级**：`critical / high / medium / low / info` + 一句理由
+  - critical：安全漏洞、数据丢失、生产崩溃
+  - high：生产环境逻辑错误
+  - medium：缺少错误处理、边界条件未覆盖
+  - low：轻微改进机会
+  - info：无明显缺陷，纯建议
+- **变更范围**：涉及哪些模块/文件（1-2 句）
 
 Step 3 — 按审查重点扫描问题
-仅扫描 diff 中新增/修改的代码，聚焦已指定的审查维度。
+仅扫描 diff 中**新增或修改**的代码，结合 Step 1 的意图判断问题是否真实存在。
+
+以下情况**不得输出评论**：
+- 只描述代码做了什么，不指出缺陷
+- 含"可能"、"也许"、"建议检查"等不确定措辞
+- 命名、缩进、注释风格等格式问题
+- `.md`、`.txt`、`.json`（配置）、`.yaml`、锁文件、生成产物
+- UI 样式数值（字体大小、间距、颜色值）默认视为设计已确认
 
 Step 4 — 构建 summary_markdown（问题表格）
-若发现问题，使用以下格式：
+问题标题必须包含**具体现象**，不得只写维度名称（如"安全问题"）。
+
 ```
 | No. | 问题标题 | 建议 | 代码位置 |
 |-----|---------|------|---------|
-| 1   | ...     | ...  | path/to/file.py:123 |
+| 1   | JWT exp 字段未校验，令牌可能永不过期 | 在 refresh() 中检查 token.exp < time.time() | auth/token.py:45 |
 ```
-若无问题，summary_markdown 填空字符串 ""。
+
+若无问题：summary_markdown 填 `""`，inline_comments 填 `[]`，overall_severity 填 `"info"`。
+
+---
 
 **输出要求（必须严格遵守）：**
-- 最终输出为单个 JSON 对象，不包含额外文本、注释或代码块标记
-- `overall_severity` 取值：critical/high/medium/low/info
-- `inline_comments` 最多 10 条，专注最重要发现，无问题时填 []
-- 行号必须与 diff 一致，无法定位时省略该条
-- `suggestion` 若含代码必须使用 Markdown 代码块（```语言...```）
+- 最终输出为**单个 JSON 对象**，不包含任何额外文本、注释或代码块标记
+- `overall_severity`：critical / high / medium / low / info
+- `inline_comments`：最多 10 条，仅记录 high/critical 问题，不需要凑满，无问题填 `[]`
+- 行号使用**新版本行号**（new_line）标注新增/修改行，删除行使用 old_line；无法精确定位时省略该条
+- 路径使用相对于仓库根目录的精确路径，不含 `./` 前缀
+- `suggestion` 含代码时必须使用 Markdown 代码块（```语言 ... ```）
+- 同一问题不得在 summary 表格和 inline_comments 中重复描述
 
 JSON 结构：
 {{
-  "pr_overview_markdown": "## 变更概览\\n**意图：** ...\\n**风险：** medium — ...",
-  "summary_markdown": "| No. | 问题标题 | 建议 | 代码位置 |\\n|---|---|---|---|\\n| 1 | ... | ... | path:123 |",
-  "overall_severity": "medium",
+  "pr_overview_markdown": "**意图：** 修复 JWT exp 字段未校验的 bug\\n\\n**风险等级：** high — 令牌刷新后可能永不过期，影响认证安全\\n\\n**变更范围：** 修改了 auth/token.py 中的 refresh() 方法",
+  "summary_markdown": "| No. | 问题标题 | 建议 | 代码位置 |\\n|---|---|---|---|\\n| 1 | JWT exp 未校验，刷新后令牌永不过期 | 添加 `if token.exp < time.time(): raise TokenExpiredError()` | auth/token.py:45 |",
+  "overall_severity": "high",
   "inline_comments": [
     {{
-      "path": "app/main.py",
-      "new_line": 123,
+      "path": "auth/token.py",
+      "new_line": 45,
       "old_line": null,
       "severity": "high",
-      "comment": "描述问题与影响",
-      "suggestion": "建议修改为：\\n```python\\nresult = safe_function(user_input)\\n```"
+      "comment": "refresh() 未检查令牌是否已过期，攻击者可用旧令牌持续刷新获得永久访问权",
+      "suggestion": "```python\\nif token.exp < time.time():\\n    raise TokenExpiredError('token has expired')\\n```"
     }}
   ]
 }}
