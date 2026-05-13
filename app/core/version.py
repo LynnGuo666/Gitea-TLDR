@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 __release_date__ = "2026-05-13"
 __author__ = "LynnGuo666"
 

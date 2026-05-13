@@ -456,8 +456,15 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             return {"success": True}
 
     @router.get("/repos")
-    async def list_repos():
-        repos = await context.gitea_client.list_user_repos()
+    async def list_repos(request: Request):
+        session = await context.auth_manager.get_session_async(
+            request, getattr(request.state, "database", None)
+        )
+        if context.auth_manager.enabled and session:
+            client = context.auth_manager.build_user_client(session)
+        else:
+            client = context.gitea_client
+        repos = await client.list_user_repos()
         if repos is None:
             raise HTTPException(status_code=502, detail="无法从 Gitea 获取仓库列表")
         return {"repos": [_serialize_repo(repo) for repo in repos]}
