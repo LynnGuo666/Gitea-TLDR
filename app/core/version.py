@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "2.2.1"
+__version__ = "2.2.2"
 __release_date__ = "2026-05-13"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,12 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.2.2": {
+        "date": "2026-05-13",
+        "changes": [
+            "优化：PR 审查评论底部统一附加审查引擎与模型信息（格式：*审查引擎：Forge · 模型：claude-opus-4-5*），覆盖变更概览和审查发现两条评论",
+        ],
+    },
     "2.2.1": {
         "date": "2026-05-13",
         "changes": [

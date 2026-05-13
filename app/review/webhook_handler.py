@@ -860,9 +860,11 @@ class WebhookHandler:
 
             # 更新或创建评论
             if "comment" in features:
+                footer = self._build_review_footer(analysis_result)
+
                 # 评论1：PR 变更概览（更新 loading 占位）
                 overview = analysis_result.pr_overview_markdown or summary_markdown
-                comment1_body = f"## 代码变更概览\n\n{overview}"
+                comment1_body = f"## 代码变更概览\n\n{overview}{footer}"
                 if comment_id:
                     success &= await self.gitea_client.update_issue_comment(
                         owner, repo_name, comment_id, comment1_body
@@ -880,7 +882,7 @@ class WebhookHandler:
                     if issues_text:
                         await self.gitea_client.create_issue_comment(
                             owner, repo_name, pr_number,
-                            f"## 审查发现\n\n{issues_text}",
+                            f"## 审查发现\n\n{issues_text}{footer}",
                         )
                         gitea_api_calls += 1
 
@@ -1059,6 +1061,22 @@ class WebhookHandler:
         if not bot_username:
             return False
         return str(username).strip().lower() == str(bot_username).strip().lower()
+
+    _PROVIDER_DISPLAY: Dict[str, str] = {
+        "forge": "Forge",
+        "claude_code": "Claude Code",
+        "codex_cli": "Codex CLI",
+    }
+
+    def _build_review_footer(self, analysis_result: ReviewResult) -> str:
+        """构建评论底部的引擎与模型信息行。"""
+        engine = self._PROVIDER_DISPLAY.get(
+            analysis_result.provider_name, analysis_result.provider_name
+        )
+        model = (analysis_result.usage_metadata.get("model") or "").strip()
+        if model:
+            return f"\n\n---\n*审查引擎：{engine} · 模型：{model}*"
+        return f"\n\n---\n*审查引擎：{engine}*"
 
     def _build_review_comments(
         self, analysis_result: ReviewResult
