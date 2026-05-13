@@ -7,7 +7,7 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["E402"]
-"app/services/providers/forge/tools/__init__.py" = ["E402"]
+"app/review/providers/forge/tools/__init__.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.11"
