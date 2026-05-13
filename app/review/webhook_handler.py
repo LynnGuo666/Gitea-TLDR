@@ -860,21 +860,31 @@ class WebhookHandler:
 
             # 更新或创建评论
             if "comment" in features:
-                comment_body = f"## 自动代码审查报告\n\n{summary_markdown}"
+                # 评论1：PR 变更概览（更新 loading 占位）
+                overview = analysis_result.pr_overview_markdown or summary_markdown
+                comment1_body = f"## 代码变更概览\n\n{overview}"
                 if comment_id:
-                    # 更新已有评论
                     success &= await self.gitea_client.update_issue_comment(
-                        owner, repo_name, comment_id, comment_body
+                        owner, repo_name, comment_id, comment1_body
                     )
                 else:
-                    # 如果初始评论创建失败，则创建新评论
                     new_comment_id = await self.gitea_client.create_issue_comment(
-                        owner, repo_name, pr_number, comment_body
+                        owner, repo_name, pr_number, comment1_body
                     )
                     success &= new_comment_id is not None
                 gitea_api_calls += 1
 
-            # 创建Review
+                # 评论2：审查发现（仅问题表格，仅在有问题时创建）
+                if analysis_result.pr_overview_markdown:
+                    issues_text = (analysis_result.summary_markdown or "").strip()
+                    if issues_text:
+                        await self.gitea_client.create_issue_comment(
+                            owner, repo_name, pr_number,
+                            f"## 审查发现\n\n{issues_text}",
+                        )
+                        gitea_api_calls += 1
+
+            # 创建 Gitea 正式 Review（行内批注通过此接口发送到 diff 对应行）
             if "review" in features:
                 review_comments = self._build_review_comments(analysis_result)
                 review_success = await self.gitea_client.create_review(

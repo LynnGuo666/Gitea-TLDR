@@ -45,6 +45,7 @@ class ReviewResult:
     """代码审查结果 (provider-agnostic)"""
 
     summary_markdown: str
+    pr_overview_markdown: str = ""
     inline_comments: List[InlineComment] = field(default_factory=list)
     overall_severity: Optional[str] = None
     raw_output: str = ""

@@ -474,7 +474,10 @@ class ClaudeCodeProvider(ReviewProvider):
             if parsed:
                 inline_comments.append(parsed)
 
+        pr_overview = str(data.get("pr_overview_markdown") or "").strip()
+
         return ReviewResult(
+            pr_overview_markdown=pr_overview,
             summary_markdown=summary or sanitized,
             inline_comments=inline_comments,
             overall_severity=severity,

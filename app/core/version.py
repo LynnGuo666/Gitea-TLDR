@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "2.1.1"
+__version__ = "2.2.0"
 __release_date__ = "2026-05-13"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,18 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.2.0": {
+        "date": "2026-05-13",
+        "changes": [
+            "增强：Forge 提示词重设计为 7 步工作流（了解结构→读取上下文→推断意图→生成 Mermaid 概览→扫描问题→构建问题表格→提交），替代原简单 prompt",
+            "增强：PR 审查结果拆分为两条评论——评论1 为变更概览（含意图说明与 Mermaid 流程图），评论2 仅在有发现时创建（问题表格 + 行内批注正文），行内批注不再单独发 Gitea review",
+            "增强：Issue 分析采用假设驱动根因分析流程——先提出 3-5 个可证伪假设，再用工具代码级验证，最终基于已证实假设给出修复方案",
+            "增强：CLI provider（claude_code/codex_cli）prompt 升级，新增意图推断步骤，输出结构扩展为 pr_overview_markdown + summary_markdown 双段 JSON",
+            "增强：行内批注上限从 5 条提升至 10 条（非强制）",
+            "架构：ReviewResult 新增 pr_overview_markdown 字段；submit_review 工具 schema 同步更新；ForgeProvider._convert_result() 映射新字段",
+            "架构：webhook_handler 新增 _build_inline_section() 辅助方法，将行内批注渲染为 Markdown 文本追加在第二条评论正文",
+        ],
+    },
     "2.1.0": {
         "date": "2026-05-13",
         "changes": [

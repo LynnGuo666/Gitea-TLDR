@@ -125,6 +125,7 @@ class ForgeProvider(ReviewProvider):
                     )
                 )
             return ReviewResult(
+                pr_overview_markdown=data.get("pr_overview_markdown", ""),
                 summary_markdown=data.get("summary_markdown", ""),
                 inline_comments=comments,
                 overall_severity=data.get("overall_severity"),

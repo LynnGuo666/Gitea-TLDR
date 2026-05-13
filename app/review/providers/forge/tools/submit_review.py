@@ -26,9 +26,20 @@ class SubmitReviewTool(ForgeTool):
         return {
             "type": "object",
             "properties": {
+                "pr_overview_markdown": {
+                    "type": "string",
+                    "description": (
+                        "第一条评论内容：变更意图说明（1-2句）、Mermaid 流程图、整体风险等级。"
+                        "必须包含 Mermaid 图，颜色规则：fill 与 color 同时指定。"
+                    ),
+                },
                 "summary_markdown": {
                     "type": "string",
-                    "description": "Markdown 格式的审查总结",
+                    "description": (
+                        "第二条评论内容：Markdown 格式的问题表格 "
+                        "（| No. | 问题标题 | 建议 | 代码位置 |）。"
+                        "若无问题则填空字符串。"
+                    ),
                 },
                 "overall_severity": {
                     "type": "string",
@@ -59,15 +70,15 @@ class SubmitReviewTool(ForgeTool):
                             "comment": {"type": "string", "description": "评论内容"},
                             "suggestion": {
                                 "type": ["string", "null"],
-                                "description": "修复建议",
+                                "description": "修复建议（含代码时使用 Markdown 代码块）",
                             },
                         },
                         "required": ["path", "comment"],
                     },
-                    "description": "行级审查评论列表",
+                    "description": "行级批注列表，最多 10 条，专注最重要发现，无问题时填 []",
                 },
             },
-            "required": ["summary_markdown", "overall_severity"],
+            "required": ["pr_overview_markdown", "summary_markdown", "overall_severity"],
         }
 
     async def execute(self, arguments: Dict[str, Any], repo_path) -> str:

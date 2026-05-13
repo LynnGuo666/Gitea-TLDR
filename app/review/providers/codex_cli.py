@@ -32,10 +32,10 @@ from .parsing import (
 logger = logging.getLogger(__name__)
 
 # codex exec --output-schema 所用的 JSON Schema
-# 与 ClaudeCodeProvider 要求的输出格式一致
 _REVIEW_OUTPUT_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "properties": {
+        "pr_overview_markdown": {"type": "string"},
         "summary_markdown": {"type": "string"},
         "overall_severity": {
             "type": "string",
@@ -58,7 +58,7 @@ _REVIEW_OUTPUT_SCHEMA: Dict[str, Any] = {
             },
         },
     },
-    "required": ["summary_markdown", "overall_severity", "inline_comments"],
+    "required": ["pr_overview_markdown", "summary_markdown", "overall_severity", "inline_comments"],
     "additionalProperties": False,
 }
 
@@ -517,7 +517,10 @@ class CodexProvider(ReviewProvider):
             if parsed:
                 inline_comments.append(parsed)
 
+        pr_overview = str(data.get("pr_overview_markdown") or "").strip()
+
         return ReviewResult(
+            pr_overview_markdown=pr_overview,
             summary_markdown=summary or sanitized,
             inline_comments=inline_comments,
             overall_severity=severity,

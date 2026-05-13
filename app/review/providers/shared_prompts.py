@@ -34,9 +34,9 @@ def build_cli_review_prompt(
     lang_instruction = _detect_language_instruction(pr_info)
     focus_text = "、".join([FOCUS_MAP.get(f, f) for f in focus_areas])
 
-    prompt = f"""{lang_instruction}请审查以下Pull Request的代码变更。
+    prompt = f"""{lang_instruction}你是一位专业的代码审查专家。请按以下步骤审查 Pull Request 的代码变更。
 
-**PR信息：**
+**PR 信息：**
 - 标题: {pr_info.get("title", "N/A")}
 - 描述: {pr_info.get("body", "N/A")}
 - 作者: {pr_info.get("user", {}).get("login", "N/A")}
@@ -49,23 +49,40 @@ def build_cli_review_prompt(
 {diff_content}
 ```
 
-请完成以下审查任务：
-1. **总体评价**：描述本次变更的整体风险、积极影响
-2. **发现的问题**：按严重程度列出（严重/中等/轻微），解释原因
-3. **改进建议**：给出可执行的修改建议
-4. **优点**：指出值得保留或学习的实现
+**审查步骤：**
 
-输出要求（必须严格遵守）：
-- 最终输出为单个JSON对象，不要包含额外文本、注释或代码块标记
-- `summary_markdown` 字段使用Markdown编写上述内容，结构清晰
+Step 1 — 推断变更意图
+分析 diff 的整体模式，用 1-2 句概括作者目标，例如："修复 JWT 刷新后用户被强制登出的问题"。
+
+Step 2 — 生成 pr_overview_markdown
+包含以下内容（纯文字，无 Mermaid）：
+- 变更意图（Step 1 推断结果）
+- 整体风险：`critical / high / medium / low / info` + 一句理由
+- 变更范围概述（涉及哪些模块/文件）
+
+Step 3 — 按审查重点扫描问题
+仅扫描 diff 中新增/修改的代码，聚焦已指定的审查维度。
+
+Step 4 — 构建 summary_markdown（问题表格）
+若发现问题，使用以下格式：
+```
+| No. | 问题标题 | 建议 | 代码位置 |
+|-----|---------|------|---------|
+| 1   | ...     | ...  | path/to/file.py:123 |
+```
+若无问题，summary_markdown 填空字符串 ""。
+
+**输出要求（必须严格遵守）：**
+- 最终输出为单个 JSON 对象，不包含额外文本、注释或代码块标记
 - `overall_severity` 取值：critical/high/medium/low/info
-- `inline_comments` 最多5条，逐条包含精确的 `path`、`new_line` (新增行号) 或 `old_line` (删除行号)、`comment`，可选 `suggestion` 与 `severity`
-- `suggestion` 字段如果包含代码，必须使用 Markdown 代码块格式（```语言...```）
-- 对无法定位的建议，省略该条，确保所有行号与diff一致
+- `inline_comments` 最多 10 条，专注最重要发现，无问题时填 []
+- 行号必须与 diff 一致，无法定位时省略该条
+- `suggestion` 若含代码必须使用 Markdown 代码块（```语言...```）
 
-JSON结构示例：
+JSON 结构：
 {{
-  "summary_markdown": "### 总体评价\\n...",
+  "pr_overview_markdown": "## 变更概览\\n**意图：** ...\\n**风险：** medium — ...",
+  "summary_markdown": "| No. | 问题标题 | 建议 | 代码位置 |\\n|---|---|---|---|\\n| 1 | ... | ... | path:123 |",
   "overall_severity": "medium",
   "inline_comments": [
     {{
