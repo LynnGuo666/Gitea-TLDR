@@ -5,14 +5,11 @@ Application context holding long-lived service instances.
 from dataclasses import dataclass
 from typing import Optional, TYPE_CHECKING
 
-from app.services import (
-    GiteaClient,
-    RepoManager,
-    RepoRegistry,
-    ReviewEngine,
-    WebhookHandler,
-    AuthManager,
-)
+from app.gitea.client import GiteaClient
+from app.gitea.auth import AuthManager
+from app.gitea.repo_manager import RepoManager
+from app.gitea.repo_registry import RepoRegistry
+from app.review import ReviewEngine, WebhookHandler
 
 if TYPE_CHECKING:
     from app.core.database import Database

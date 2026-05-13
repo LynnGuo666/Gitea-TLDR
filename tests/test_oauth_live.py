@@ -27,7 +27,7 @@ if str(PROJECT_ROOT) not in sys.path:
 @pytest.mark.live
 def test_oauth_full_flow() -> None:
     from app.core import settings
-    from app.services.auth_manager import AuthManager
+    from app.gitea.auth import AuthManager
     from fastapi import Response
 
     if not settings.oauth_client_id or not settings.oauth_redirect_url:

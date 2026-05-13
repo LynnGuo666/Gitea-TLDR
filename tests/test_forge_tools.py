@@ -8,11 +8,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.services.providers.forge.tools.glob_tool import GlobTool
-from app.services.providers.forge.tools.list_directory import ListDirectoryTool
-from app.services.providers.forge.tools.lsp_tool import LSPTool
-from app.services.providers.forge.tools.read_file import ReadFileTool
-from app.services.providers.forge.tools.search_code import SearchCodeTool
+from app.review.providers.forge.tools.glob_tool import GlobTool
+from app.review.providers.forge.tools.list_directory import ListDirectoryTool
+from app.review.providers.forge.tools.lsp_tool import LSPTool
+from app.review.providers.forge.tools.read_file import ReadFileTool
+from app.review.providers.forge.tools.search_code import SearchCodeTool
 
 
 def test_read_file_reads_repo_file(tmp_path: Path):

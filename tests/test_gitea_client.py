@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.services.gitea_client import GiteaClient
+from app.gitea.client import GiteaClient
 from tests.conftest import FAKE_PR, FAKE_REPO
 
 
@@ -72,7 +72,7 @@ class _MockAsyncClient:
 def _patch_httpx(monkeypatch: pytest.MonkeyPatch, *responses: _MockResponse) -> None:
     mock = _MockAsyncClient(list(responses))
     monkeypatch.setattr(
-        "app.services.gitea_client.httpx.AsyncClient",
+        "app.gitea.client.httpx.AsyncClient",
         lambda **_: mock,
     )
 

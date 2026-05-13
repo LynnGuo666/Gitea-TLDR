@@ -27,14 +27,8 @@ from app.core.admin_auth import ensure_initial_admin
 from app.core import runtime_settings
 from app.core.context import AppContext
 from app.core.database import Database
-from app.services import (
-    GiteaClient,
-    RepoManager,
-    ReviewEngine,
-    WebhookHandler,
-    RepoRegistry,
-    AuthManager,
-)
+from app.gitea import GiteaClient, RepoManager, RepoRegistry, AuthManager
+from app.review import ReviewEngine, WebhookHandler
 
 # 配置日志
 logging.basicConfig(

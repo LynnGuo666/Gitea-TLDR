@@ -10,7 +10,7 @@ from app.services.db_service import DBService
 logger = logging.getLogger(__name__)
 
 
-async def check_repo_config_health(
+async def check_config_health(
     db_service: DBService,
     owner: str,
     repo_name: str,
@@ -85,3 +85,7 @@ async def check_repo_config_health(
         overall = "ok"
 
     return {"overall": overall, "checks": checks}
+
+
+# backward-compat alias（原名 check_repo_config_health）
+check_repo_config_health = check_config_health

@@ -10,11 +10,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.services.providers.base import InlineComment
-from app.services.providers.forge.engine import ForgeEngine
-from app.services.providers.forge.provider import ForgeProvider
-from app.services.providers.forge.tools import get_tools_for_scenario
-from app.services.providers.forge.types import ForgeResult, ForgeUsage, Scenario
+from app.review.providers.base import InlineComment
+from app.review.providers.forge.engine import ForgeEngine
+from app.review.providers.forge.provider import ForgeProvider
+from app.review.providers.forge.tools import get_tools_for_scenario
+from app.review.providers.forge.types import ForgeResult, ForgeUsage, Scenario
 
 
 def test_get_tools_for_review_scenario_includes_submit_review():
@@ -139,19 +139,19 @@ def test_forge_provider_analyze_pr_passes_configured_max_turns(
             },
         )
 
-    monkeypatch.setattr("app.services.providers.forge.provider.run_review", fake_run_review)
+    monkeypatch.setattr("app.review.providers.forge.provider.run_review", fake_run_review)
     monkeypatch.setattr(
-        "app.services.providers.forge.provider.settings.forge_api_key", "secret"
+        "app.review.providers.forge.provider.settings.forge_api_key", "secret"
     )
     monkeypatch.setattr(
-        "app.services.providers.forge.provider.settings.forge_base_url",
+        "app.review.providers.forge.provider.settings.forge_base_url",
         "https://example.com",
     )
     monkeypatch.setattr(
-        "app.services.providers.forge.provider.settings.forge_model", "claude-test"
+        "app.review.providers.forge.provider.settings.forge_model", "claude-test"
     )
     monkeypatch.setattr(
-        "app.services.providers.forge.provider.settings.forge_max_turns", 9
+        "app.review.providers.forge.provider.settings.forge_max_turns", 9
     )
 
     review = asyncio.run(
@@ -191,13 +191,13 @@ def test_forge_provider_prefers_explicit_api_over_settings(
             },
         )
 
-    monkeypatch.setattr("app.services.providers.forge.provider.AnthropicClient", DummyClient)
-    monkeypatch.setattr("app.services.providers.forge.provider.run_review", fake_run_review)
+    monkeypatch.setattr("app.review.providers.forge.provider.AnthropicClient", DummyClient)
+    monkeypatch.setattr("app.review.providers.forge.provider.run_review", fake_run_review)
     monkeypatch.setattr(
-        "app.services.providers.forge.provider.settings.forge_api_key", "settings-key"
+        "app.review.providers.forge.provider.settings.forge_api_key", "settings-key"
     )
     monkeypatch.setattr(
-        "app.services.providers.forge.provider.settings.forge_base_url",
+        "app.review.providers.forge.provider.settings.forge_base_url",
         "https://settings.example.com",
     )
 

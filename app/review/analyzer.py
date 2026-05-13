@@ -1,7 +1,7 @@
 """
 Claude Code CLI调用模块 (backward-compatibility wrapper)
 
-已迁移至 app.services.providers.claude_code.ClaudeCodeProvider
+已迁移至 app.review.providers.claude_code.ClaudeCodeProvider
 本模块保留旧的导入路径，供现有代码平滑过渡。
 """
 
@@ -9,9 +9,9 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from app.services.providers.base import InlineComment as InlineCommentSuggestion
-from app.services.providers.base import ReviewResult as ClaudeReviewResult
-from app.services.providers.claude_code import ClaudeCodeProvider
+from app.review.providers.base import InlineComment as InlineCommentSuggestion
+from app.review.providers.base import ReviewResult as ClaudeReviewResult
+from app.review.providers.claude_code import ClaudeCodeProvider
 
 logger = logging.getLogger(__name__)
 

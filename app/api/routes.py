@@ -540,7 +540,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
     async def config_health(owner: str, repo: str, request: Request):
         if not getattr(request.state, "database", None):
             return {"checks": [], "status": "unknown"}
-        from app.services.config_health import check_repo_config_health
+        from app.review.config_health import check_repo_config_health
 
         async with request.state.database.session() as session:
             service = DBService(session)

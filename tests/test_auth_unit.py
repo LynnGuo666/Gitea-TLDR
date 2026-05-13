@@ -34,11 +34,11 @@ def _make_settings(**overrides: Any) -> SimpleNamespace:
 
 
 def _make_auth_manager(monkeypatch: pytest.MonkeyPatch, **settings_overrides: Any):
-    from app.services import auth_manager as am_module
+    from app.gitea import auth as am_module
 
     fake_settings = _make_settings(**settings_overrides)
     monkeypatch.setattr(am_module, "settings", fake_settings)
-    from app.services.auth_manager import AuthManager
+    from app.gitea.auth import AuthManager
 
     return AuthManager()
 
@@ -144,7 +144,7 @@ async def test_handle_callback_raises_when_disabled(
 
 
 def test_get_session_expired_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.services.auth_manager import SessionData
+    from app.gitea.auth import SessionData
 
     mgr = _make_auth_manager(monkeypatch)
     session_id = "test-session-id"
@@ -180,7 +180,7 @@ def test_get_session_expired_returns_none(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_logout_clears_cookie(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.services.auth_manager import SessionData
+    from app.gitea.auth import SessionData
     from starlette.requests import Request as StarletteRequest
 
     mgr = _make_auth_manager(monkeypatch)

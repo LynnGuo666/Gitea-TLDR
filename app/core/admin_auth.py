@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Actor as User
-from app.services.permission_service import has_permission as check_permission
+from app.gitea.permission import has_permission as check_permission
 
 logger = logging.getLogger(__name__)
 

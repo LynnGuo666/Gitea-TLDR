@@ -14,8 +14,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.api.routes import create_api_router
-from app.services.gitea_client import GiteaClient
-from app.services.repo_manager import RepoManager
+from app.gitea.client import GiteaClient
+from app.gitea.repo_manager import RepoManager
 from tests.conftest import (
     DummyAuthManager,
     DummyDatabase,
@@ -147,7 +147,7 @@ async def test_clone_repository_never_puts_token_in_command(
         return FakeProcess()
 
     monkeypatch.setattr(
-        "app.services.repo_manager.asyncio.create_subprocess_exec",
+        "app.gitea.repo_manager.asyncio.create_subprocess_exec",
         fake_create_subprocess_exec,
     )
 

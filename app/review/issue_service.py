@@ -23,14 +23,14 @@ from app.core.database import Database
 from app.models import DEFAULT_ISSUE_FOCUS
 from app.services.db_service import DBService
 from app.services.audit_service import AuditService
-from app.services.gitea_client import GiteaClient
-from app.services.providers.base import IssueResult
-from app.services.providers.forge.provider import (
+from app.gitea.client import GiteaClient
+from app.review.providers.base import IssueResult
+from app.review.providers.forge.provider import (
     DEFAULT_FORGE_BASE_URL,
     DEFAULT_FORGE_MODEL,
     ForgeProvider,
 )
-from app.services.repo_manager import RepoManager
+from app.gitea.repo_manager import RepoManager
 
 logger = logging.getLogger(__name__)
 

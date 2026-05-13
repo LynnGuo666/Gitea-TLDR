@@ -17,7 +17,7 @@ import httpx
 from fastapi import HTTPException, Request, Response
 
 from app.core import settings
-from .gitea_client import GiteaClient
+from .client import GiteaClient
 
 logger = logging.getLogger(__name__)
 

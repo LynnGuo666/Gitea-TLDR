@@ -11,17 +11,17 @@ from typing import Any, Dict, List, Optional
 
 from app.core import settings, runtime_settings
 from app.core.database import Database
-from app.services.providers.base import (
+from app.review.providers.base import (
     InlineComment,
     ReviewResult,
 )
-from app.services.review_engine import ReviewEngine
-from app.services.command_parser import CommandParser
+from app.review.engine import ReviewEngine
+from app.gitea.command_parser import CommandParser
 from app.services.db_service import DBService
 from app.services.audit_service import AuditService
-from app.services.gitea_client import GiteaClient
-from app.services.issue_analysis_service import IssueAnalysisService
-from app.services.repo_manager import RepoManager
+from app.gitea.client import GiteaClient
+from app.review.issue_service import IssueAnalysisService
+from app.gitea.repo_manager import RepoManager
 
 logger = logging.getLogger(__name__)
 

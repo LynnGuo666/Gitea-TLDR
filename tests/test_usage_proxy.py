@@ -15,8 +15,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.core import settings
-from app.services.providers.claude_code import ClaudeCodeProvider
-from app.services.providers.usage_proxy import UsageCapturingProxy
+from app.review.providers.claude_code import ClaudeCodeProvider
+from app.review.providers.usage_proxy import UsageCapturingProxy
 
 
 class FakeReader:

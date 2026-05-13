@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "2.0.7"
+__version__ = "2.1.0"
 __release_date__ = "2026-05-13"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,12 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.1.0": {
+        "date": "2026-05-13",
+        "changes": [
+            "重构：将 app/services/ 按职责拆分为三个独立子包——app/gitea/（Gitea 连接适配）、app/review/（AI 审查编排）、app/services/（纯数据基础设施），消除模块边界混淆，提升代码内聚性",
+        ],
+    },
     "2.0.7": {
         "date": "2026-05-13",
         "changes": [

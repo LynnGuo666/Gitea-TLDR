@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.services.providers.forge.api_client import AnthropicClient
+from app.review.providers.forge.api_client import AnthropicClient
 
 
 class FakeResponse:
@@ -74,10 +74,10 @@ def test_anthropic_client_retries_529_three_times_then_succeeds(
         sleeps.append(delay)
 
     monkeypatch.setattr(
-        "app.services.providers.forge.api_client.httpx.AsyncClient",
+        "app.review.providers.forge.api_client.httpx.AsyncClient",
         FakeAsyncClient,
     )
-    monkeypatch.setattr("app.services.providers.forge.api_client.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("app.review.providers.forge.api_client.asyncio.sleep", fake_sleep)
 
     data, usage = asyncio.run(
         AnthropicClient(api_key="secret", max_retries=3).create_message(
@@ -113,10 +113,10 @@ def test_anthropic_client_does_not_retry_permission_error(monkeypatch):
         raise AssertionError("401 不应进入重试等待")
 
     monkeypatch.setattr(
-        "app.services.providers.forge.api_client.httpx.AsyncClient",
+        "app.review.providers.forge.api_client.httpx.AsyncClient",
         FakeAsyncClient,
     )
-    monkeypatch.setattr("app.services.providers.forge.api_client.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("app.review.providers.forge.api_client.asyncio.sleep", fake_sleep)
 
     try:
         asyncio.run(
