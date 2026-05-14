@@ -2,7 +2,7 @@
 版本信息模块
 """
 
-__version__ = "2.2.3"
+__version__ = "2.2.4"
 __release_date__ = "2026-05-14"
 __author__ = "LynnGuo666"
 
@@ -17,6 +17,14 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.2.4": {
+        "date": "2026-05-14",
+        "changes": [
+            "修复：仓库 Webhook 配置改为使用当前登录用户的 OAuth token，并在保存/状态查询前校验仓库 admin 权限，避免误用 Bot PAT 导致保存失败",
+            "修复：Webhook 默认目标地址改为基于请求上下文生成完整 /webhook URL，拒绝相对 URL，并尊重前端选择的触发事件",
+            "优化：仓库配置页 Webhook 保存失败时展示后端错误详情，补充登录、权限、URL 与事件校验的回归测试",
+        ],
+    },
     "2.2.3": {
         "date": "2026-05-14",
         "changes": [

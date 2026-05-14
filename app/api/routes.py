@@ -276,6 +276,64 @@ def _serialize_webhook_event(event) -> dict[str, Any]:
     }
 
 
+async def _require_repo_admin_client(context: AppContext, owner: str, repo: str, request: Request):
+    session = await context.auth_manager.get_session_async(
+        request, getattr(request.state, "database", None)
+    )
+    if not session:
+        raise HTTPException(status_code=401, detail="未登录")
+
+    user_client = context.auth_manager.build_user_client(session)
+    perms = await user_client.check_repo_permissions(owner, repo)
+    if perms is None:
+        raise HTTPException(status_code=502, detail="无法从 Gitea 获取仓库权限")
+    if not perms.get("admin"):
+        raise HTTPException(status_code=403, detail="需要仓库管理员权限")
+    return user_client
+
+
+def _resolve_webhook_url(request: Request, raw_url: Any) -> str:
+    if raw_url is None or raw_url == "":
+        return str(request.url_for("webhook"))
+    if not isinstance(raw_url, str):
+        raise HTTPException(status_code=400, detail="Webhook URL 必须是字符串")
+    hook_url = raw_url.strip()
+    if not hook_url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Webhook URL 必须是完整的 http(s) 地址")
+    return hook_url
+
+
+def _resolve_webhook_events(raw_events: Any) -> list[str]:
+    default_events = ["pull_request", "issues", "issue_comment"]
+    allowed_events = set(default_events)
+    if raw_events is None:
+        return default_events
+    if not isinstance(raw_events, list):
+        raise HTTPException(status_code=400, detail="Webhook events 必须是数组")
+
+    events: list[str] = []
+    invalid_events: list[str] = []
+    for event in raw_events:
+        if not isinstance(event, str):
+            invalid_events.append(str(event))
+            continue
+        normalized = event.strip()
+        if normalized not in allowed_events:
+            invalid_events.append(normalized)
+            continue
+        if normalized not in events:
+            events.append(normalized)
+
+    if invalid_events:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的 Webhook events: {', '.join(invalid_events)}",
+        )
+    if not events:
+        raise HTTPException(status_code=400, detail="至少选择一个 Webhook event")
+    return events
+
+
 def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRouter]:
     router = APIRouter()
     public_router = APIRouter()
@@ -490,26 +548,29 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
         return {"pulls": pulls}
 
     @router.get("/repos/{owner}/{repo}/webhook-status")
-    async def webhook_status(owner: str, repo: str):
-        hooks = await context.gitea_client.list_repo_hooks(owner, repo) or []
+    async def webhook_status(owner: str, repo: str, request: Request):
+        user_client = await _require_repo_admin_client(context, owner, repo, request)
+        hooks = await user_client.list_repo_hooks(owner, repo) or []
         return {"configured": bool(hooks), "hooks": hooks}
 
     @router.post("/repos/{owner}/{repo}/webhook")
     async def configure_webhook(owner: str, repo: str, request: Request):
         payload = await request.json()
+        user_client = await _require_repo_admin_client(context, owner, repo, request)
         secret = payload.get("webhook_secret") or payload.get("secret") or secrets.token_urlsafe(24)
-        hook_url = payload.get("url") or "/webhook"
+        hook_url = _resolve_webhook_url(request, payload.get("url"))
+        hook_events = _resolve_webhook_events(payload.get("events"))
         hook = {
             "type": "gitea",
             "active": True,
-            "events": ["pull_request", "issues", "issue_comment"],
+            "events": hook_events,
             "config": {
                 "url": hook_url,
                 "content_type": "json",
                 "secret": secret,
             },
         }
-        hook_id = await context.gitea_client.ensure_repo_webhook(owner, repo, hook)
+        hook_id = await user_client.ensure_repo_webhook(owner, repo, hook)
         if hook_id is None:
             raise HTTPException(status_code=502, detail="Webhook 配置失败")
         if getattr(request.state, "database", None):

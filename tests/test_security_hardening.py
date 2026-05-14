@@ -6,7 +6,7 @@ from typing import Any
 import sys
 
 import pytest
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -130,8 +130,6 @@ def test_old_my_reviews_endpoint_is_removed() -> None:
 async def test_clone_repository_never_puts_token_in_command(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Any
 ) -> None:
-    import asyncio as _asyncio
-
     manager = RepoManager(str(tmp_path))
     captured: dict[str, Any] = {}
 
@@ -271,6 +269,100 @@ def test_review_settings_write_requires_repo_admin(
         ).status_code
         == 404
     )
+
+
+def test_configure_webhook_requires_login() -> None:
+    client = build_app(
+        auth_status={"loggedIn": False, "user": None},
+        auth_manager=DummyAuthManager(session=None, user_client=None),
+        database=DummyDatabase(),
+    )
+    response = client.post(
+        "/api/repos/owner/repo/webhook",
+        json={"events": ["pull_request"]},
+    )
+    assert response.status_code == 401
+
+
+def test_configure_webhook_requires_repo_admin() -> None:
+    class NonAdminClient(DummyUserClient):
+        async def check_repo_permissions(
+            self, owner: str, repo: str
+        ) -> dict[str, bool]:
+            return {"admin": False, "push": True, "pull": True}
+
+    client = build_app(
+        auth_status={"loggedIn": True, "user": {"username": "alice"}},
+        auth_manager=DummyAuthManager(
+            session=DummySessionData("alice"),
+            user_client=NonAdminClient(),
+        ),
+        database=DummyDatabase(),
+    )
+    response = client.post(
+        "/api/repos/owner/repo/webhook",
+        json={"events": ["pull_request"]},
+    )
+    assert response.status_code == 403
+
+
+def test_configure_webhook_uses_user_client_and_absolute_default_url() -> None:
+    class AdminWebhookClient(DummyUserClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.hook_definition: dict[str, Any] | None = None
+
+        async def check_repo_permissions(
+            self, owner: str, repo: str
+        ) -> dict[str, bool]:
+            return {"admin": True, "push": True, "pull": True}
+
+        async def ensure_repo_webhook(
+            self, owner: str, repo: str, hook_definition: dict[str, Any]
+        ) -> int:
+            self.hook_definition = hook_definition
+            return 123
+
+    user_client = AdminWebhookClient()
+    client = build_app(
+        auth_status={"loggedIn": True, "user": {"username": "alice"}},
+        auth_manager=DummyAuthManager(
+            session=DummySessionData("alice"),
+            user_client=user_client,
+        ),
+        database=None,
+    )
+    response = client.post(
+        "/api/repos/owner/repo/webhook",
+        json={"events": ["pull_request", "issue_comment"]},
+    )
+    assert response.status_code == 200
+    assert response.json()["hook_id"] == 123
+    assert user_client.hook_definition is not None
+    assert user_client.hook_definition["events"] == ["pull_request", "issue_comment"]
+    assert user_client.hook_definition["config"]["url"] == "http://testserver/webhook"
+
+
+def test_configure_webhook_rejects_relative_url() -> None:
+    class AdminWebhookClient(DummyUserClient):
+        async def check_repo_permissions(
+            self, owner: str, repo: str
+        ) -> dict[str, bool]:
+            return {"admin": True, "push": True, "pull": True}
+
+    client = build_app(
+        auth_status={"loggedIn": True, "user": {"username": "alice"}},
+        auth_manager=DummyAuthManager(
+            session=DummySessionData("alice"),
+            user_client=AdminWebhookClient(),
+        ),
+        database=DummyDatabase(),
+    )
+    response = client.post(
+        "/api/repos/owner/repo/webhook",
+        json={"url": "/webhook", "events": ["pull_request"]},
+    )
+    assert response.status_code == 400
 
 
 def test_stats_requires_login() -> None:

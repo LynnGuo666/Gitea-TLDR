@@ -52,6 +52,17 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(hours / 24)} 天前`;
 }
 
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const data = (await res.json()) as { detail?: unknown; message?: unknown };
+    const detail = data.detail ?? data.message;
+    if (typeof detail === 'string' && detail.trim()) return detail;
+  } catch {
+    // Response body is not JSON.
+  }
+  return fallback;
+}
+
 export default function RepoPage() {
   const router = useRouter();
   const owner = String(router.query.owner || '');
@@ -79,6 +90,8 @@ export default function RepoPage() {
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
   const [webhookLoading, setWebhookLoading] = useState(true);
   const [webhookConfiguring, setWebhookConfiguring] = useState(false);
+  const [webhookError, setWebhookError] = useState('');
+  const [webhookSuccess, setWebhookSuccess] = useState('');
   const [events, setEvents] = useState<string[]>(['pull_request', 'issue_comment']);
 
   const [pulls, setPulls] = useState<PullRequest[]>([]);
@@ -153,9 +166,11 @@ export default function RepoPage() {
         setWebhookStatus(data);
         const hookEvents = data.hooks?.[0]?.events;
         if (hookEvents?.length) setEvents(hookEvents);
+      } else {
+        setWebhookError(await readErrorMessage(res, '无法获取 Webhook 状态'));
       }
     } catch {
-      // handled silently
+      setWebhookError('无法获取 Webhook 状态，请稍后重试');
     } finally {
       setWebhookLoading(false);
     }
@@ -213,15 +228,22 @@ export default function RepoPage() {
   const configureWebhook = async () => {
     if (webhookConfiguring) return;
     setWebhookConfiguring(true);
+    setWebhookError('');
+    setWebhookSuccess('');
     try {
-      await apiFetch(`/api/v2/repos/${owner}/${repo}/webhook`, {
+      const res = await apiFetch(`/api/v2/repos/${owner}/${repo}/webhook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ events }),
       });
+      if (!res.ok) {
+        setWebhookError(await readErrorMessage(res, 'Webhook 保存失败'));
+        return;
+      }
       await loadWebhook();
+      setWebhookSuccess('Webhook 已保存');
     } catch {
-      // handled silently
+      setWebhookError('Webhook 保存失败，请检查网络或稍后重试');
     } finally {
       setWebhookConfiguring(false);
     }
@@ -311,6 +333,18 @@ export default function RepoPage() {
                     ))}
                   </div>
                 </div>
+
+                {webhookError && (
+                  <div className="rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+                    {webhookError}
+                  </div>
+                )}
+
+                {webhookSuccess && (
+                  <div className="rounded-md border border-success/40 bg-success/10 p-3 text-sm text-success">
+                    {webhookSuccess}
+                  </div>
+                )}
 
                 <Button
                   color="primary"
