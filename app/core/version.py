@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "2.2.2"
-__release_date__ = "2026-05-13"
+__version__ = "2.2.3"
+__release_date__ = "2026-05-14"
 __author__ = "LynnGuo666"
 
 
@@ -17,6 +17,12 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.2.3": {
+        "date": "2026-05-14",
+        "changes": [
+            "移除：删除首页「所有仓库均显示为只读」警告横幅，保留权限筛选等功能性逻辑",
+        ],
+    },
     "2.2.2": {
         "date": "2026-05-13",
         "changes": [
