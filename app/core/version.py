@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "2.2.4"
-__release_date__ = "2026-05-14"
+__version__ = "2.2.5"
+__release_date__ = "2026-05-18"
 __author__ = "LynnGuo666"
 
 
@@ -17,6 +17,12 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.2.5": {
+        "date": "2026-05-18",
+        "changes": [
+            "优化：场景配置 Tab 全面改版——场景选择改为卡片式双选（PR 审查 / Issue 分析），Engine 改为预设下拉（Forge/Claude Code CLI/Codex CLI），Wire API 改为协议下拉，Features 改为行内评论开关，新增 is_active 场景启用开关，移除多余的 focus textarea，字段标签中文化，错误提示去除原始变量名",
+        ],
+    },
     "2.2.4": {
         "date": "2026-05-14",
         "changes": [

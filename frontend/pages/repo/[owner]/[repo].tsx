@@ -43,6 +43,23 @@ const FOCUS_CATALOG = [
   { key: 'logic', label: '业务逻辑', detail: '边界条件、回归风险、异常链路' },
 ];
 
+const SCENARIO_OPTIONS: { key: Scenario; label: string; detail: string }[] = [
+  { key: 'review', label: 'PR 审查', detail: '分析代码变更，生成内联评论与概览' },
+  { key: 'issue', label: 'Issue 分析', detail: '定位 Issue 根因，提供解决方案' },
+];
+
+const ENGINE_OPTIONS = [
+  { value: 'forge', label: 'Forge（推荐）', description: '工具驱动的 Agentic 引擎，支持代码读取' },
+  { value: 'claude_code', label: 'Claude Code CLI', description: '通过 Claude Code 命令行调用' },
+  { value: 'codex_cli', label: 'Codex CLI', description: '通过 OpenAI Codex CLI 调用' },
+];
+
+const WIRE_API_OPTIONS = [
+  { key: '__wire_default__', label: '默认' },
+  { key: 'responses', label: 'Responses API' },
+  { key: 'chat-completions', label: 'Chat Completions API' },
+];
+
 function relativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -98,6 +115,10 @@ export default function RepoPage() {
   const [pullsLoading, setPullsLoading] = useState(true);
 
   const isReadOnly = hasAdmin === false;
+
+  const featureList = form.features.split(',').map((s) => s.trim()).filter(Boolean);
+  const featuresHasComment = featureList.includes('comment');
+  const featuresOther = featureList.filter((f) => f !== 'comment');
 
   const loadStatic = async () => {
     try {
@@ -390,46 +411,151 @@ export default function RepoPage() {
 
         {activeTab === 'config' && (
           <section className="flex flex-col gap-6">
-            <div className="flex items-center justify-between gap-3">
-              <SectionHeader title="场景配置" />
-              <Select
-                className="max-w-48"
-                selectedKeys={new Set([scenario])}
-                onSelectionChange={(keys) =>
-                  setScenario(String(Array.from(keys)[0] || 'review') as Scenario)
-                }
-              >
-                <SelectItem key="review">review</SelectItem>
-                <SelectItem key="issue">issue</SelectItem>
-              </Select>
+            <SectionHeader title="场景配置" />
+
+            <div>
+              <p className="text-sm font-medium mb-3">场景选择</p>
+              <div className="grid grid-cols-2 gap-3">
+                {SCENARIO_OPTIONS.map(({ key, label, detail }) => (
+                  <Card
+                    key={key}
+                    isPressable
+                    onPress={() => setScenario(key)}
+                    className={`border-2 transition-colors ${
+                      scenario === key ? 'border-primary bg-primary/5' : 'border-divider'
+                    }`}
+                  >
+                    <CardBody className="p-4 flex flex-col gap-1">
+                      <span className="font-semibold text-sm">
+                        {scenario === key && '✓ '}{label}
+                      </span>
+                      <span className="text-xs text-default-500">{detail}</span>
+                    </CardBody>
+                  </Card>
+                ))}
+              </div>
             </div>
 
             {permissionsLoading ? (
               <div className="text-sm text-default-400">加载权限…</div>
             ) : configurationRequired ? (
               <div className="rounded-md border border-warning/50 bg-warning/10 p-4 text-sm text-warning-700">
-                configuration_required：这个仓库还没有 {scenario} 配置，请联系管理员初始化。
+                此仓库尚未为「{SCENARIO_OPTIONS.find((s) => s.key === scenario)?.label}」场景初始化配置，请联系管理员完成初始化后再访问此页面。
               </div>
             ) : config ? (
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-5">
+                <div className="flex items-center justify-between rounded-lg border border-divider p-4">
+                  <div>
+                    <p className="font-medium text-sm">启用此场景配置</p>
+                    <p className="text-xs text-default-500 mt-1">关闭后此场景不会自动触发</p>
+                  </div>
+                  <Switch
+                    isSelected={form.is_active}
+                    isDisabled={isReadOnly}
+                    onValueChange={(is_active) => setForm({ ...form, is_active })}
+                    aria-label="启用此场景配置"
+                  />
+                </div>
+
+                <div className="h-px bg-divider" />
+
                 <div className="grid gap-3 md:grid-cols-3">
-                  <Input label="Engine" value={form.engine} isDisabled={isReadOnly} onValueChange={(engine) => setForm({ ...form, engine })} />
-                  <Input label="Model" value={form.model} isDisabled={isReadOnly} onValueChange={(model) => setForm({ ...form, model })} />
                   <Select
-                    label="凭证"
+                    label="审查引擎"
+                    isDisabled={isReadOnly}
+                    selectedKeys={form.engine ? new Set([form.engine]) : new Set([])}
+                    onSelectionChange={(keys) => setForm({ ...form, engine: String(Array.from(keys)[0] || '') })}
+                  >
+                    {ENGINE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} description={opt.description}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </Select>
+                  <Input
+                    label="模型"
+                    placeholder="例：claude-opus-4-5"
+                    value={form.model}
+                    isDisabled={isReadOnly}
+                    onValueChange={(model) => setForm({ ...form, model })}
+                  />
+                  <Select
+                    label="API 凭证"
                     isDisabled={isReadOnly}
                     selectedKeys={form.credential_id ? new Set([form.credential_id]) : new Set([])}
                     onSelectionChange={(keys) => setForm({ ...form, credential_id: String(Array.from(keys)[0] || '') })}
                   >
                     {credentials.map((c) => <SelectItem key={String(c.id)}>{c.name}</SelectItem>)}
                   </Select>
-                  <Input label="Wire API" value={form.wire_api} isDisabled={isReadOnly} onValueChange={(wire_api) => setForm({ ...form, wire_api })} />
-                  <Input label="Temperature" value={form.temperature} isDisabled={isReadOnly} onValueChange={(temperature) => setForm({ ...form, temperature })} />
-                  <Input label="Max tokens" value={form.max_tokens} isDisabled={isReadOnly} onValueChange={(max_tokens) => setForm({ ...form, max_tokens })} />
                 </div>
-                <Textarea label="Focus，逗号分隔" value={form.focus} isDisabled={isReadOnly} onValueChange={(focus) => setForm({ ...form, focus })} />
-                <Textarea label="Features，逗号分隔" value={form.features} isDisabled={isReadOnly} onValueChange={(features) => setForm({ ...form, features })} />
-                <Textarea label="Custom prompt" value={form.custom_prompt} isDisabled={isReadOnly} onValueChange={(custom_prompt) => setForm({ ...form, custom_prompt })} />
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <Select
+                    label="API 协议"
+                    isDisabled={isReadOnly}
+                    selectedKeys={new Set([form.wire_api === '' ? '__wire_default__' : form.wire_api])}
+                    onSelectionChange={(keys) => {
+                      const val = String(Array.from(keys)[0] ?? '');
+                      setForm({ ...form, wire_api: val === '__wire_default__' ? '' : val });
+                    }}
+                  >
+                    {WIRE_API_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.key}>{opt.label}</SelectItem>
+                    ))}
+                  </Select>
+                  <Input
+                    label="Temperature"
+                    placeholder="0.0 – 1.0，留空使用默认值"
+                    value={form.temperature}
+                    isDisabled={isReadOnly}
+                    onValueChange={(temperature) => setForm({ ...form, temperature })}
+                  />
+                  <Input
+                    label="最大 Token 数"
+                    placeholder="留空使用默认值"
+                    value={form.max_tokens}
+                    isDisabled={isReadOnly}
+                    onValueChange={(max_tokens) => setForm({ ...form, max_tokens })}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between rounded-lg border border-divider p-4">
+                    <div>
+                      <p className="font-medium text-sm">启用行内评论</p>
+                      <p className="text-xs text-default-500 mt-1">将审查意见作为 inline comment 直接标注到代码行</p>
+                    </div>
+                    <Switch
+                      isSelected={featuresHasComment}
+                      isDisabled={isReadOnly}
+                      onValueChange={(checked) => {
+                        const next = checked ? [...featuresOther, 'comment'] : featuresOther;
+                        setForm({ ...form, features: next.join(',') });
+                      }}
+                      aria-label="启用行内评论"
+                    />
+                  </div>
+                  {featuresOther.length > 0 && (
+                    <div className="flex gap-2 flex-wrap px-1">
+                      {featuresOther.map((f) => (
+                        <Chip key={f} size="sm" variant="flat">{f}</Chip>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Textarea
+                  label="自定义提示词补充"
+                  placeholder="可在此追加额外的审查要求或上下文，将追加到默认提示词之后"
+                  value={form.custom_prompt}
+                  isDisabled={isReadOnly}
+                  onValueChange={(custom_prompt) => setForm({ ...form, custom_prompt })}
+                />
+
+                <div className="rounded-md border border-default-200 bg-default-50 p-3 text-sm text-default-500">
+                  ℹ 审查方向（focus）请在&ldquo;审查方向&rdquo; Tab 中配置。
+                </div>
+
                 <Button color="primary" onPress={saveConfig} isDisabled={isReadOnly}>保存仓库配置</Button>
               </div>
             ) : null}

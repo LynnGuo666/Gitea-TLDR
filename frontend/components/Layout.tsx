@@ -11,7 +11,7 @@ import {
   Avatar,
   addToast,
 } from '@heroui/react';
-import { BarChart3, User, Sun, Moon, Shield, LogOut, LayoutGrid, Menu, X, Settings2, BookOpen, GitBranch, Lightbulb, Cpu } from 'lucide-react';
+import { BarChart3, User, Sun, Moon, Shield, LogOut, LayoutGrid, Menu, X, Settings2, BookOpen, GitBranch, Lightbulb, Cpu, type LucideIcon } from 'lucide-react';
 import { VersionDisplay } from './VersionDisplay';
 import {
   AuthContext,
@@ -28,15 +28,46 @@ type LayoutProps = {
   children: ReactNode;
 };
 
-const navItems = [
-  { href: '/', label: '仪表盘', icon: LayoutGrid },
-  { href: '/usage', label: '用量', icon: BarChart3 },
-  { href: '/reviews', label: '审查记录', icon: BookOpen },
-  { href: '/issues', label: 'Issue 分析', icon: Lightbulb },
-  { href: '/forge', label: 'Forge 会话', icon: Cpu },
-  { href: '/settings', label: '用户中心', icon: User },
-  { href: '/preferences', label: '个人设置', icon: Settings2 },
-  { href: '/admin', label: '管理后台', icon: Shield, adminOnly: true },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  adminOnly?: boolean;
+};
+
+type NavGroup = {
+  label?: string;
+  items: NavItem[];
+};
+
+const navGroups: NavGroup[] = [
+  {
+    items: [
+      { href: '/', label: '仪表盘', icon: LayoutGrid },
+      { href: '/usage', label: '用量', icon: BarChart3 },
+    ],
+  },
+  {
+    label: '运行记录',
+    items: [
+      { href: '/reviews', label: '审查记录', icon: BookOpen },
+      { href: '/issues', label: 'Issue 分析', icon: Lightbulb },
+      { href: '/forge', label: 'Forge 会话', icon: Cpu },
+    ],
+  },
+  {
+    label: '账号',
+    items: [
+      { href: '/settings', label: '用户中心', icon: User },
+      { href: '/preferences', label: '个人设置', icon: Settings2 },
+    ],
+  },
+  {
+    label: '管理',
+    items: [
+      { href: '/admin', label: '管理后台', icon: Shield, adminOnly: true },
+    ],
+  },
 ];
 
 const AUTH_POLL_INTERVAL = 60000;
@@ -251,26 +282,38 @@ export default function Layout({ children }: LayoutProps) {
             }`}
             aria-hidden={!mobileMenuOpen}
           >
-            {navItems.map((item) => {
-              if (item.adminOnly && !isAdmin) return null;
-              const isExact = item.href === '/';
-              const active = isExact
-                ? router.pathname === '/'
-                : router.pathname === item.href || router.pathname.startsWith(item.href + '/');
-              const Icon = item.icon;
+            {navGroups.map((group, gi) => {
+              const visibleItems = group.items.filter((item) => !item.adminOnly || isAdmin);
+              if (visibleItems.length === 0) return null;
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm no-underline transition-colors ${
-                    active
-                      ? 'bg-primary/10 font-semibold text-primary'
-                      : 'text-foreground/80 hover:bg-default-100/60'
-                  }`}
-                >
-                  <Icon size={20} />
-                  <span>{item.label}</span>
-                </Link>
+                <div key={gi} className={gi > 0 ? 'mt-2 pt-2 border-t border-divider/50' : ''}>
+                  {group.label && (
+                    <div className="px-3 pb-1 text-xs font-medium text-default-400 uppercase tracking-wider">
+                      {group.label}
+                    </div>
+                  )}
+                  {visibleItems.map((item) => {
+                    const isExact = item.href === '/';
+                    const active = isExact
+                      ? router.pathname === '/'
+                      : router.pathname === item.href || router.pathname.startsWith(item.href + '/');
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm no-underline transition-colors ${
+                          active
+                            ? 'bg-primary/10 font-semibold text-primary'
+                            : 'text-foreground/80 hover:bg-default-100/60'
+                        }`}
+                      >
+                        <Icon size={20} />
+                        <span>{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
               );
             })}
           </nav>
@@ -294,27 +337,41 @@ export default function Layout({ children }: LayoutProps) {
               </Button>
             )}
           </div>
-          <nav className="flex flex-col overflow-visible py-4 px-3 gap-1 flex-1">
-            {navItems.map((item) => {
-              if (item.adminOnly && !isAdmin) return null;
-              const isExact = item.href === '/';
-              const active = isExact
-                ? router.pathname === '/'
-                : router.pathname === item.href || router.pathname.startsWith(item.href + '/');
-              const Icon = item.icon;
+          <nav className="flex flex-col overflow-visible py-4 px-3 flex-1">
+            {navGroups.map((group, gi) => {
+              const visibleItems = group.items.filter((item) => !item.adminOnly || isAdmin);
+              if (visibleItems.length === 0) return null;
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm no-underline transition-colors whitespace-nowrap ${
-                    active
-                      ? 'bg-primary/10 font-semibold text-primary'
-                      : 'text-foreground/80 hover:bg-default-100/60'
-                  }`}
-                >
-                  <Icon size={20} />
-                  <span>{item.label}</span>
-                </Link>
+                <div key={gi} className={gi > 0 ? 'mt-3 pt-3 border-t border-divider/50' : ''}>
+                  {group.label && (
+                    <div className="px-3 pb-1 text-xs font-medium text-default-400 uppercase tracking-wider">
+                      {group.label}
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-0.5">
+                    {visibleItems.map((item) => {
+                      const isExact = item.href === '/';
+                      const active = isExact
+                        ? router.pathname === '/'
+                        : router.pathname === item.href || router.pathname.startsWith(item.href + '/');
+                      const Icon = item.icon;
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm no-underline transition-colors whitespace-nowrap ${
+                            active
+                              ? 'bg-primary/10 font-semibold text-primary'
+                              : 'text-foreground/80 hover:bg-default-100/60'
+                          }`}
+                        >
+                          <Icon size={20} />
+                          <span>{item.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })}
           </nav>
