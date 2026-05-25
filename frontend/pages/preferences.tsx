@@ -68,8 +68,18 @@ export default function PreferencesPage() {
           <div className="grid gap-3 md:grid-cols-4 mt-4">
             <Input label="名称" value={credentialForm.name} onValueChange={(name) => setCredentialForm({ ...credentialForm, name })} />
             <Input label="Provider" value={credentialForm.provider} onValueChange={(provider) => setCredentialForm({ ...credentialForm, provider })} />
-            <Input label="API URL" value={credentialForm.api_url} onValueChange={(api_url) => setCredentialForm({ ...credentialForm, api_url })} />
-            <Input label="API Key" type="password" value={credentialForm.api_key} onValueChange={(api_key) => setCredentialForm({ ...credentialForm, api_key })} />
+            <Input
+              label="API URL"
+              placeholder="https://api.anthropic.com"
+              value={credentialForm.api_url}
+              onValueChange={(api_url) => setCredentialForm({ ...credentialForm, api_url })}
+            />
+            <Input
+              label="Forge / Anthropic API Key"
+              type="password"
+              value={credentialForm.api_key}
+              onValueChange={(api_key) => setCredentialForm({ ...credentialForm, api_key })}
+            />
           </div>
           <Button className="mt-3" color="primary" onPress={createCredential} isDisabled={!credentialForm.name || loading}>
             新建凭证

@@ -14,68 +14,56 @@ class ProviderRegistry:
     """管理所有已注册的审查 Provider"""
 
     def __init__(self) -> None:
-        """初始化实例状态。
-
-        Args:
-            无。
-
-        Returns:
-            无返回值。
-        """
+        """初始化实例状态。"""
         self._providers: Dict[str, Type[ReviewProvider]] = {}
         self._register_builtins()
+        self._maybe_register_extras()
 
     def _register_builtins(self) -> None:
-        """处理builtins相关逻辑。
-
-        Args:
-            无。
-
-        Returns:
-            无返回值。
-        """
-        from .claude_code import ClaudeCodeProvider
-        from .codex_cli import CodexProvider
+        """注册始终启用的内置 provider（Forge）。"""
         from .forge.provider import ForgeProvider
 
-        self.register("claude_code", ClaudeCodeProvider)
-        self.register("codex_cli", CodexProvider)
         self.register("forge", ForgeProvider)
 
-    def register(self, name: str, provider_class: Type[ReviewProvider]) -> None:
-        """注册相关内容。
+    def _maybe_register_extras(self) -> None:
+        """按 `settings.enable_legacy_providers` 注册 legacy CLI providers。
 
-        Args:
-            name: 名称标识。
-            provider_class: 提供方实现类。
-
-        Returns:
-            无返回值。
+        默认关闭。导入失败仅记录 warning，不影响 Forge 主链路。
         """
+        try:
+            from app.core import settings
+        except Exception as exc:  # pragma: no cover - 配置加载异常时跳过
+            logger.warning("加载 settings 失败，跳过 legacy providers: %s", exc)
+            return
+
+        if not getattr(settings, "enable_legacy_providers", False):
+            return
+
+        try:
+            from .extras.claude_code import ClaudeCodeProvider
+
+            self.register("claude_code", ClaudeCodeProvider)
+        except Exception as exc:
+            logger.warning("注册 legacy claude_code provider 失败: %s", exc)
+
+        try:
+            from .extras.codex_cli import CodexProvider
+
+            self.register("codex_cli", CodexProvider)
+        except Exception as exc:
+            logger.warning("注册 legacy codex_cli provider 失败: %s", exc)
+
+    def register(self, name: str, provider_class: Type[ReviewProvider]) -> None:
+        """注册 provider 实现。"""
         self._providers[name] = provider_class
-        logger.debug(f"注册 Provider: {name}")
+        logger.debug("注册 Provider: %s", name)
 
     def get_class(self, name: str) -> Optional[Type[ReviewProvider]]:
-        """获取class。
-
-        Args:
-            name: 名称标识。
-
-        Returns:
-            可能为空的结果。
-        """
+        """根据名称查找 provider 类。"""
         return self._providers.get(name)
 
     def create(self, name: str, **kwargs: object) -> ReviewProvider:
-        """创建相关内容。
-
-        Args:
-            name: 名称标识。
-            **kwargs: 传递给提供方构造函数的附加参数。
-
-        Returns:
-            ReviewProvider 类型结果。
-        """
+        """构造 provider 实例。"""
         provider_class = self._providers.get(name)
         if not provider_class:
             available = list(self._providers.keys())
@@ -83,14 +71,7 @@ class ProviderRegistry:
         return provider_class(**kwargs)
 
     def list_providers(self) -> List[str]:
-        """列出提供方列表。
-
-        Args:
-            无。
-
-        Returns:
-            列表结果。
-        """
+        """已注册 provider 名称列表。"""
         return list(self._providers.keys())
 
     def list_issue_providers(self) -> List[str]:

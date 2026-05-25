@@ -6,7 +6,7 @@
 
 ## 概览
 - 技术栈：FastAPI + SQLAlchemy/Alembic 后端，Next.js pages-router 前端（静态导出），Docker 部署。
-- 核心领域：Gitea PR 审查编排（多引擎：`claude_code`、`codex_cli`、`forge`）+ 管理后台/用量面板。
+- 核心领域：Gitea PR 审查编排（默认 Forge 引擎；`claude_code`、`codex_cli` 为 legacy extras，需 `ENABLE_LEGACY_PROVIDERS=true` 启用）+ 管理后台/用量面板。
 
 ## 目录结构
 ```text
@@ -37,7 +37,7 @@
 | API 路由（全部） | `app/api/routes.py` | 单一文件包含所有路由（含 admin） |
 | 数据库模型 | `app/models/` | ORM 实体与关系 |
 | 业务编排 | `app/services/` | webhook、gitea、db、auth、admin |
-| 审查引擎 | `app/review/providers/` | Claude/Codex/Forge 实现 |
+| 审查引擎 | `app/review/providers/` | Forge 默认；CLI 实现位于 `extras/`，按需启用 |
 | 审查编排 | `app/review/` | webhook_handler、issue_service、review_engine |
 | Gitea 客户端 | `app/gitea/` | API 封装、认证、仓库注册 |
 | 前端外壳 | `frontend/pages/_app.tsx`、`frontend/components/Layout.tsx` | providers、auth 刷新、导航 |

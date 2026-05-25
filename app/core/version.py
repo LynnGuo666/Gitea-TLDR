@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "2.2.5"
-__release_date__ = "2026-05-18"
+__version__ = "2.2.6"
+__release_date__ = "2026-05-25"
 __author__ = "LynnGuo666"
 
 
@@ -17,6 +17,16 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.2.6": {
+        "date": "2026-05-25",
+        "changes": [
+            "重构：Forge 成为默认且唯一推荐的审查引擎；claude_code / codex_cli provider 迁至 app/review/providers/extras/，仅当 ENABLE_LEGACY_PROVIDERS=true 时按需注册",
+            "数据迁移：repository_configs.engine 中的 claude_code/codex_cli/空值一次性切换为 forge，wire_api 清空（Alembic migration f3a7b1c8d2e4）",
+            "加固：ReviewEngine 默认 provider 改为懒加载，未知 engine 自动退回 forge；webhook_handler 移除 forge 特判，所有 provider 统一创建 ProviderRun 记录",
+            "前端：仓库配置页 Engine 改为只读 Forge 标签，wire_api 字段默认隐藏；凭证表单文案与占位符调整为 Forge / Anthropic API 语义",
+            "删除：废弃的 app/review/analyzer.py（ClaudeAnalyzer 兼容封装）",
+        ],
+    },
     "2.2.5": {
         "date": "2026-05-18",
         "changes": [

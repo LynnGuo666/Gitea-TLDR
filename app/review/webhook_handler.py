@@ -632,6 +632,16 @@ class WebhookHandler:
                             f"使用仓库 {owner}/{repo_name} 的自定义 Anthropic 配置"
                         )
 
+                    logger.info(
+                        "engine_resolved engine=%s config_source=%s credential_id=%s has_api_key=%s wire_api=%s model=%s",
+                        engine,
+                        config_source,
+                        repo_config.credential_id,
+                        bool(api_key),
+                        wire_api or "-",
+                        model or "-",
+                    )
+
                     if focus_areas is None:
                         focus_areas = runtime_settings.get("default_review_focus", settings.default_review_focus)
                     if features is None:
@@ -769,20 +779,21 @@ class WebhookHandler:
             clone_operations += 1
             analysis_mode = "full"
 
-            # Forge 场景：在调用前创建 ForgeSession（status="running"）
-            if engine == "forge" and self.database and repository_id:
+            # 为所有 provider 统一创建 ProviderRun 记录（status="running"），
+            # 后续在结果落库时通过 provider_run_session_id 关联。
+            if self.database and repository_id:
                 try:
                     async with self.database.session() as session:
                         _db = DBService(session)
                         _fs = await _db.create_provider_run(
                             repository_id,
                             "review",
-                            provider="forge",
+                            provider=engine,
                             analysis_run_id=review_run_id,
                         )
                         provider_run_session_id = _fs.session_id
                 except Exception as _fse:
-                    logger.warning("创建 ForgeSession 失败（非致命）: %s", _fse)
+                    logger.warning("创建 ProviderRun 失败（非致命）: %s", _fse)
 
             analysis_result = await self.review_engine.analyze_pr(
                 repo_path,
@@ -836,7 +847,7 @@ class WebhookHandler:
                             error_message=analysis_error,
                         )
 
-                # 完成 ForgeSession（失败）
+                # 完成 ProviderRun（失败）
                 if provider_run_session_id and self.database:
                     try:
                         async with self.database.session() as session:
@@ -849,7 +860,7 @@ class WebhookHandler:
                                 error=analysis_error,
                             )
                     except Exception as _fse:
-                        logger.warning("完成 ForgeSession 失败（非致命）: %s", _fse)
+                        logger.warning("完成 ProviderRun 失败（非致命）: %s", _fse)
 
                 return False
 
@@ -983,7 +994,7 @@ class WebhookHandler:
                             clone_operations=clone_operations,
                         )
 
-            # 完成 ForgeSession（成功）
+            # 完成 ProviderRun（成功）
             if provider_run_session_id and self.database:
                 try:
                     import json as _json
@@ -1006,7 +1017,7 @@ class WebhookHandler:
                             analysis_run_id=review_run_id,
                         )
                 except Exception as _fse:
-                    logger.warning("完成 ForgeSession 失败（非致命）: %s", _fse)
+                    logger.warning("完成 ProviderRun 失败（非致命）: %s", _fse)
 
             logger.info(f"PR审查完成: {owner}/{repo_name}#{pr_number}")
             return success
@@ -1028,7 +1039,7 @@ class WebhookHandler:
                 except Exception as db_error:
                     logger.error(f"更新数据库记录失败: {db_error}")
 
-            # 完成 ForgeSession（异常）
+            # 完成 ProviderRun（异常）
             if provider_run_session_id and self.database:
                 try:
                     async with self.database.session() as session:
@@ -1040,7 +1051,7 @@ class WebhookHandler:
                             error=str(e),
                         )
                 except Exception as _fse:
-                    logger.warning("完成 ForgeSession 失败（非致命）: %s", _fse)
+                    logger.warning("完成 ProviderRun 失败（非致命）: %s", _fse)
 
             return False
 

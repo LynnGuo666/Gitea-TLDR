@@ -13,7 +13,7 @@ from app.core.config import settings
 RUNTIME_KEYS: dict[str, tuple[str, str, Any]] = {
     "default_provider": (
         "review",
-        "默认审查引擎（claude_code / codex_cli）",
+        "默认审查引擎（forge；启用 legacy 时还可选 claude_code / codex_cli）",
         settings.default_provider,
     ),
     "default_review_focus": (

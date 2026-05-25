@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.core import settings, runtime_settings
-from .base import InlineComment, ReviewProvider, ReviewResult
-from .shared_prompts import build_cli_review_prompt
-from .parsing import (
+from ..base import InlineComment, ReviewProvider, ReviewResult
+from ..shared_prompts import build_cli_review_prompt
+from ..parsing import (
     extract_json_payload as _shared_extract_json,
     parse_inline_comment as _shared_parse_inline,
     coerce_int as _shared_coerce_int,
@@ -494,7 +494,7 @@ class ClaudeCodeProvider(ReviewProvider):
 
     @staticmethod
     def _scan_json_object(text: str) -> Optional[Dict[str, Any]]:
-        from .parsing import scan_json_object
+        from ..parsing import scan_json_object
 
         return scan_json_object(text)
 

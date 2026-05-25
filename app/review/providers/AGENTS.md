@@ -13,7 +13,7 @@
 - Failures should preserve actionable diagnostics but redact secrets.
 - Keep output schema stable for downstream persistence/UI rendering.
 - Ensure suggestion snippets are markdown code blocks when code is included.
-- Forge supports the `review` and `issue` scenarios today; `claude_code` and `codex_cli` only implement `review` — declare support via `supports_issue()` before routing Issue flows.
+- Forge supports `review` and `issue` scenarios; the legacy `claude_code` / `codex_cli` providers (loaded only when `ENABLE_LEGACY_PROVIDERS=true`) implement `review` only — declare support via `supports_issue()` before routing Issue flows.
 
 ## SAFETY RULES
 - Never leak API keys/tokens in logs, exceptions, or returned text.
@@ -26,10 +26,9 @@
 | File | Responsibility |
 |---|---|
 | `base.py` | contract + dataclasses (`ReviewProvider`, `ReviewResult`, `InlineComment`) |
-| `registry.py` | provider registration and lookup |
+| `registry.py` | provider registration; Forge built-in, CLI extras gated by `ENABLE_LEGACY_PROVIDERS` |
 | `parsing.py` | shared parsing utilities (`extract_json_payload`, `parse_inline_comment`, `coerce_int`, `extract_actionable_error`) |
-| `claude_code.py` | Claude CLI invocation + result normalization |
-| `codex_cli.py` | Codex CLI invocation + isolated config/runtime |
+| `shared_prompts.py` | shared CLI prompt builder (`build_cli_review_prompt`) |
 | `forge/` | Agentic engine — direct Anthropic API with tool use |
 | `forge/provider.py` | `ForgeProvider` — ReviewProvider adapter for the forge engine |
 | `forge/engine.py` | `ForgeEngine` — agentic loop core (turn loop + tool execution) |
@@ -38,7 +37,9 @@
 | `forge/system_prompts.py` | system prompt builders per scenario (includes `ISSUE_FOCUS_MAP`) |
 | `forge/tools/` | tool definitions + executors (`read_file`, `search_code`, `list_directory`, `glob_files`, `lsp`, `submit_review`, `submit_analysis`) |
 | `forge/scenarios/` | scenario runners (`review.py`, `issue.py` — `run_issue` + `finalize_issue_payload` 三层降级) |
-| `usage_proxy.py` | SSE proxy for capturing Claude CLI usage (only used by claude_code) |
+| `extras/claude_code.py` | (legacy) Claude CLI invocation + result normalization |
+| `extras/codex_cli.py` | (legacy) Codex CLI invocation + isolated config/runtime |
+| `extras/usage_proxy.py` | (legacy) SSE proxy for capturing Claude CLI usage (only used by claude_code) |
 
 ## ANTI-PATTERNS
 - Do not add business policy decisions (webhook/event flow) in providers.

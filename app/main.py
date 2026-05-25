@@ -139,14 +139,19 @@ def build_context(database: Database | None = None) -> AppContext:
     """初始化所有服务组件并封装为应用上下文。"""
     gitea_client = GiteaClient(settings.gitea_url, settings.gitea_token, settings.debug)
     repo_manager = RepoManager(settings.work_dir)
+
+    provider_cli_paths: dict[str, str] | None = None
+    if settings.enable_legacy_providers:
+        provider_cli_paths = {
+            "claude_code": settings.claude_code_path,
+            "codex_cli": settings.codex_cli_path,
+        }
+
     review_engine = ReviewEngine(
         default_provider=settings.default_provider,
         cli_path=settings.claude_code_path,
         debug=settings.debug,
-        provider_cli_paths={
-            "claude_code": settings.claude_code_path,
-            "codex_cli": settings.codex_cli_path,
-        },
+        provider_cli_paths=provider_cli_paths,
     )
 
     # 初始化仓库注册表（支持数据库存储）
@@ -194,14 +199,18 @@ def create_app() -> FastAPI:
         logger.info("LCPU AI Reviewer 启动")
         logger.info(f"Gitea URL: {settings.gitea_url}")
         logger.info(f"工作目录: {settings.work_dir}")
-        logger.info(
-            f"审查引擎 ({settings.default_provider}) CLI路径: {settings.claude_code_path}"
-        )
-        logger.info(
-            "Claude usage 代理: %s（调试日志: %s）",
-            "开启" if settings.claude_usage_proxy_enabled else "关闭",
-            "开启" if settings.claude_usage_proxy_debug else "关闭",
-        )
+        logger.info(f"默认审查引擎: {settings.default_provider}")
+        if settings.enable_legacy_providers:
+            logger.info(
+                "Legacy providers 已启用: claude_code_path=%s codex_cli_path=%s",
+                settings.claude_code_path,
+                settings.codex_cli_path,
+            )
+            logger.info(
+                "Claude usage 代理: %s（调试日志: %s）",
+                "开启" if settings.claude_usage_proxy_enabled else "关闭",
+                "开启" if settings.claude_usage_proxy_debug else "关闭",
+            )
         logger.info(f"可用引擎: {context.review_engine.registry.list_providers()}")
         logger.info(f"Debug模式: {'开启' if settings.debug else '关闭'}")
 

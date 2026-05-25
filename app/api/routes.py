@@ -373,8 +373,16 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
 
     @router.get("/providers")
     async def providers():
+        labels = {
+            "forge": "Forge",
+            "claude_code": "Claude Code (legacy)",
+            "codex_cli": "Codex CLI (legacy)",
+        }
         items = [
-            {"name": name, "label": name.replace("_", " ").title()}
+            {
+                "name": name,
+                "label": labels.get(name, name.replace("_", " ").title()),
+            }
             for name in context.review_engine.registry.list_providers()
         ]
         return {"providers": items, "default": context.review_engine.default_provider_name}

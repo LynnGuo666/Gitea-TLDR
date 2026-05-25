@@ -6,10 +6,9 @@
 ## 目录结构
 ```text
 review/
-├── webhook_handler.py   # Webhook 事件入口（1118 行，核心编排）
-├── issue_service.py     # Issue 智能分析服务（764 行）
-├── engine.py            # 审查引擎调度（Provider 路由）
-├── analyzer.py          # 向后兼容封装（ClaudeAnalyzer）
+├── webhook_handler.py   # Webhook 事件入口（核心编排）
+├── issue_service.py     # Issue 智能分析服务
+├── engine.py            # 审查引擎调度（Provider 路由，默认 forge）
 ├── config_health.py     # 仓库配置健康检查
 └── providers/           # 多引擎实现 → 详见 providers/AGENTS.md
 ```
@@ -20,10 +19,9 @@ review/
 | PR 创建/更新 webhook | `webhook_handler.py` | `handle_pull_request_event()` |
 | PR 评论命令触发 | `webhook_handler.py` | `handle_comment_event()` — 解析 `/review` 命令 |
 | Issue 评论命令触发 | `webhook_handler.py` | 路由至 `IssueAnalysisService` |
-| 引擎选择与调度 | `engine.py` | `ReviewEngine` — 根据仓库配置选择 provider |
+| 引擎选择与调度 | `engine.py` | `ReviewEngine` — 懒加载 + forge 兜底 |
 | Issue 分析 | `issue_service.py` | 文本分析、分类、方案生成 |
 | 配置健康检查 | `config_health.py` | 检查仓库 review/issue 配置状态 |
-| 旧版兼容 | `analyzer.py` | `ClaudeAnalyzer` — 委托至 `ClaudeCodeProvider` |
 
 ## 数据流
 ```
@@ -37,9 +35,11 @@ WebhookHandler.handle()
 
 ## 约定
 - Webhook 处理器不直接调用 provider；通过 `ReviewEngine` 统一路由。
+- 默认引擎为 `forge`；`claude_code` / `codex_cli` 为 legacy extras（`ENABLE_LEGACY_PROVIDERS=true` 才注册）。
 - Issue 分析目前仅 Forge 引擎支持；其他引擎通过 `supports_issue()` 声明能力。
 - 所有 webhook 入口需验证签名（`WEBHOOK_SECRET` 已配置时）。
 - 审查结果通过 `ReviewResult` 标准化输出（summary + inline_comments + usage_metadata）。
+- 所有 provider 调用前后由 webhook_handler 统一创建 / 收尾 `ProviderRun` 记录，无引擎特判。
 - 处理过程中的错误保留可诊断信息，但必须脱敏 token/密钥。
 
 ## 反模式

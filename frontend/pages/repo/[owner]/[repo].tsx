@@ -48,18 +48,6 @@ const SCENARIO_OPTIONS: { key: Scenario; label: string; detail: string }[] = [
   { key: 'issue', label: 'Issue 分析', detail: '定位 Issue 根因，提供解决方案' },
 ];
 
-const ENGINE_OPTIONS = [
-  { value: 'forge', label: 'Forge（推荐）', description: '工具驱动的 Agentic 引擎，支持代码读取' },
-  { value: 'claude_code', label: 'Claude Code CLI', description: '通过 Claude Code 命令行调用' },
-  { value: 'codex_cli', label: 'Codex CLI', description: '通过 OpenAI Codex CLI 调用' },
-];
-
-const WIRE_API_OPTIONS = [
-  { key: '__wire_default__', label: '默认' },
-  { key: 'responses', label: 'Responses API' },
-  { key: 'chat-completions', label: 'Chat Completions API' },
-];
-
 function relativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -231,10 +219,10 @@ export default function RepoPage() {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        engine: form.engine || undefined,
+        engine: 'forge',
         model: form.model || null,
         credential_id: form.credential_id ? Number(form.credential_id) : null,
-        wire_api: form.wire_api || null,
+        wire_api: null,
         temperature: form.temperature ? Number(form.temperature) : null,
         max_tokens: form.max_tokens ? Number(form.max_tokens) : null,
         custom_prompt: form.custom_prompt || null,
@@ -460,18 +448,12 @@ export default function RepoPage() {
                 <div className="h-px bg-divider" />
 
                 <div className="grid gap-3 md:grid-cols-3">
-                  <Select
-                    label="审查引擎"
-                    isDisabled={isReadOnly}
-                    selectedKeys={form.engine ? new Set([form.engine]) : new Set([])}
-                    onSelectionChange={(keys) => setForm({ ...form, engine: String(Array.from(keys)[0] || '') })}
-                  >
-                    {ENGINE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} description={opt.description}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </Select>
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-tiny text-default-500">审查引擎</span>
+                    <div className="flex h-10 items-center">
+                      <Chip color="primary" variant="flat">Forge</Chip>
+                    </div>
+                  </div>
                   <Input
                     label="模型"
                     placeholder="例：claude-opus-4-5"
@@ -490,19 +472,6 @@ export default function RepoPage() {
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-3">
-                  <Select
-                    label="API 协议"
-                    isDisabled={isReadOnly}
-                    selectedKeys={new Set([form.wire_api === '' ? '__wire_default__' : form.wire_api])}
-                    onSelectionChange={(keys) => {
-                      const val = String(Array.from(keys)[0] ?? '');
-                      setForm({ ...form, wire_api: val === '__wire_default__' ? '' : val });
-                    }}
-                  >
-                    {WIRE_API_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.key}>{opt.label}</SelectItem>
-                    ))}
-                  </Select>
                   <Input
                     label="Temperature"
                     placeholder="0.0 – 1.0，留空使用默认值"

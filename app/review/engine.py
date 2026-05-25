@@ -11,13 +11,15 @@ from .providers.registry import ProviderRegistry
 
 logger = logging.getLogger(__name__)
 
+_FORGE_FALLBACK = "forge"
+
 
 class ReviewEngine:
     """统一审查入口，根据配置路由到对应 Provider"""
 
     def __init__(
         self,
-        default_provider: str = "claude_code",
+        default_provider: str = "forge",
         cli_path: str = "claude",
         debug: bool = False,
         provider_cli_paths: Optional[Dict[str, str]] = None,
@@ -39,23 +41,13 @@ class ReviewEngine:
         self._cli_paths: Dict[str, str] = provider_cli_paths or {}
         self._cli_paths.setdefault(default_provider, cli_path)
 
-        self._default_provider = self.registry.create(
-            default_provider, cli_path=cli_path, debug=debug
-        )
         self._provider_cache: Dict[str, ReviewProvider] = {}
         self.last_error: Optional[str] = None
 
     @property
     def provider(self) -> ReviewProvider:
-        """处理提供方相关逻辑。
-
-        Args:
-            无。
-
-        Returns:
-            ReviewProvider 类型结果。
-        """
-        return self._default_provider
+        """获取默认 provider（懒加载）。"""
+        return self._resolve_provider(self.default_provider_name)
 
     async def analyze_pr(
         self,
@@ -105,21 +97,48 @@ class ReviewEngine:
         return result
 
     def _resolve_provider(self, name: Optional[str] = None) -> ReviewProvider:
-        """处理提供方相关逻辑。
+        """按名称解析 provider，未命中时退回到 forge（若可用）。
+
+        懒加载：默认 provider 仅在首次使用时构造，避免应用启动阶段因 CLI 缺失而失败。
 
         Args:
             name: 名称标识。
 
         Returns:
-            ReviewProvider 类型结果。
+            ReviewProvider 实例。
         """
-        if not name or name == self.default_provider_name:
-            logger.debug("使用 provider: %s (默认)", self.default_provider_name)
-            return self._default_provider
-        if name not in self._provider_cache:
-            cli_path = self._cli_paths.get(name, name)
-            self._provider_cache[name] = self.registry.create(
-                name, cli_path=cli_path, debug=self.debug
+        target = name or self.default_provider_name
+        available = self.registry.list_providers()
+
+        if target not in available:
+            if _FORGE_FALLBACK in available and target != _FORGE_FALLBACK:
+                logger.warning(
+                    "engine %s 未注册（可用: %s），退回到 forge",
+                    target,
+                    available,
+                )
+                target = _FORGE_FALLBACK
+            else:
+                raise ValueError(
+                    f"未知的 Provider: {target}，可用: {available}"
+                )
+
+        if target in self._provider_cache:
+            logger.debug("使用 provider: %s (缓存)", target)
+            return self._provider_cache[target]
+
+        cli_path = self._cli_paths.get(target, target)
+        try:
+            provider = self.registry.create(
+                target, cli_path=cli_path, debug=self.debug
             )
-        logger.debug("使用 provider: %s", name)
-        return self._provider_cache[name]
+        except Exception as exc:
+            logger.exception("构造 provider %s 失败: %s", target, exc)
+            if target != _FORGE_FALLBACK and _FORGE_FALLBACK in available:
+                logger.warning("退回到 forge provider")
+                return self._resolve_provider(_FORGE_FALLBACK)
+            raise
+
+        self._provider_cache[target] = provider
+        logger.debug("使用 provider: %s", target)
+        return provider

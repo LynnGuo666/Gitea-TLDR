@@ -4,6 +4,34 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [2.2.6] - 2026-05-25
+
+### 变更 (Changed)
+
+- **Forge 成为默认且唯一推荐的审查引擎**：`claude_code` 与 `codex_cli` 迁至 `app/review/providers/extras/`，默认不再注册到 `ProviderRegistry`，仅当 `ENABLE_LEGACY_PROVIDERS=true` 时按需加载
+- **触发链路加固**：`ReviewEngine` 的默认 provider 改为懒加载，构造异常或未知 engine 名自动退回 forge；webhook 入口不再因 CLI 缺失而崩溃
+- **WebhookHandler 统一化**：移除针对 forge 引擎的特判，所有 provider 都在 PR 审查前创建 `ProviderRun` 记录，完成/失败/异常路径保持一致
+- **前端配置页**：仓库 Engine 选择改为只读 `Forge` 标签，WIRE API 字段在默认模式下隐藏；凭证表单文案与占位符调整为 Forge / Anthropic API 语义
+
+### 数据迁移 (Database)
+
+- 新增 Alembic migration `f3a7b1c8d2e4_force_forge_engine.py`：将 `repository_configs.engine` 中的 `claude_code`、`codex_cli` 与空值一次性切换为 `forge`，并清空 `wire_api`；`downgrade` 为 no-op
+- 仓库部署时需执行 `uv run alembic upgrade head` 应用新迁移
+
+### 移除 (Removed)
+
+- 删除 `app/review/analyzer.py`（旧的 `ClaudeAnalyzer` 兼容封装），如需 Claude CLI 行为请通过 `ReviewEngine` + legacy provider 启用
+
+### 配置 (Config)
+
+- `DEFAULT_PROVIDER` 默认值由 `claude_code` 改为 `forge`
+- 新增 `ENABLE_LEGACY_PROVIDERS` 开关（默认 `false`），用于按需启用 legacy CLI providers
+- `CLAUDE_CODE_PATH`、`CODEX_CLI_PATH`、`CLAUDE_USAGE_PROXY_*` 标记为 legacy，仅在 `ENABLE_LEGACY_PROVIDERS=true` 时生效
+
+### 测试 (Tests)
+
+- 新增 `tests/test_review_engine.py`：覆盖默认 provider 懒加载、未知 engine 退回 forge、构造异常 fallback 三类核心路径
+
 ## [2.2.4] - 2026-05-14
 
 ### 修复 (Fixed)

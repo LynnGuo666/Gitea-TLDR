@@ -45,8 +45,8 @@ def build_test_client(
         ),
         repo_manager=SimpleNamespace(),
         review_engine=SimpleNamespace(
-            registry=SimpleNamespace(list_providers=lambda: ["claude_code", "forge"]),
-            default_provider_name="claude_code",
+            registry=SimpleNamespace(list_providers=lambda: ["forge"]),
+            default_provider_name="forge",
         ),
         webhook_handler=SimpleNamespace(
             parse_review_features=lambda _: ["comment"],

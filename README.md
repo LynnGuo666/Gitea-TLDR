@@ -61,7 +61,8 @@ GITEA_TOKEN=your_gitea_access_token_here
 
 # 可选
 WEBHOOK_SECRET=your_webhook_secret_here
-DEFAULT_PROVIDER=forge          # forge | claude_code | codex_cli
+DEFAULT_PROVIDER=forge          # 默认 forge；启用 legacy 后还可选 claude_code / codex_cli
+ENABLE_LEGACY_PROVIDERS=false   # 默认关闭。开启后才会注册 claude_code/codex_cli CLI provider
 BOT_USERNAME=pr-reviewer-bot
 WORK_DIR=./review-workspace
 

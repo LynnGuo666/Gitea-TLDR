@@ -27,17 +27,17 @@ class Settings(BaseSettings):
     # Webhook配置
     webhook_secret: Optional[str] = Field(None, description="Webhook密钥用于验证请求")
 
-    # Claude Code配置
-    claude_code_path: str = Field("claude", description="Claude Code CLI路径")
+    # Claude Code配置（legacy，仅当 enable_legacy_providers=True 时生效）
+    claude_code_path: str = Field("claude", description="Claude Code CLI路径（legacy）")
     claude_usage_proxy_enabled: bool = Field(
-        True, description="是否启用 Claude usage 捕获代理"
+        True, description="是否启用 Claude usage 捕获代理（legacy）"
     )
     claude_usage_proxy_debug: bool = Field(
-        False, description="是否输出 Claude usage 代理诊断日志"
+        False, description="是否输出 Claude usage 代理诊断日志（legacy）"
     )
 
-    # Codex CLI配置
-    codex_cli_path: str = Field("codex", description="Codex CLI路径")
+    # Codex CLI配置（legacy，仅当 enable_legacy_providers=True 时生效）
+    codex_cli_path: str = Field("codex", description="Codex CLI路径（legacy）")
 
     # Forge 引擎配置
     forge_base_url: str = Field(
@@ -50,7 +50,11 @@ class Settings(BaseSettings):
     forge_max_turns: int = Field(5, description="Forge 引擎最大 agentic 轮次")
 
     # 审查引擎配置
-    default_provider: str = Field("claude_code", description="默认审查引擎提供者")
+    default_provider: str = Field("forge", description="默认审查引擎提供者")
+    enable_legacy_providers: bool = Field(
+        False,
+        description="是否启用 legacy CLI providers（claude_code / codex_cli）。默认关闭。",
+    )
 
     # 工作目录配置
     work_dir: str = Field(

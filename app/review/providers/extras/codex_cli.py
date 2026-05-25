@@ -20,9 +20,9 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .base import InlineComment, ReviewProvider, ReviewResult
-from .shared_prompts import build_cli_review_prompt
-from .parsing import (
+from ..base import InlineComment, ReviewProvider, ReviewResult
+from ..shared_prompts import build_cli_review_prompt
+from ..parsing import (
     extract_json_payload as _shared_extract_json,
     parse_inline_comment as _shared_parse_inline,
     coerce_int as _shared_coerce_int,
@@ -196,7 +196,7 @@ class CodexProvider(ReviewProvider):
             if work_dir.is_absolute():
                 parent = work_dir
             else:
-                project_root = Path(__file__).resolve().parents[3]
+                project_root = Path(__file__).resolve().parents[4]
                 parent = project_root / work_dir
         else:
             parent = Path.home() / ".cache" / "gitea-pr-reviewer"
