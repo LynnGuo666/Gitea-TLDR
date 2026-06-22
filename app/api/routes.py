@@ -21,7 +21,7 @@ from app.core import (
     settings,
 )
 from app.core.context import AppContext
-from app.models import Actor
+from app.models import Actor, WEBHOOK_STATUS_QUEUED
 from app.services.audit_service import AuditService
 from app.services.db_service import DBService
 
@@ -195,11 +195,6 @@ def _serialize_run(run) -> dict[str, Any]:
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
         "duration_seconds": run.duration_seconds,
-        "estimated_input_tokens": 0,
-        "estimated_output_tokens": 0,
-        "cache_creation_input_tokens": 0,
-        "cache_read_input_tokens": 0,
-        "total_tokens": 0,
     }
 
 
@@ -866,7 +861,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             if not event:
                 raise HTTPException(status_code=404, detail="webhook_event_not_found")
             payload = json.loads(event.payload_json)
-            await service.update_webhook_event(event.id, status="queued")
+            await service.update_webhook_event(event.id, status=WEBHOOK_STATUS_QUEUED)
             await audit.record_success(
                 action="replay_webhook",
                 resource_type="webhook_event",
@@ -896,15 +891,12 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
                 "resource_type": event.resource_type,
                 "resource_id": event.resource_id,
                 "repository_id": event.repository_id,
-                "namespace_id": event.namespace_id,
                 "request_id": event.request_id,
                 "source": event.source,
                 "ip_address": event.ip_address,
                 "user_agent": event.user_agent,
                 "before": json.loads(event.before_json) if event.before_json else None,
                 "after": json.loads(event.after_json) if event.after_json else None,
-                "changed_fields": json.loads(event.changed_fields_json) if event.changed_fields_json else [],
-                "sensitive_fields": json.loads(event.sensitive_fields_json) if event.sensitive_fields_json else [],
                 "status": event.status,
                 "error_message": event.error_message,
                 "created_at": event.created_at.isoformat(),

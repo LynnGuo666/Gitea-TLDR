@@ -30,6 +30,23 @@ from app.core.encryption import encryption_service
 from .base import Base, TimestampMixin
 
 
+# WebhookEvent.status 取值集合（无 DB 级枚举约束，仅在应用层统一）。
+# 入口落库为 QUEUED；处理中转为 PROCESSING；重试中为 RETRYING；
+# 终态为 SUCCESS / ERROR。恢复逻辑会捞取所有非终态事件。
+WEBHOOK_STATUS_QUEUED = "queued"
+WEBHOOK_STATUS_PROCESSING = "processing"
+WEBHOOK_STATUS_RETRYING = "retrying"
+WEBHOOK_STATUS_SUCCESS = "success"
+WEBHOOK_STATUS_ERROR = "error"
+
+# 可被 _recover_pending_webhooks 恢复的中间状态（不含终态 success/error）。
+WEBHOOK_PENDING_STATUSES = (
+    WEBHOOK_STATUS_QUEUED,
+    WEBHOOK_STATUS_PROCESSING,
+    WEBHOOK_STATUS_RETRYING,
+)
+
+
 class Actor(Base, TimestampMixin):
     """系统行为主体，包含用户、管理员和 system actor。"""
 
@@ -130,21 +147,6 @@ class AppSetting(Base, TimestampMixin):
     )
 
 
-class Namespace(Base, TimestampMixin):
-    """Gitea owner 命名空间，可代表用户或组织。"""
-
-    __tablename__ = "namespaces"
-    __table_args__ = (
-        UniqueConstraint("provider", "name", name="uq_namespaces_provider_name"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    provider: Mapped[str] = mapped_column(String(50), default="gitea", nullable=False)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    kind: Mapped[str] = mapped_column(String(50), default="unknown", nullable=False)
-    display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-
-
 class Repository(Base, TimestampMixin):
     """仓库主体表。"""
 
@@ -155,16 +157,11 @@ class Repository(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     provider: Mapped[str] = mapped_column(String(50), default="gitea", nullable=False)
-    namespace_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("namespaces.id", ondelete="SET NULL"), nullable=True, index=True
-    )
     owner: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     full_name: Mapped[str] = mapped_column(String(511), nullable=False, index=True)
     webhook_secret_enc: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-
-    namespace: Mapped[Optional[Namespace]] = relationship("Namespace")
 
     @property
     def repo_name(self) -> str:
@@ -222,9 +219,6 @@ class ProviderCredential(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     scope_type: Mapped[str] = mapped_column(String(50), nullable=False)
     scope_key: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    namespace_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("namespaces.id", ondelete="SET NULL"), nullable=True
-    )
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     api_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
@@ -303,22 +297,6 @@ class RepositoryConfig(Base, TimestampMixin):
     def api_key(self, value: Optional[str]) -> None:
         if self.credential:
             self.credential.api_key = value
-
-    @property
-    def default_features(self) -> Optional[str]:
-        return self.features_json
-
-    @default_features.setter
-    def default_features(self, value: Optional[str]) -> None:
-        self.features_json = value
-
-    @property
-    def default_focus(self) -> Optional[str]:
-        return self.focus_json
-
-    @default_focus.setter
-    def default_focus(self, value: Optional[str]) -> None:
-        self.focus_json = value
 
     def get_features(self) -> list[str]:
         import json
@@ -624,15 +602,12 @@ class AuditEvent(Base):
     resource_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     resource_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     repository_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
-    namespace_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     request_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     source: Mapped[str] = mapped_column(String(50), nullable=False)
     ip_address: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     before_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     after_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    changed_fields_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    sensitive_fields_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

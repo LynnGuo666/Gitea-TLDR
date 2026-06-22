@@ -157,9 +157,7 @@ export type UsageSummary = {
   total_input_tokens: number;
   total_output_tokens: number;
   total_gitea_calls: number;
-  total_claude_calls?: number;
   total_provider_calls: number;
-  total_clones?: number;
   total_clone_operations: number;
   record_count: number;
   run_count: number;

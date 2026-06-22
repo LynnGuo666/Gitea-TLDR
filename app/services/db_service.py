@@ -29,6 +29,8 @@ from app.models import (
     RepositoryFeature,
     UsageEvent,
     WebhookEvent,
+    WEBHOOK_PENDING_STATUSES,
+    WEBHOOK_STATUS_QUEUED,
 )
 
 logger = logging.getLogger(__name__)
@@ -147,6 +149,17 @@ class DBService:
         await self.session.delete(setting)
         await self.session.flush()
         return True
+
+    async def get_app_setting(self, key: str, fallback: Any = None) -> Any:
+        """从 DB 读取一个 app setting 值，不存在时返回 fallback。"""
+        result = await self.session.execute(select(AppSetting).where(AppSetting.key == key))
+        row = result.scalar_one_or_none()
+        if not row:
+            return fallback
+        try:
+            return json.loads(row.value_json)
+        except Exception:
+            return fallback
 
     # ==================== Repository ====================
 
@@ -640,12 +653,12 @@ class DBService:
             actor_id=kwargs.get("actor_id") or kwargs.get("user_id"),
             event_date=date.today(),
             provider=kwargs.get("provider"),
-            input_tokens=kwargs.get("input_tokens") or kwargs.get("estimated_input_tokens") or 0,
-            output_tokens=kwargs.get("output_tokens") or kwargs.get("estimated_output_tokens") or 0,
+            input_tokens=kwargs.get("input_tokens", 0),
+            output_tokens=kwargs.get("output_tokens", 0),
             cache_creation_input_tokens=kwargs.get("cache_creation_input_tokens", 0),
             cache_read_input_tokens=kwargs.get("cache_read_input_tokens", 0),
             gitea_api_calls=kwargs.get("gitea_api_calls", 0),
-            provider_api_calls=kwargs.get("provider_api_calls") or kwargs.get("claude_api_calls") or 0,
+            provider_api_calls=kwargs.get("provider_api_calls", 0),
             clone_operations=kwargs.get("clone_operations", 0),
             created_at=_now(),
         )
@@ -694,9 +707,7 @@ class DBService:
             "total_cache_read_tokens": row.total_cache_read_tokens or 0,
             "total_gitea_calls": row.total_gitea_calls or 0,
             "total_provider_calls": row.total_provider_calls or 0,
-            "total_claude_calls": row.total_provider_calls or 0,
             "total_clone_operations": row.total_clone_operations or 0,
-            "total_clones": row.total_clone_operations or 0,
             "record_count": row.record_count or 0,
             "run_count": row.record_count or 0,
         }
@@ -711,7 +722,7 @@ class DBService:
 
     # ==================== Webhooks ====================
 
-    async def create_webhook_event(self, request_id: str, repository_id: Optional[int], event_type: str, payload: str, status: str = "processing"):
+    async def create_webhook_event(self, request_id: str, repository_id: Optional[int], event_type: str, payload: str, status: str = WEBHOOK_STATUS_QUEUED):
         event = WebhookEvent(
             request_id=request_id,
             repository_id=repository_id or None,
@@ -740,7 +751,7 @@ class DBService:
     async def list_pending_webhook_events(self, min_age_seconds: int = 60, max_age_hours: int = 6):
         now = _now()
         stmt = select(WebhookEvent).where(
-            WebhookEvent.status == "processing",
+            WebhookEvent.status.in_(WEBHOOK_PENDING_STATUSES),
             WebhookEvent.created_at >= now - timedelta(hours=max_age_hours),
             WebhookEvent.created_at <= now - timedelta(seconds=min_age_seconds),
         )
@@ -770,7 +781,7 @@ class DBService:
 
     # ==================== Audit ====================
 
-    async def record_audit(self, *, actor_id: Optional[int], actor_type: str, action: str, resource_type: str, resource_id: Optional[int] = None, repository_id: Optional[int] = None, namespace_id: Optional[int] = None, request_id: Optional[str] = None, source: str = "api", ip_address: Optional[str] = None, user_agent: Optional[str] = None, status: str = "success", before: Any = None, after: Any = None, changed_fields: Optional[list[str]] = None, sensitive_fields: Optional[list[str]] = None, error_message: Optional[str] = None):
+    async def record_audit(self, *, actor_id: Optional[int], actor_type: str, action: str, resource_type: str, resource_id: Optional[int] = None, repository_id: Optional[int] = None, request_id: Optional[str] = None, source: str = "api", ip_address: Optional[str] = None, user_agent: Optional[str] = None, status: str = "success", before: Any = None, after: Any = None, error_message: Optional[str] = None):
         event = AuditEvent(
             actor_id=actor_id,
             actor_type=actor_type,
@@ -778,15 +789,12 @@ class DBService:
             resource_type=resource_type,
             resource_id=resource_id,
             repository_id=repository_id,
-            namespace_id=namespace_id,
             request_id=request_id,
             source=source,
             ip_address=ip_address,
             user_agent=user_agent,
             before_json=_json(before) if before is not None else None,
             after_json=_json(after) if after is not None else None,
-            changed_fields_json=_json(changed_fields or []),
-            sensitive_fields_json=_json(sensitive_fields or []),
             status=status,
             error_message=error_message,
             created_at=_now(),

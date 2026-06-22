@@ -373,8 +373,8 @@ class IssueAnalysisService:
                         repository_id=repository_id,
                         analysis_run_id=issue_run_id,
                         user_id=actor_user_id,
-                        estimated_input_tokens=usage.get("input_tokens", 0),
-                        estimated_output_tokens=usage.get("output_tokens", 0),
+                        input_tokens=usage.get("input_tokens", 0),
+                        output_tokens=usage.get("output_tokens", 0),
                         cache_creation_input_tokens=usage.get(
                             "cache_creation_input_tokens", 0
                         ),

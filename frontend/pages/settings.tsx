@@ -137,7 +137,7 @@ export default function SettingsPage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
                   { value: reviewCount, label: 'PR 审查次数' },
-                  { value: stats?.total_provider_calls || stats?.total_claude_calls || 0, label: '审查引擎调用' },
+                  { value: stats?.total_provider_calls || 0, label: '审查引擎调用' },
                   {
                     value: formatNumber((stats?.total_input_tokens || 0) + (stats?.total_output_tokens || 0)),
                     label: '总 Token 使用量',

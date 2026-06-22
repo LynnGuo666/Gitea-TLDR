@@ -9,7 +9,7 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional
 
-from app.core import settings, runtime_settings
+from app.core import settings
 from app.core.database import Database
 from app.review.providers.base import (
     InlineComment,
@@ -22,6 +22,12 @@ from app.services.audit_service import AuditService
 from app.gitea.client import GiteaClient
 from app.review.issue_service import IssueAnalysisService
 from app.gitea.repo_manager import RepoManager
+from app.models import (
+    WEBHOOK_STATUS_ERROR,
+    WEBHOOK_STATUS_PROCESSING,
+    WEBHOOK_STATUS_RETRYING,
+    WEBHOOK_STATUS_SUCCESS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +94,7 @@ class WebhookHandler:
             审查重点列表
         """
         if not focus_header:
-            return runtime_settings.get("default_review_focus", settings.default_review_focus)
+            return list(settings.default_review_focus)
 
         focus_areas = [f.strip().lower() for f in focus_header.split(",")]
         valid_areas = ["quality", "security", "performance", "logic"]
@@ -197,7 +203,7 @@ class WebhookHandler:
                         repository_id=repository_id,
                         event_type=event_type,
                         payload=json.dumps(payload, ensure_ascii=False),
-                        status="processing",
+                        status=WEBHOOK_STATUS_PROCESSING,
                     )
                     log_id = log.id
             except Exception as e:
@@ -213,7 +219,7 @@ class WebhookHandler:
                 if log_id and self.database:
                     await self._update_log(
                         log_id,
-                        status="success" if success else "error",
+                        status=WEBHOOK_STATUS_SUCCESS if success else WEBHOOK_STATUS_ERROR,
                         processing_time_ms=elapsed_ms,
                         error_message=None if success else "handler returned False",
                     )
@@ -229,7 +235,7 @@ class WebhookHandler:
                 if log_id and self.database:
                     await self._update_log(
                         log_id,
-                        status="retrying" if attempt < max_retries else "error",
+                        status=WEBHOOK_STATUS_RETRYING if attempt < max_retries else WEBHOOK_STATUS_ERROR,
                         processing_time_ms=elapsed_ms,
                         error_message=last_error,
                         increment_retry=True,
@@ -643,7 +649,9 @@ class WebhookHandler:
                     )
 
                     if focus_areas is None:
-                        focus_areas = runtime_settings.get("default_review_focus", settings.default_review_focus)
+                        focus_areas = await db_service.get_app_setting(
+                            "default_review_focus", list(settings.default_review_focus)
+                        )
                     if features is None:
                         features = ["comment"]
 
@@ -670,7 +678,9 @@ class WebhookHandler:
                     review_run_id = review_run.id
 
             if focus_areas is None:
-                focus_areas = runtime_settings.get("default_review_focus", settings.default_review_focus)
+                # 走到这里说明 self.database 为空（上方 DB 块整体被跳过），
+                # 此时无法读 app_settings，直接用配置默认值。
+                focus_areas = list(settings.default_review_focus)
             if features is None:
                 features = ["comment"]
 
@@ -913,13 +923,25 @@ class WebhookHandler:
                 success &= review_success
 
                 # 如果review创建成功且配置了bot_username且启用了auto_request_reviewer，则自动请求审查者
+                if self.database:
+                    async with self.database.session() as _session:
+                        _db = DBService(_session)
+                        auto_request = await _db.get_app_setting(
+                            "auto_request_reviewer", settings.auto_request_reviewer
+                        )
+                        bot_username_setting = await _db.get_app_setting(
+                            "bot_username", settings.bot_username
+                        )
+                else:
+                    auto_request = settings.auto_request_reviewer
+                    bot_username_setting = settings.bot_username
                 if (
                     review_success
-                    and runtime_settings.get("auto_request_reviewer", settings.auto_request_reviewer)
-                    and runtime_settings.get("bot_username", settings.bot_username)
+                    and auto_request
+                    and bot_username_setting
                 ):
                     await self.gitea_client.request_reviewer(
-                        owner, repo_name, pr_number, [runtime_settings.get("bot_username", settings.bot_username)]
+                        owner, repo_name, pr_number, [bot_username_setting]
                     )
                     gitea_api_calls += 1
 
@@ -981,8 +1003,8 @@ class WebhookHandler:
                             repository_id=repository_id,
                             analysis_run_id=review_run_id,
                             user_id=actor_user_id,
-                            estimated_input_tokens=meta.get("input_tokens", 0),
-                            estimated_output_tokens=meta.get("output_tokens", 0),
+                            input_tokens=meta.get("input_tokens", 0),
+                            output_tokens=meta.get("output_tokens", 0),
                             cache_creation_input_tokens=meta.get(
                                 "cache_creation_input_tokens", 0
                             ),
@@ -1065,10 +1087,15 @@ class WebhookHandler:
         )
 
     def _is_bot_actor(self, username: Optional[str]) -> bool:
-        """判断给定用户名是否为配置的 bot 用户，防止自触发。"""
+        """判断给定用户名是否为配置的 bot 用户，防止自触发。
+
+        使用启动配置中的 bot_username 做静态判断；运行时热更新的
+        bot_username 通过 /api/v2/app-settings 修改，此处不做 DB 读取
+        （仅用于过滤 bot 自触发，重启后即可同步）。
+        """
         if not username:
             return False
-        bot_username = runtime_settings.get("bot_username", settings.bot_username)
+        bot_username = settings.bot_username
         if not bot_username:
             return False
         return str(username).strip().lower() == str(bot_username).strip().lower()
