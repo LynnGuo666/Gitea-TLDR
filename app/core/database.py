@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator, Optional
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -16,6 +17,19 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import StaticPool
 
 logger = logging.getLogger(__name__)
+
+
+def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:
+    """SQLite 连接建立时开启 PRAGMA foreign_keys=ON。
+
+    让 ondelete=CASCADE/SET NULL 约束实际生效；PRAGMA 是连接级
+    设置，需要为每个底层 DBAPI 连接单独执行。
+    """
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA foreign_keys=ON")
+    finally:
+        cursor.close()
 
 
 class Database:
@@ -51,6 +65,13 @@ class Database:
             connect_args=connect_args,
             poolclass=StaticPool if "sqlite" in self.database_url else None,
         )
+
+        # SQLite 下让 ondelete=CASCADE/SET NULL 真正生效（PRAGMA 是连接级，
+        # 必须挂在底层 sync engine 的 connect 事件上为每条连接执行）。
+        if "sqlite" in self.database_url and self._engine.sync_engine is not None:
+            event.listens_for(self._engine.sync_engine, "connect")(
+                _enable_sqlite_foreign_keys
+            )
 
         self._session_factory = async_sessionmaker(
             bind=self._engine,

@@ -21,7 +21,7 @@
 | `created_at` | `DateTime` | NOT NULL | 创建时间，默认 `func.now()`。 |
 | `updated_at` | `DateTime` | NOT NULL | 更新时间，默认 `func.now()`，更新时 `onupdate=func.now()`。 |
 
-继承 `TimestampMixin` 的表：`actors`、`auth_sessions`、`app_settings`、`namespaces`、`repositories`、`repository_features`、`provider_credentials`、`repository_configs`、`analysis_runs`、`provider_runs`、`webhook_events`。
+继承 `TimestampMixin` 的表：`actors`、`auth_sessions`、`app_settings`、`repositories`、`repository_features`、`provider_credentials`、`repository_configs`、`analysis_runs`、`provider_runs`、`webhook_events`。
 
 ## 总览图
 
@@ -33,9 +33,6 @@ erDiagram
     actors ||--o{ repository_configs : created_by_actor_id
     actors ||--o{ usage_events : actor_id
     actors ||--o{ audit_events : actor_id
-
-    namespaces ||--o{ repositories : namespace_id
-    namespaces ||--o{ provider_credentials : namespace_id
 
     repositories ||--o{ repository_features : repository_id
     repositories ||--o{ repository_configs : repository_id
@@ -53,8 +50,6 @@ erDiagram
     analysis_runs ||--o{ provider_runs : analysis_run_id
     analysis_runs ||--o{ usage_events : analysis_run_id
     analysis_runs ||--o{ webhook_events : analysis_run_id
-
-    provider_runs ||--o{ usage_events : provider_run_id
 ```
 
 ## 领域分层图
@@ -67,7 +62,6 @@ flowchart TD
     end
 
     subgraph Repo[仓库与功能]
-        namespaces[namespaces]
         repositories[repositories]
         repository_features[repository_features]
     end
@@ -91,7 +85,6 @@ flowchart TD
     end
 
     actors --> auth_sessions
-    namespaces --> repositories
     repositories --> repository_features
     repositories --> repository_configs
     provider_credentials --> repository_configs
@@ -100,7 +93,6 @@ flowchart TD
     analysis_runs --> analysis_annotations
     analysis_runs --> provider_runs
     analysis_runs --> usage_events
-    provider_runs --> usage_events
     repositories --> webhook_events
     analysis_runs --> webhook_events
     actors --> audit_events
@@ -184,19 +176,7 @@ sequenceDiagram
 | `description` | `Text` | NULL | 设置说明。 |
 | `updated_by_actor_id` | `Integer` | FK -> `actors.id`, NULL, ON DELETE SET NULL | 最近更新者。 |
 
-### `namespaces`
-
-Gitea owner 命名空间，可代表用户或组织。
-
-| 字段 | 类型 | 键/约束 | 说明 |
-| --- | --- | --- | --- |
-| `id` | `Integer` | PK | 自增主键。 |
-| `provider` | `String(50)` | NOT NULL, UQ 组合, default `gitea` | 代码托管平台。 |
-| `name` | `String(255)` | NOT NULL, UQ 组合 | owner 名称。 |
-| `kind` | `String(50)` | NOT NULL, default `unknown` | owner 类型，例如用户、组织或未知。 |
-| `display_name` | `String(255)` | NULL | 展示名称。 |
-
-唯一约束：`uq_namespaces_provider_name(provider, name)`。
+飞书推送相关 key（`category=notification`）：`feishu_enabled`、`feishu_webhook_url`、`feishu_secret`、`feishu_mode`（`all` / `failure_only`）、`feishu_verification_token`（仅飞书 outgoing 命令校验用）。
 
 ### `repositories`
 
@@ -206,14 +186,13 @@ Gitea owner 命名空间，可代表用户或组织。
 | --- | --- | --- | --- |
 | `id` | `Integer` | PK | 自增主键。 |
 | `provider` | `String(50)` | NOT NULL, UQ 组合, default `gitea` | 代码托管平台。 |
-| `namespace_id` | `Integer` | FK -> `namespaces.id`, IDX, NULL, ON DELETE SET NULL | 所属 namespace。 |
-| `owner` | `String(255)` | NOT NULL, UQ 组合, IDX | 仓库 owner。 |
-| `name` | `String(255)` | NOT NULL, UQ 组合, IDX | 仓库名。 |
-| `full_name` | `String(511)` | NOT NULL, IDX | 完整仓库名，例如 `owner/repo`。 |
+| `owner` | `String(255)` | NOT NULL, UQ 组合 | 仓库 owner。 |
+| `name` | `String(255)` | NOT NULL, UQ 组合 | 仓库名。 |
+| `full_name` | `String(511)` | NOT NULL | 完整仓库名，例如 `owner/repo`。 |
 | `webhook_secret_enc` | `Text` | NULL, ENC | 加密后的仓库 webhook secret。 |
 | `is_active` | `Boolean` | NOT NULL, default `true` | 仓库是否启用。 |
 
-唯一约束：`uq_repositories_name(provider, owner, name)`。关系：`namespace` -> `Namespace`。兼容属性：`repo_name` 映射 `name`，setter 会同步 `full_name`。加密属性：`webhook_secret` 读写 `webhook_secret_enc`。
+唯一约束：`uq_repositories_name(provider, owner, name)`。兼容属性：`repo_name` 映射 `name`，setter 会同步 `full_name`。加密属性：`webhook_secret` 读写 `webhook_secret_enc`。
 
 ### `repository_features`
 
@@ -239,7 +218,6 @@ Provider 凭证表，当前唯一保存 API Key 的业务表。
 | `id` | `Integer` | PK | 自增主键。 |
 | `scope_type` | `String(50)` | NOT NULL | 凭证作用域类型，例如 `system`、`namespace`、`repository`。 |
 | `scope_key` | `String(100)` | NOT NULL, UQ 组合, IDX | 作用域键，例如 `system` 或 `repo:123`。 |
-| `namespace_id` | `Integer` | FK -> `namespaces.id`, NULL, ON DELETE SET NULL | namespace 级凭证关联。 |
 | `name` | `String(150)` | NOT NULL, UQ 组合 | 凭证名称。 |
 | `provider` | `String(50)` | NOT NULL | Provider 类型，例如 `anthropic`、`custom`。 |
 | `api_url` | `String(500)` | NULL | Provider API 地址。 |
@@ -278,21 +256,23 @@ Provider 凭证表，当前唯一保存 API Key 的业务表。
 
 ### `analysis_runs`
 
-统一分析运行记录。PR 审查和 Issue 分析都写入此表，通过 `kind` 区分。
+统一分析运行记录。PR 审查、Issue 分析与 tag 区间审查都写入此表，通过 `kind` 区分。
 
 | 字段 | 类型 | 键/约束 | 说明 |
 | --- | --- | --- | --- |
 | `id` | `Integer` | PK | 自增主键。 |
-| `kind` | `String(50)` | NOT NULL, IDX | 分析类型，例如 `review` 或 `issue`。 |
+| `kind` | `String(50)` | NOT NULL, IDX | 分析类型，例如 `review`、`issue` 或 `tag_review`。 |
 | `repository_id` | `Integer` | FK -> `repositories.id`, NOT NULL, IDX, ON DELETE CASCADE | 所属仓库。 |
-| `external_number` | `Integer` | NOT NULL, IDX | 外部编号，PR number 或 Issue number。 |
+| `external_number` | `Integer` | NOT NULL, IDX | 外部编号，PR number 或 Issue number；`tag_review` 固定为 `0`。 |
 | `external_title` | `String(500)` | NULL | PR/Issue 标题。 |
 | `external_author` | `String(255)` | NULL | PR/Issue 作者。 |
 | `external_state` | `String(50)` | NULL | 外部状态，主要用于 Issue 状态。 |
-| `source_branch` | `String(255)` | NULL | 源分支，主要用于 PR。 |
-| `target_branch` | `String(255)` | NULL | 目标分支，主要用于 PR。 |
-| `head_sha` | `String(64)` | NULL | PR head commit SHA。 |
-| `trigger_type` | `String(50)` | NOT NULL | 触发方式，例如 webhook、manual。 |
+| `source_branch` | `String(255)` | NULL | 源分支，主要用于 PR；`tag_review` 用 `to_tag`。 |
+| `target_branch` | `String(255)` | NULL | 目标分支，主要用于 PR；`tag_review` 用 `from_tag`。 |
+| `head_sha` | `String(64)` | NULL | PR head commit SHA 或 tag 对应 commit SHA。 |
+| `from_tag` | `String(255)` | NULL | tag 区间审查的基准 tag（仅 `kind=tag_review`）。 |
+| `to_tag` | `String(255)` | NULL | tag 区间审查的目标 tag（仅 `kind=tag_review`）。 |
+| `trigger_type` | `String(50)` | NOT NULL | 触发方式，例如 `auto`、`manual`、`feishu`。 |
 | `source_comment_id` | `Integer` | NULL | 触发命令的评论 ID。 |
 | `bot_comment_id` | `Integer` | NULL | 机器人发布的评论 ID。 |
 | `effective_engine` | `String(100)` | NULL | 实际使用的引擎。 |
@@ -305,13 +285,13 @@ Provider 凭证表，当前唯一保存 API Key 的业务表。
 | `summary_markdown` | `Text` | NULL | 分析摘要 Markdown。 |
 | `result_payload_json` | `Text` | NULL, JSON | 结构化结果 payload。 |
 | `error_message` | `Text` | NULL | 错误信息。 |
-| `started_at` | `DateTime` | NOT NULL | 开始时间。 |
-| `completed_at` | `DateTime` | NULL | 完成时间。 |
+| `started_at` | `DateTime` | NOT NULL, IDX | 开始时间。 |
+| `completed_at` | `DateTime` | NULL, IDX | 完成时间。 |
 | `duration_seconds` | `Float` | NULL | 运行耗时秒数。 |
 
-关系：`repository` -> `Repository`。兼容属性：`pr_number` / `issue_number` 映射 `external_number`，`pr_title` / `issue_title` 映射 `external_title`，`pr_author` / `issue_author` 映射 `external_author`，`head_branch` 映射 `source_branch`，`base_branch` 映射 `target_branch`，`engine` 映射 `effective_engine`，`model` / `model_name` 映射 `effective_model`，`analysis_payload` 映射 `result_payload_json`。
+关系：`repository` -> `Repository`。复合索引：`ix_analysis_runs_repository_kind_number(repository_id, kind, external_number, head_sha)`，优化 `get_review_run_by_head` 幂等查询。
 
-JSON helper：`get_analysis_payload()` 解析结果 payload；`get_features()` 读取 `enabled_features`；`get_focus()` 读取 `focus_areas`；`config_source` 读取 payload 中的 `config_source`。
+JSON helper：`get_analysis_payload()` 解析结果 payload；`get_features()` 读取 `enabled_features`；`get_focus()` 读取 `focus_areas`。
 
 ### `analysis_annotations`
 
@@ -368,7 +348,6 @@ Provider 执行明细，用于记录模型调用、会话、token、工具调用
 | --- | --- | --- | --- |
 | `id` | `Integer` | PK | 自增主键。 |
 | `analysis_run_id` | `Integer` | FK -> `analysis_runs.id`, IDX, NULL, ON DELETE SET NULL | 关联分析运行。 |
-| `provider_run_id` | `Integer` | FK -> `provider_runs.id`, IDX, NULL, ON DELETE SET NULL | 关联 Provider 执行。 |
 | `repository_id` | `Integer` | FK -> `repositories.id`, NOT NULL, IDX, ON DELETE CASCADE | 关联仓库。 |
 | `actor_id` | `Integer` | FK -> `actors.id`, IDX, NULL, ON DELETE SET NULL | 关联 actor。 |
 | `event_date` | `Date` | NOT NULL, IDX | 统计日期。 |
@@ -382,9 +361,11 @@ Provider 执行明细，用于记录模型调用、会话、token、工具调用
 | `clone_operations` | `Integer` | NOT NULL, default `0` | 仓库克隆次数。 |
 | `created_at` | `DateTime` | NOT NULL | 事件写入时间。 |
 
+> 历史上的 `provider_run_id` 列（FK -> `provider_runs.id`）已删除——该列从未被实际写入，属于死列。
+
 ### `webhook_events`
 
-Webhook 事件处理记录，用于追踪 Gitea webhook 的处理状态和重放来源。
+Webhook 事件处理记录，用于追踪 Gitea webhook 的处理状态和重放来源。继承 `TimestampMixin`，`created_at` 上有索引 `ix_webhook_events_created_at` 以支持恢复未完成事件的范围扫描。
 
 | 字段 | 类型 | 键/约束 | 说明 |
 | --- | --- | --- | --- |
@@ -392,7 +373,7 @@ Webhook 事件处理记录，用于追踪 Gitea webhook 的处理状态和重放
 | `request_id` | `String(100)` | NOT NULL, UQ, IDX | 请求 ID，用于追踪与去重。 |
 | `repository_id` | `Integer` | FK -> `repositories.id`, IDX, NULL, ON DELETE CASCADE | 关联仓库。 |
 | `analysis_run_id` | `Integer` | FK -> `analysis_runs.id`, NULL, ON DELETE SET NULL | 关联分析运行。 |
-| `event_type` | `String(50)` | NOT NULL, IDX | Webhook 事件类型。 |
+| `event_type` | `String(50)` | NOT NULL, IDX | Webhook 事件类型，例如 `pull_request` / `issues` / `issue_comment` / `create`。 |
 | `payload_json` | `Text` | NOT NULL, JSON | 原始 payload JSON 字符串。 |
 | `status` | `String(50)` | NOT NULL, IDX | 处理状态。 |
 | `error_message` | `Text` | NULL | 错误信息。 |
@@ -401,7 +382,7 @@ Webhook 事件处理记录，用于追踪 Gitea webhook 的处理状态和重放
 
 ### `audit_events`
 
-所有写操作的审计事件。该表没有继承 `TimestampMixin`，只有单独的 `created_at`。注意：`repository_id` 和 `namespace_id` 是普通整数引用，不是严格外键，便于审计记录在资源删除后仍保留。
+所有写操作的审计事件。该表没有继承 `TimestampMixin`，只有单独的 `created_at`（有索引 `ix_audit_events_created_at`）。注意：`repository_id` 是普通整数引用，不是严格外键，便于审计记录在资源删除后仍保留。
 
 | 字段 | 类型 | 键/约束 | 说明 |
 | --- | --- | --- | --- |
@@ -412,37 +393,36 @@ Webhook 事件处理记录，用于追踪 Gitea webhook 的处理状态和重放
 | `resource_type` | `String(100)` | NOT NULL, IDX | 资源类型。 |
 | `resource_id` | `Integer` | NULL | 资源 ID。 |
 | `repository_id` | `Integer` | IDX, NULL | 相关仓库 ID，非严格 FK。 |
-| `namespace_id` | `Integer` | NULL | 相关 namespace ID，非严格 FK。 |
 | `request_id` | `String(100)` | NULL | 请求 ID。 |
 | `source` | `String(50)` | NOT NULL | 来源，例如 api、webhook、migration。 |
 | `ip_address` | `String(100)` | NULL | 客户端 IP。 |
 | `user_agent` | `Text` | NULL | User-Agent。 |
 | `before_json` | `Text` | NULL, JSON | 变更前快照。 |
 | `after_json` | `Text` | NULL, JSON | 变更后快照。 |
-| `changed_fields_json` | `Text` | NULL, JSON | 变更字段列表。 |
-| `sensitive_fields_json` | `Text` | NULL, JSON | 被脱敏的敏感字段列表。 |
 | `status` | `String(50)` | NOT NULL | 审计动作结果，例如 success、failure。 |
 | `error_message` | `Text` | NULL | 失败原因。 |
-| `created_at` | `DateTime` | NOT NULL | 审计事件创建时间。 |
+| `created_at` | `DateTime` | NOT NULL, IDX | 审计事件创建时间。 |
+
+> 历史上的 `namespace_id` / `changed_fields_json` / `sensitive_fields_json` 列已删除——分别随 Namespace 表清理与审计死字段清理移除。
 
 ## 删除行为与数据保留
+
+> SQLite 下 `Database.init()` 已通过 `PRAGMA foreign_keys=ON` 启用外键约束，以下 `on delete` 行为实际生效。
 
 | 来源表 | 目标表 | on delete | 影响 |
 | --- | --- | --- | --- |
 | `actors` | `auth_sessions` / `usage_events` / `audit_events` 等 | SET NULL | 删除 actor 后保留业务记录。 |
-| `namespaces` | `repositories` / `provider_credentials` | SET NULL | 删除 namespace 后保留仓库和凭证。 |
 | `repositories` | `repository_features` / `repository_configs` / `analysis_runs` / `usage_events` / `webhook_events` | CASCADE | 删除仓库会删除大量运行与观测数据；实际业务更适合优先软删除 `is_active=false`。 |
 | `repositories` | `provider_runs` | SET NULL | Provider 执行记录保留，仓库引用置空。 |
 | `provider_credentials` | `repository_configs` / `analysis_runs` | SET NULL | 删除凭证后配置和历史运行保留，但凭证引用置空。 |
 | `analysis_runs` | `analysis_annotations` | CASCADE | 删除运行会删除对应注释。 |
 | `analysis_runs` | `provider_runs` / `usage_events` / `webhook_events` | SET NULL | 删除运行后保留执行、用量和 webhook 记录。 |
-| `provider_runs` | `usage_events` | SET NULL | 删除执行记录后保留用量事件。 |
 
 ## 当前设计注意点
 
-1. `analysis_runs` 使用 `kind` 统一 PR 审查和 Issue 分析，避免维护两套生命周期表。
+1. `analysis_runs` 使用 `kind` 统一 PR 审查、Issue 分析与 tag 区间审查（`review` / `issue` / `tag_review`），避免维护多套生命周期表；`tag_review` 的 `external_number` 固定为 `0`，区间信息存于 `from_tag` / `to_tag`。
 2. API Key、OAuth token、webhook secret 都通过 `*_enc` 字段加密保存，并通过属性读写明文。
-3. 配置模板表已从运行时模型中移除；当前运行时只读取 `repository_configs`。
+3. 配置模板表与 Namespace 表已从运行时模型中移除；当前运行时只读取 `repository_configs`。
 4. 多个 JSON 字段使用 `Text` 保存，便于 SQLite 兼容，但复杂查询和数据校验依赖应用层。
 5. 审计表刻意弱化部分资源外键，以保留删除后的历史上下文。
-6. SQLite 默认部署时，需要额外关注外键 PRAGMA、并发写锁、大 JSON 字段增长和历史数据保留策略。
+6. SQLite 默认部署时，`Database.init()` 已通过 `PRAGMA foreign_keys=ON` 启用外键约束，但仍需关注并发写锁、大 JSON 字段增长和历史数据保留策略。

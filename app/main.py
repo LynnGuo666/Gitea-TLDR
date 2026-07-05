@@ -24,10 +24,10 @@ from app.core import (
     get_version_info,
 )
 from app.core.admin_auth import ensure_initial_admin
-from app.core import runtime_settings
 from app.core.context import AppContext
 from app.core.database import Database
 from app.gitea import GiteaClient, RepoManager, RepoRegistry, AuthManager
+from app.models import WEBHOOK_STATUS_RETRYING, WEBHOOK_STATUS_SUCCESS
 from app.review import ReviewEngine, WebhookHandler
 
 # 配置日志
@@ -98,7 +98,7 @@ async def _recover_pending_webhooks(context: AppContext) -> None:
                 db_service = DBService(session)
                 await db_service.update_webhook_event(
                     event_id=log.id,
-                    status="retrying",
+                    status=WEBHOOK_STATUS_RETRYING,
                 )
         except Exception:
             pass
@@ -123,7 +123,7 @@ async def _recover_pending_webhooks(context: AppContext) -> None:
                     db_service = DBService(session)
                     await db_service.update_webhook_event(
                         event_id=log.id,
-                        status="success",
+                        status=WEBHOOK_STATUS_SUCCESS,
                         processing_time_ms=_elapsed_ms,
                     )
             except Exception:
@@ -241,14 +241,6 @@ def create_app() -> FastAPI:
                     logger.info(f"已从JSON迁移 {migrated} 条仓库记录到数据库")
             except Exception as e:
                 logger.warning(f"JSON数据迁移失败: {e}")
-
-            # 加载运行时配置缓存
-            try:
-                async with database.session() as session:
-                    await runtime_settings.seed(session)
-                logger.info("运行时配置缓存已加载")
-            except Exception as e:
-                logger.warning(f"运行时配置缓存加载失败: {e}")
 
             # 初始化管理员用户
             if settings.admin_enabled and settings.initial_admin_username:

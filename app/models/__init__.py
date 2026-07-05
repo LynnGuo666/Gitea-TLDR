@@ -12,7 +12,6 @@ from .schema import (
     AppSetting,
     AuditEvent,
     AuthSession,
-    Namespace,
     ProviderCredential,
     ProviderRun,
     Repository,
@@ -20,6 +19,12 @@ from .schema import (
     RepositoryFeature,
     UsageEvent,
     WebhookEvent,
+    WEBHOOK_PENDING_STATUSES,
+    WEBHOOK_STATUS_ERROR,
+    WEBHOOK_STATUS_PROCESSING,
+    WEBHOOK_STATUS_QUEUED,
+    WEBHOOK_STATUS_RETRYING,
+    WEBHOOK_STATUS_SUCCESS,
 )
 
 # 兼容还未完全清理的权限/依赖注入类型名；表和语义已经是 Actor。
@@ -34,7 +39,6 @@ __all__ = [
     "User",
     "AuthSession",
     "AppSetting",
-    "Namespace",
     "Repository",
     "RepositoryFeature",
     "ProviderCredential",
@@ -46,4 +50,10 @@ __all__ = [
     "WebhookEvent",
     "AuditEvent",
     "DEFAULT_ISSUE_FOCUS",
+    "WEBHOOK_PENDING_STATUSES",
+    "WEBHOOK_STATUS_QUEUED",
+    "WEBHOOK_STATUS_PROCESSING",
+    "WEBHOOK_STATUS_RETRYING",
+    "WEBHOOK_STATUS_SUCCESS",
+    "WEBHOOK_STATUS_ERROR",
 ]

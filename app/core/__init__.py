@@ -3,7 +3,6 @@ Core utilities and configuration for the backend application.
 """
 
 from .config import settings  # re-export for convenience
-from . import runtime_settings
 from .version import (
     __version__,
     __release_date__,
@@ -16,7 +15,6 @@ from .version import (
 
 __all__ = [
     "settings",
-    "runtime_settings",
     "__version__",
     "__release_date__",
     "get_version_banner",

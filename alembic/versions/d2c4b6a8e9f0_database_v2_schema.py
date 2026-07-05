@@ -103,6 +103,57 @@ def _drop_indexes(table_name: str) -> None:
 
 
 def _create_v2_tables() -> None:
+    # 历史模型（ConfigTemplate、Namespace）已被后续迁移移除，无法再从
+    # app.models.schema 导入。这里用内联的 Table 定义保证该迁移在全新库
+    # 上仍可执行 —— 这些表会在 d2c4b6a8e9f0 本身或后续迁移中被删除/重建，
+    # 因此仅需要短暂存在以承接旧数据迁移。
+    from sqlalchemy import (
+        Column,
+        DateTime,
+        Integer,
+        String,
+        Table,
+        Text,
+        UniqueConstraint,
+    )
+
+    bind = op.get_bind()
+    metadata = sa.MetaData()
+
+    namespace_table = Table(
+        "namespaces",
+        metadata,
+        Column("id", Integer, primary_key=True, autoincrement=True),
+        Column("provider", String(50), nullable=False),
+        Column("name", String(255), nullable=False),
+        Column("kind", String(50), nullable=False),
+        Column("display_name", String(255), nullable=True),
+        Column("created_at", DateTime, nullable=True),
+        Column("updated_at", DateTime, nullable=True),
+        UniqueConstraint("provider", "name", name="uq_namespaces_provider_name"),
+    )
+
+    config_template_table = Table(
+        "config_templates",
+        metadata,
+        Column("id", Integer, primary_key=True, autoincrement=True),
+        Column("name", String(150), nullable=False),
+        Column("engine", String(100), nullable=False),
+        Column("model", String(200), nullable=True),
+        Column("api_url", String(500), nullable=True),
+        Column("api_key_enc", Text, nullable=True),
+        Column("wire_api", String(50), nullable=True),
+        Column("temperature", sa.Float, nullable=True),
+        Column("max_tokens", Integer, nullable=True),
+        Column("custom_prompt", Text, nullable=True),
+        Column("focus_json", Text, nullable=True),
+        Column("features_json", Text, nullable=True),
+        Column("is_active", sa.Boolean, nullable=False, default=sa.true()),
+        Column("created_at", DateTime, nullable=True),
+        Column("updated_at", DateTime, nullable=True),
+        UniqueConstraint("name", name="uq_config_templates_name"),
+    )
+
     from app.models.schema import (
         Actor,
         AnalysisAnnotation,
@@ -110,8 +161,6 @@ def _create_v2_tables() -> None:
         AppSetting,
         AuditEvent,
         AuthSession,
-        ConfigTemplate,
-        Namespace,
         ProviderCredential,
         ProviderRun,
         Repository,
@@ -121,16 +170,17 @@ def _create_v2_tables() -> None:
         WebhookEvent,
     )
 
-    bind = op.get_bind()
+    # 先建 namespaces / config_templates（旧表，仅用于承接历史数据），
+    # 再建当前 schema 模型表。checkfirst 保证已存在的表不会被重建。
+    namespace_table.create(bind, checkfirst=True)
+    config_template_table.create(bind, checkfirst=True)
     for model in [
         Actor,
         AuthSession,
         AppSetting,
-        Namespace,
         Repository,
         RepositoryFeature,
         ProviderCredential,
-        ConfigTemplate,
         RepositoryConfig,
         AnalysisRun,
         AnalysisAnnotation,
@@ -909,14 +959,14 @@ def _audit_migration(system_actor_id: int, before: dict[str, int]) -> None:
             """
             INSERT INTO audit_events (
                 actor_id, actor_type, action, resource_type, resource_id,
-                repository_id, namespace_id, request_id, source, ip_address,
-                user_agent, before_json, after_json, changed_fields_json,
-                sensitive_fields_json, status, error_message, created_at
+                repository_id, request_id, source, ip_address,
+                user_agent, before_json, after_json,
+                status, error_message, created_at
             )
             VALUES (
                 :actor_id, 'migration', 'run_migration', 'migration', NULL,
-                NULL, NULL, :request_id, 'migration', NULL, NULL,
-                :before_json, :after_json, :changed, :sensitive,
+                NULL, :request_id, 'migration', NULL, NULL,
+                :before_json, :after_json,
                 'success', NULL, :created_at
             )
             """
@@ -926,8 +976,6 @@ def _audit_migration(system_actor_id: int, before: dict[str, int]) -> None:
             "request_id": revision,
             "before_json": _json(before),
             "after_json": _json(after),
-            "changed": _json(list(after.keys())),
-            "sensitive": _json(["api_key_enc", "access_token_enc", "refresh_token_enc"]),
             "created_at": _now(),
         },
     )

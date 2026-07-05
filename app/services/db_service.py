@@ -29,6 +29,8 @@ from app.models import (
     RepositoryFeature,
     UsageEvent,
     WebhookEvent,
+    WEBHOOK_PENDING_STATUSES,
+    WEBHOOK_STATUS_QUEUED,
 )
 
 logger = logging.getLogger(__name__)
@@ -148,6 +150,17 @@ class DBService:
         await self.session.flush()
         return True
 
+    async def get_app_setting(self, key: str, fallback: Any = None) -> Any:
+        """从 DB 读取一个 app setting 值，不存在时返回 fallback。"""
+        result = await self.session.execute(select(AppSetting).where(AppSetting.key == key))
+        row = result.scalar_one_or_none()
+        if not row:
+            return fallback
+        try:
+            return json.loads(row.value_json)
+        except Exception:
+            return fallback
+
     # ==================== Repository ====================
 
     async def get_or_create_repository(self, owner: str, repo_name: str) -> Repository:
@@ -187,11 +200,17 @@ class DBService:
         result = await self.session.execute(select(Repository).where(Repository.id == repo_id))
         return result.scalar_one_or_none()
 
-    async def list_repositories(self, is_active: Optional[bool] = None) -> list[Repository]:
+    async def list_repositories(
+        self,
+        is_active: Optional[bool] = None,
+        *,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> list[Repository]:
         stmt = select(Repository)
         if is_active is not None:
             stmt = stmt.where(Repository.is_active == is_active)
-        stmt = stmt.order_by(Repository.updated_at.desc())
+        stmt = stmt.order_by(Repository.updated_at.desc()).limit(limit).offset(offset)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
@@ -242,31 +261,16 @@ class DBService:
         )
         return result.scalar_one_or_none()
 
-    async def update_issue_settings(
-        self,
-        owner: str,
-        repo_name: str,
-        *,
-        issue_enabled: Optional[bool] = None,
-        issue_auto_on_open: Optional[bool] = None,
-        issue_manual_command_enabled: Optional[bool] = None,
-    ) -> Repository:
-        repo = await self.get_or_create_repository(owner, repo_name)
-        feature = await self.ensure_repository_feature(repo.id, "issue")
-        if issue_enabled is not None:
-            feature.enabled = issue_enabled
-        if issue_auto_on_open is not None:
-            feature.auto_on_open = issue_auto_on_open
-        if issue_manual_command_enabled is not None:
-            feature.manual_command_enabled = issue_manual_command_enabled
-        await self.session.flush()
-        return repo
-
     # ==================== Credentials / Templates / Configs ====================
 
-    async def list_provider_credentials(self) -> list[ProviderCredential]:
+    async def list_provider_credentials(
+        self, *, limit: int = 200, offset: int = 0
+    ) -> list[ProviderCredential]:
         result = await self.session.execute(
-            select(ProviderCredential).order_by(ProviderCredential.updated_at.desc())
+            select(ProviderCredential)
+            .order_by(ProviderCredential.updated_at.desc())
+            .limit(limit)
+            .offset(offset)
         )
         return list(result.scalars().all())
 
@@ -389,6 +393,8 @@ class DBService:
         source_branch: Optional[str] = None,
         target_branch: Optional[str] = None,
         head_sha: Optional[str] = None,
+        from_tag: Optional[str] = None,
+        to_tag: Optional[str] = None,
         source_comment_id: Optional[int] = None,
         bot_comment_id: Optional[int] = None,
         effective_engine: Optional[str] = None,
@@ -407,6 +413,8 @@ class DBService:
             source_branch=source_branch,
             target_branch=target_branch,
             head_sha=head_sha,
+            from_tag=from_tag,
+            to_tag=to_tag,
             trigger_type=trigger_type,
             source_comment_id=source_comment_id,
             bot_comment_id=bot_comment_id,
@@ -635,17 +643,16 @@ class DBService:
     async def record_usage_event(self, repository_id: int, **kwargs):
         event = UsageEvent(
             analysis_run_id=kwargs.get("analysis_run_id"),
-            provider_run_id=kwargs.get("provider_run_id"),
             repository_id=repository_id,
             actor_id=kwargs.get("actor_id") or kwargs.get("user_id"),
             event_date=date.today(),
             provider=kwargs.get("provider"),
-            input_tokens=kwargs.get("input_tokens") or kwargs.get("estimated_input_tokens") or 0,
-            output_tokens=kwargs.get("output_tokens") or kwargs.get("estimated_output_tokens") or 0,
+            input_tokens=kwargs.get("input_tokens", 0),
+            output_tokens=kwargs.get("output_tokens", 0),
             cache_creation_input_tokens=kwargs.get("cache_creation_input_tokens", 0),
             cache_read_input_tokens=kwargs.get("cache_read_input_tokens", 0),
             gitea_api_calls=kwargs.get("gitea_api_calls", 0),
-            provider_api_calls=kwargs.get("provider_api_calls") or kwargs.get("claude_api_calls") or 0,
+            provider_api_calls=kwargs.get("provider_api_calls", 0),
             clone_operations=kwargs.get("clone_operations", 0),
             created_at=_now(),
         )
@@ -653,7 +660,16 @@ class DBService:
         await self.session.flush()
         return event
 
-    async def list_usage_events(self, repository_id: Optional[int] = None, actor_id: Optional[int] = None, start_date: Optional[date] = None, end_date: Optional[date] = None):
+    async def list_usage_events(
+        self,
+        repository_id: Optional[int] = None,
+        actor_id: Optional[int] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        *,
+        limit: int = 200,
+        offset: int = 0,
+    ):
         stmt = select(UsageEvent)
         if repository_id:
             stmt = stmt.where(UsageEvent.repository_id == repository_id)
@@ -663,7 +679,9 @@ class DBService:
             stmt = stmt.where(UsageEvent.event_date >= start_date)
         if end_date:
             stmt = stmt.where(UsageEvent.event_date <= end_date)
-        result = await self.session.execute(stmt.order_by(UsageEvent.event_date.desc()))
+        result = await self.session.execute(
+            stmt.order_by(UsageEvent.event_date.desc()).limit(limit).offset(offset)
+        )
         return list(result.scalars().all())
 
     async def get_usage_summary(self, repository_id: Optional[int] = None, actor_id: Optional[int] = None, user_id: Optional[int] = None, start_date: Optional[date] = None, end_date: Optional[date] = None):
@@ -694,24 +712,14 @@ class DBService:
             "total_cache_read_tokens": row.total_cache_read_tokens or 0,
             "total_gitea_calls": row.total_gitea_calls or 0,
             "total_provider_calls": row.total_provider_calls or 0,
-            "total_claude_calls": row.total_provider_calls or 0,
             "total_clone_operations": row.total_clone_operations or 0,
-            "total_clones": row.total_clone_operations or 0,
             "record_count": row.record_count or 0,
             "run_count": row.record_count or 0,
         }
 
-    async def get_usage_stats(self, **kwargs):
-        return await self.list_usage_events(
-            repository_id=kwargs.get("repository_id"),
-            actor_id=kwargs.get("user_id"),
-            start_date=kwargs.get("start_date"),
-            end_date=kwargs.get("end_date"),
-        )
-
     # ==================== Webhooks ====================
 
-    async def create_webhook_event(self, request_id: str, repository_id: Optional[int], event_type: str, payload: str, status: str = "processing"):
+    async def create_webhook_event(self, request_id: str, repository_id: Optional[int], event_type: str, payload: str, status: str = WEBHOOK_STATUS_QUEUED):
         event = WebhookEvent(
             request_id=request_id,
             repository_id=repository_id or None,
@@ -740,7 +748,7 @@ class DBService:
     async def list_pending_webhook_events(self, min_age_seconds: int = 60, max_age_hours: int = 6):
         now = _now()
         stmt = select(WebhookEvent).where(
-            WebhookEvent.status == "processing",
+            WebhookEvent.status.in_(WEBHOOK_PENDING_STATUSES),
             WebhookEvent.created_at >= now - timedelta(hours=max_age_hours),
             WebhookEvent.created_at <= now - timedelta(seconds=min_age_seconds),
         )
@@ -770,7 +778,7 @@ class DBService:
 
     # ==================== Audit ====================
 
-    async def record_audit(self, *, actor_id: Optional[int], actor_type: str, action: str, resource_type: str, resource_id: Optional[int] = None, repository_id: Optional[int] = None, namespace_id: Optional[int] = None, request_id: Optional[str] = None, source: str = "api", ip_address: Optional[str] = None, user_agent: Optional[str] = None, status: str = "success", before: Any = None, after: Any = None, changed_fields: Optional[list[str]] = None, sensitive_fields: Optional[list[str]] = None, error_message: Optional[str] = None):
+    async def record_audit(self, *, actor_id: Optional[int], actor_type: str, action: str, resource_type: str, resource_id: Optional[int] = None, repository_id: Optional[int] = None, request_id: Optional[str] = None, source: str = "api", ip_address: Optional[str] = None, user_agent: Optional[str] = None, status: str = "success", before: Any = None, after: Any = None, error_message: Optional[str] = None):
         event = AuditEvent(
             actor_id=actor_id,
             actor_type=actor_type,
@@ -778,15 +786,12 @@ class DBService:
             resource_type=resource_type,
             resource_id=resource_id,
             repository_id=repository_id,
-            namespace_id=namespace_id,
             request_id=request_id,
             source=source,
             ip_address=ip_address,
             user_agent=user_agent,
             before_json=_json(before) if before is not None else None,
             after_json=_json(after) if after is not None else None,
-            changed_fields_json=_json(changed_fields or []),
-            sensitive_fields_json=_json(sensitive_fields or []),
             status=status,
             error_message=error_message,
             created_at=_now(),

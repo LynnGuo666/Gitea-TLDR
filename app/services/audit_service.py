@@ -125,7 +125,6 @@ class AuditService:
                 resource_type=resource_type,
                 resource_id=resource_id,
                 repository_id=context.get("repository_id"),
-                namespace_id=context.get("namespace_id"),
                 request_id=context.get("request_id"),
                 source=context.get("source", "api"),
                 ip_address=context.get("ip_address"),
@@ -133,7 +132,6 @@ class AuditService:
                 status=status,
                 before=redact_payload(before),
                 after=redact_payload(after),
-                sensitive_fields=list(SENSITIVE_FIELD_MASKS),
                 error_message=error_message,
             )
         except Exception:

@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.core import settings, runtime_settings
+from app.core import settings
 from ..base import InlineComment, ReviewProvider, ReviewResult
 from ..shared_prompts import build_cli_review_prompt
 from ..parsing import (
@@ -139,15 +139,15 @@ class ClaudeCodeProvider(ReviewProvider):
     async def _prepare_usage_proxy(
         self, api_url: str
     ) -> Tuple[Optional[UsageCapturingProxy], str]:
-        """按配置决定是否启用 usage 代理，并返回有效 base URL。"""
+        """按配置决定是否启用 usage 代理，并返回有效 base URL。
+
+        legacy Claude Code provider 直接读取启动配置（settings），
+        不再走运行时缓存层；如需运行时切换，重启即可。
+        """
         effective_base_url = api_url.rstrip("/")
 
-        proxy_enabled = runtime_settings.get(
-            "claude_usage_proxy_enabled", settings.claude_usage_proxy_enabled
-        )
-        proxy_debug = runtime_settings.get(
-            "claude_usage_proxy_debug", settings.claude_usage_proxy_debug
-        )
+        proxy_enabled = settings.claude_usage_proxy_enabled
+        proxy_debug = settings.claude_usage_proxy_debug
 
         if not proxy_enabled:
             if self.debug or proxy_debug:

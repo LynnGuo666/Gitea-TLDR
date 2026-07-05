@@ -20,11 +20,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # 仅在 repository_configs 确实还带这两个列时才尝试删除。
+    # 当本迁移在全新库上运行（d2c4b6a8e9f0 已用当前 schema 建表，
+    # 这两列本就不存在）时，batch_alter_table 的 drop_column 会抛
+    # KeyError，因此先做存在性判断。
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_cols = {col["name"] for col in inspector.get_columns("repository_configs")}
     with op.batch_alter_table("repository_configs") as batch_op:
-        batch_op.drop_column("source_template_id")
-        batch_op.drop_column("template_version_copied_at")
+        if "source_template_id" in existing_cols:
+            batch_op.drop_column("source_template_id")
+        if "template_version_copied_at" in existing_cols:
+            batch_op.drop_column("template_version_copied_at")
 
-    op.drop_table("config_templates")
+    if inspector.has_table("config_templates"):
+        op.drop_table("config_templates")
 
 
 def downgrade() -> None:
