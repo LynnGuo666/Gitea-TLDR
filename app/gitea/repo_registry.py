@@ -270,7 +270,7 @@ class RepoRegistry:
             repos = await db_service.list_repositories()
             result = {}
             for repo in repos:
-                key = f"{repo.owner}/{repo.repo_name}"
+                key = f"{repo.owner}/{repo.name}"
                 result[key] = {
                     "webhook_secret": repo.webhook_secret or "",
                     "is_active": str(repo.is_active),

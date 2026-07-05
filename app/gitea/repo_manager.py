@@ -274,6 +274,109 @@ class RepoManager:
             logger.error(f"检出分支异常: {e}")
             return False
 
+    async def clone_for_compare(
+        self,
+        clone_url: str,
+        owner: str,
+        repo: str,
+        workspace_id: int,
+        base_tag: str,
+        head_tag: str,
+        auth_token: Optional[str] = None,
+    ) -> Optional[Path]:
+        """
+        为 tag 区间审查克隆仓库：浅克隆 head_tag，再 fetch base_tag，
+        使本地同时持有两个 tag ref，并检出 head_tag（审查后的状态）。
+
+        Args:
+            clone_url: 克隆 URL（不带认证）
+            owner: 仓库所有者
+            repo: 仓库名称
+            workspace_id: 工作区编号（用 AnalysisRun.id 即可）
+            base_tag: 基准 tag
+            head_tag: 目标 tag（检出此 tag 作为工作区状态）
+            auth_token: 可选访问令牌
+
+        Returns:
+            工作区路径，失败返回 None
+        """
+        workspace_kind = "tag_compare"
+        repo_path = self.get_workspace_path(owner, repo, workspace_kind, workspace_id)
+        lock = await self._acquire_workspace_lock(
+            owner, repo, workspace_kind, workspace_id
+        )
+        askpass_script: Optional[Path] = None
+        try:
+            async with lock:
+                if repo_path.exists():
+                    logger.info(f"删除已存在的 tag 区间工作区: {repo_path}")
+                    shutil.rmtree(repo_path)
+
+                logger.info(
+                    "克隆 tag 区间工作区: %s/%s head=%s base=%s",
+                    owner,
+                    repo,
+                    head_tag,
+                    base_tag,
+                )
+                env, askpass_script = self._build_git_env(auth_token)
+                # 1. 浅克隆 head tag
+                process = await asyncio.create_subprocess_exec(
+                    "git",
+                    "clone",
+                    "--depth=1",
+                    "--branch",
+                    head_tag,
+                    clone_url,
+                    str(repo_path),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                )
+                _, stderr = await process.communicate()
+                if process.returncode != 0:
+                    stderr_text = stderr.decode(errors="ignore")
+                    logger.error(
+                        "克隆 tag 区间工作区失败: %s",
+                        self._classify_clone_error(stderr_text),
+                    )
+                    return None
+
+                # 2. fetch base tag，使本地同时持有两个 tag ref
+                fetch_proc = await asyncio.create_subprocess_exec(
+                    "git",
+                    "fetch",
+                    "--depth=1",
+                    "origin",
+                    f"refs/tags/{base_tag}:refs/tags/{base_tag}",
+                    cwd=str(repo_path),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                )
+                _, fetch_stderr = await fetch_proc.communicate()
+                if fetch_proc.returncode != 0:
+                    logger.warning(
+                        "fetch base tag %s 失败（区间 diff 仍可由 API 生成）: %s",
+                        base_tag,
+                        fetch_stderr.decode(errors="ignore"),
+                    )
+
+                logger.info("成功克隆 tag 区间工作区到: %s", repo_path)
+                return repo_path
+        except Exception as e:
+            logger.error(f"克隆 tag 区间工作区异常: {e}")
+            return None
+        finally:
+            if askpass_script and askpass_script.exists():
+                try:
+                    askpass_script.unlink()
+                except OSError:
+                    pass
+            await self._release_workspace_lock(
+                owner, repo, workspace_kind, workspace_id
+            )
+
     def cleanup_repository(self, owner: str, repo: str, pr_number: int) -> bool:
         """
         清理仓库目录
@@ -298,6 +401,14 @@ class RepoManager:
         except Exception as e:
             logger.error(f"清理仓库目录失败: {e}")
             return False
+
+    def cleanup_compare_workspace(
+        self, owner: str, repo: str, workspace_id: int
+    ) -> bool:
+        """清理 tag 区间审查工作区。"""
+        return self.cleanup_workspace(
+            owner, repo, "tag_compare", workspace_id
+        )
 
     def cleanup_workspace(
         self,

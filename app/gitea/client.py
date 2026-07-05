@@ -581,6 +581,94 @@ class GiteaClient:
             logger.error(f"获取提交列表失败: {e}")
             return None
 
+    async def compare_tags(
+        self, owner: str, repo: str, base: str, head: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        比较两个 tag/commit 之间的差异，返回 commits 与 files（含 patch）。
+
+        Args:
+            owner: 仓库所有者
+            repo: 仓库名称
+            base: 基准 tag 或 commit sha
+            head: 目标 tag 或 commit sha
+
+        Returns:
+            {commits: [...], files: [{filename, patch, ...}]}，失败返回 None
+        """
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/compare/{base}...{head}"
+        try:
+            self._log_debug("GET", url)
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.get(url, headers=self.headers)
+                self._log_response(response)
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            logger.error(f"比较 tag 区间失败: {e}")
+            return None
+
+    async def get_tag_sha(
+        self, owner: str, repo: str, tag: str
+    ) -> Optional[str]:
+        """
+        获取指定 tag 对应的 commit sha（用于 head_sha 落库与幂等）。
+
+        Args:
+            owner: 仓库所有者
+            repo: 仓库名称
+            tag: tag 名称
+
+        Returns:
+            commit sha 字符串，失败返回 None
+        """
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/git/refs/tags/{tag}"
+        try:
+            self._log_debug("GET", url)
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.get(url, headers=self.headers)
+                self._log_response(response)
+                response.raise_for_status()
+                data = response.json()
+            # Gitea 返回 {object: {sha, type}} 或带分页的列表
+            if isinstance(data, dict):
+                obj = data.get("object") or {}
+                sha = obj.get("sha")
+                if isinstance(sha, str):
+                    return sha
+            return None
+        except Exception as e:
+            logger.error(f"获取 tag sha 失败: {e}")
+            return None
+
+    async def list_tags(
+        self, owner: str, repo: str, limit: int = 50
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        列出仓库的 tag，供前端下拉选择。
+
+        Args:
+            owner: 仓库所有者
+            repo: 仓库名称
+            limit: 返回数量上限
+
+        Returns:
+            tag 列表，每项含 name 与 commit sha，失败返回 None
+        """
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/tags"
+        params: Dict[str, str | int] = {"limit": limit}
+        try:
+            self._log_debug("GET", url)
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.get(url, headers=self.headers, params=params)
+                self._log_response(response)
+                response.raise_for_status()
+                data = response.json()
+            return data if isinstance(data, list) else []
+        except Exception as e:
+            logger.error(f"获取 tag 列表失败: {e}")
+            return None
+
     async def list_user_repos(self) -> Optional[List[Dict[str, Any]]]:
         """列出当前token可访问的仓库（分页拉取全部）"""
 

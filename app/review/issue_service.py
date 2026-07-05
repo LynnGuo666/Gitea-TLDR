@@ -23,6 +23,7 @@ from app.core.database import Database
 from app.models import DEFAULT_ISSUE_FOCUS
 from app.services.db_service import DBService
 from app.services.audit_service import AuditService
+from app.services.notifier import FeishuNotifier
 from app.gitea.client import GiteaClient
 from app.review.providers.base import IssueResult
 from app.review.providers.forge.provider import (
@@ -383,6 +384,22 @@ class IssueAnalysisService:
                         provider_api_calls=1,
                         clone_operations=clone_operations,
                     )
+
+            # 飞书推送（非致命旁路）
+            if self.database:
+                try:
+                    issue_url = issue_data.get("html_url")
+                    async with self.database.session() as session:
+                        _db = DBService(session)
+                        await FeishuNotifier(_db).send(
+                            title=f"{owner}/{repo_name}#{issue_number}",
+                            summary=analysis_payload.get("summary_markdown", ""),
+                            severity=analysis_payload.get("overall_severity"),
+                            link=issue_url,
+                            is_failure=not success,
+                        )
+                except Exception as exc:
+                    logger.warning("Issue 飞书推送失败（非致命）: %s", exc)
 
             logger.info("Issue 分析完成: %s/%s#%s", owner, repo_name, issue_number)
             return success

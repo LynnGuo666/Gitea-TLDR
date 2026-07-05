@@ -4,6 +4,38 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [2.3.0] - 2026-07-06
+
+### 新增 (Added)
+
+- **Tag 区间审查**：对两个 tag 之间的代码变更做 release 间 diff 审查，支持四种触发方式——前端仓库页「Tag 区间审查」Tab 手动触发、Gitea tag 创建 webhook 自动触发（自动取「上一个 tag → 新 tag」）、PR/Issue 评论 `/{bot} /tag-review v1.0.0 v1.1.0` 命令触发、飞书 outgoing webhook 命令 `审查 owner/repo from_tag to_tag` 触发
+- **GiteaClient 扩展**：新增 `compare_tags` / `get_tag_sha` / `list_tags` 三个 API 方法；`RepoManager.clone_for_compare` 克隆 head tag 并 fetch base tag，检出 head 让 forge 工具读取「审查后的状态」
+- **飞书群机器人推送通道**：审查完成后把摘要 + 严重级别 + 链接推送到飞书群，支持加签（secret），`feishu_mode` 可选 `all`（总推）/ `failure_only`（仅失败才推）。配置走 `app_settings`（category=notification），复用现有 `GET/PUT /api/v2/app-settings`
+- **新 API 端点**：`POST /api/v2/repos/{owner}/{repo}/tag-review`（仓库 admin 手动触发）、`POST /api/v2/feishu/command`（飞书 outgoing 命令回调，校验 `feishu_verification_token`）、`GET /api/v2/repos/{owner}/{repo}/tags`（tag 列表，供前端下拉）
+- **AnalysisRun 字段**：新增 `from_tag` / `to_tag` 列，`kind` 增加 `tag_review` 类型；前端仓库页新增「Tag 区间审查」Tab，含 tag 下拉选择与历史记录列表
+
+### 安全 (Security)
+
+- **补齐 webhook 签名验证**：`WEBHOOK_SECRET` 已配置时校验 `X-Gitea-Signature`（HMAC-SHA256 of raw body），此前缺失违反 AGENTS.md；event 白名单加入 `create`（tag 创建事件），`POST /webhook` 分发到 `handle_create`
+
+### 数据库 (Database)
+
+- 新增 Alembic migration `0003_tag_review_and_db_optimize.py`：一次性完成三件事——新增 `analysis_runs.from_tag` / `to_tag` 列、补齐高频排序索引与 `repository_id+kind+external_number+head_sha` 复合索引、删除 `repositories` 冗余单列索引与 `usage_events.provider_run_id` 死列
+- **SQLite FK PRAGMA**：`Database.init()` 通过 `event.listens_for(sync_engine, "connect")` 设置 `PRAGMA foreign_keys=ON`，让 `ondelete=CASCADE/SET NULL` 真正生效
+- **索引补齐**：`analysis_runs.started_at` / `completed_at`、`webhook_events.created_at`、`audit_events.created_at`、`provider_runs.started_at` 等高频排序列新增索引；`repositories` 的 `owner` / `name` / `full_name` 单列索引删除（保留 `(provider,owner,name)` UQ）
+- 部署时需执行 `uv run alembic upgrade head` 应用新迁移
+
+### 变更 (Changed)
+
+- **ORM 清理**：删除 `AnalysisRun` 上 13 个未用兼容 property（`pr_number` / `issue_number` / `pr_title` / `model_name` / `engine` / `config_source` 等）；`AuthSession.session_token_hash` 去除 `unique=True` + `index=True` 重复声明
+- **DBService 清理**：删除死方法 `get_usage_stats` / `update_issue_settings`；`record_usage_event` 删除 `provider_run_id` 形参（对应列已删）；`list_repositories` / `list_provider_credentials` / `list_usage_events` 新增 `limit` / `offset` 参数防止无界查询
+- **`/webhook` 入口**：先 `await request.body()` 拿原始字节再 `json.loads`，以支持签名验证
+
+### 移除 (Removed)
+
+- 删除 `UsageEvent.provider_run_id` 列（永远 NULL）及其 FK
+- 删除 `AnalysisRun` 兼容 property：`pr_number` / `issue_number` / `pr_title` / `issue_title` / `pr_author` / `issue_author` / `issue_state` / `head_branch` / `base_branch` / `engine` / `model` / `model_name` / `config_source` / `analysis_payload`
+
 ## [2.2.6] - 2026-05-25
 
 ### 变更 (Changed)
