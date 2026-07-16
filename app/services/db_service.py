@@ -200,17 +200,11 @@ class DBService:
         result = await self.session.execute(select(Repository).where(Repository.id == repo_id))
         return result.scalar_one_or_none()
 
-    async def list_repositories(
-        self,
-        is_active: Optional[bool] = None,
-        *,
-        limit: int = 200,
-        offset: int = 0,
-    ) -> list[Repository]:
+    async def list_repositories(self, is_active: Optional[bool] = None) -> list[Repository]:
         stmt = select(Repository)
         if is_active is not None:
             stmt = stmt.where(Repository.is_active == is_active)
-        stmt = stmt.order_by(Repository.updated_at.desc()).limit(limit).offset(offset)
+        stmt = stmt.order_by(Repository.updated_at.desc())
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
@@ -261,16 +255,31 @@ class DBService:
         )
         return result.scalar_one_or_none()
 
+    async def update_issue_settings(
+        self,
+        owner: str,
+        repo_name: str,
+        *,
+        issue_enabled: Optional[bool] = None,
+        issue_auto_on_open: Optional[bool] = None,
+        issue_manual_command_enabled: Optional[bool] = None,
+    ) -> Repository:
+        repo = await self.get_or_create_repository(owner, repo_name)
+        feature = await self.ensure_repository_feature(repo.id, "issue")
+        if issue_enabled is not None:
+            feature.enabled = issue_enabled
+        if issue_auto_on_open is not None:
+            feature.auto_on_open = issue_auto_on_open
+        if issue_manual_command_enabled is not None:
+            feature.manual_command_enabled = issue_manual_command_enabled
+        await self.session.flush()
+        return repo
+
     # ==================== Credentials / Templates / Configs ====================
 
-    async def list_provider_credentials(
-        self, *, limit: int = 200, offset: int = 0
-    ) -> list[ProviderCredential]:
+    async def list_provider_credentials(self) -> list[ProviderCredential]:
         result = await self.session.execute(
-            select(ProviderCredential)
-            .order_by(ProviderCredential.updated_at.desc())
-            .limit(limit)
-            .offset(offset)
+            select(ProviderCredential).order_by(ProviderCredential.updated_at.desc())
         )
         return list(result.scalars().all())
 
@@ -393,8 +402,6 @@ class DBService:
         source_branch: Optional[str] = None,
         target_branch: Optional[str] = None,
         head_sha: Optional[str] = None,
-        from_tag: Optional[str] = None,
-        to_tag: Optional[str] = None,
         source_comment_id: Optional[int] = None,
         bot_comment_id: Optional[int] = None,
         effective_engine: Optional[str] = None,
@@ -413,8 +420,6 @@ class DBService:
             source_branch=source_branch,
             target_branch=target_branch,
             head_sha=head_sha,
-            from_tag=from_tag,
-            to_tag=to_tag,
             trigger_type=trigger_type,
             source_comment_id=source_comment_id,
             bot_comment_id=bot_comment_id,
@@ -643,6 +648,7 @@ class DBService:
     async def record_usage_event(self, repository_id: int, **kwargs):
         event = UsageEvent(
             analysis_run_id=kwargs.get("analysis_run_id"),
+            provider_run_id=kwargs.get("provider_run_id"),
             repository_id=repository_id,
             actor_id=kwargs.get("actor_id") or kwargs.get("user_id"),
             event_date=date.today(),
@@ -660,16 +666,7 @@ class DBService:
         await self.session.flush()
         return event
 
-    async def list_usage_events(
-        self,
-        repository_id: Optional[int] = None,
-        actor_id: Optional[int] = None,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        *,
-        limit: int = 200,
-        offset: int = 0,
-    ):
+    async def list_usage_events(self, repository_id: Optional[int] = None, actor_id: Optional[int] = None, start_date: Optional[date] = None, end_date: Optional[date] = None):
         stmt = select(UsageEvent)
         if repository_id:
             stmt = stmt.where(UsageEvent.repository_id == repository_id)
@@ -679,9 +676,7 @@ class DBService:
             stmt = stmt.where(UsageEvent.event_date >= start_date)
         if end_date:
             stmt = stmt.where(UsageEvent.event_date <= end_date)
-        result = await self.session.execute(
-            stmt.order_by(UsageEvent.event_date.desc()).limit(limit).offset(offset)
-        )
+        result = await self.session.execute(stmt.order_by(UsageEvent.event_date.desc()))
         return list(result.scalars().all())
 
     async def get_usage_summary(self, repository_id: Optional[int] = None, actor_id: Optional[int] = None, user_id: Optional[int] = None, start_date: Optional[date] = None, end_date: Optional[date] = None):
@@ -716,6 +711,14 @@ class DBService:
             "record_count": row.record_count or 0,
             "run_count": row.record_count or 0,
         }
+
+    async def get_usage_stats(self, **kwargs):
+        return await self.list_usage_events(
+            repository_id=kwargs.get("repository_id"),
+            actor_id=kwargs.get("user_id"),
+            start_date=kwargs.get("start_date"),
+            end_date=kwargs.get("end_date"),
+        )
 
     # ==================== Webhooks ====================
 

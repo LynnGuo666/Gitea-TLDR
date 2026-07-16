@@ -5,8 +5,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import secrets
 from datetime import date
@@ -74,43 +72,6 @@ class ActorUpdatePayload(BaseModel):
     role: Optional[str] = None
     permissions: Optional[list[str]] = None
     is_active: Optional[bool] = None
-
-
-class TagReviewPayload(BaseModel):
-    from_tag: str
-    to_tag: str
-    focus: Optional[list[str]] = None
-
-
-class FeishuCommandPayload(BaseModel):
-    text: Optional[str] = None
-    token: Optional[str] = None
-    chat_id: Optional[str] = None
-
-
-async def _run_tag_review_background(
-    handler,
-    owner: str,
-    repo: str,
-    from_tag: str,
-    to_tag: str,
-    trigger_type: str,
-    actor_username: Optional[str],
-) -> None:
-    """后台任务包装：调 perform_tag_review，吞掉异常避免 BackgroundTasks 抛错。"""
-    try:
-        await handler.perform_tag_review(
-            owner=owner,
-            repo_name=repo,
-            from_tag=from_tag,
-            to_tag=to_tag,
-            trigger_type=trigger_type,
-            actor_username=actor_username,
-        )
-    except Exception as exc:  # noqa: BLE001 - 后台任务不能向调用方抛
-        import logging
-
-        logging.getLogger(__name__).warning("后台 tag 区间审查失败: %s", exc)
 
 
 def _loads_list(value: Optional[str]) -> list[Any]:
@@ -193,10 +154,8 @@ def _serialize_repo_config(config) -> dict[str, Any]:
 
 def _serialize_run(run) -> dict[str, Any]:
     payload = run.get_analysis_payload()
-    payload_dict = payload if isinstance(payload, dict) else {}
-    related_issues = payload_dict.get("related_issues")
-    solution_suggestions = payload_dict.get("solution_suggestions")
-    config_source = payload_dict.get("config_source")
+    related_issues = payload.get("related_issues") if isinstance(payload, dict) else []
+    solution_suggestions = payload.get("solution_suggestions") if isinstance(payload, dict) else []
     return {
         "id": run.id,
         "kind": run.kind,
@@ -212,15 +171,13 @@ def _serialize_run(run) -> dict[str, Any]:
         "pr_author": run.external_author if run.kind == "review" else None,
         "issue_author": run.external_author if run.kind == "issue" else None,
         "issue_state": run.external_state,
-        "from_tag": run.from_tag if run.kind == "tag_review" else None,
-        "to_tag": run.to_tag if run.kind == "tag_review" else None,
         "trigger_type": run.trigger_type,
         "status": run.status,
         "effective_engine": run.effective_engine,
         "effective_model": run.effective_model,
         "engine": run.effective_engine,
         "model": run.effective_model,
-        "config_source": config_source if isinstance(config_source, str) else None,
+        "config_source": run.config_source,
         "overall_success": run.overall_success,
         "overall_severity": run.overall_severity,
         "summary_markdown": run.summary_markdown,
@@ -230,10 +187,10 @@ def _serialize_run(run) -> dict[str, Any]:
         "solution_suggestions": solution_suggestions if isinstance(solution_suggestions, list) else [],
         "related_issue_count": len(related_issues) if isinstance(related_issues, list) else 0,
         "solution_count": len(solution_suggestions) if isinstance(solution_suggestions, list) else 0,
-        "related_files": payload_dict.get("related_files", []),
-        "next_actions": payload_dict.get("next_actions", []),
-        "fallback_mode": payload_dict.get("fallback_mode", "tool"),
-        "focus_areas": payload_dict.get("focus_areas", []),
+        "related_files": payload.get("related_files", []) if isinstance(payload, dict) else [],
+        "next_actions": payload.get("next_actions", []) if isinstance(payload, dict) else [],
+        "fallback_mode": payload.get("fallback_mode", "tool") if isinstance(payload, dict) else "tool",
+        "focus_areas": payload.get("focus_areas", []) if isinstance(payload, dict) else [],
         "error_message": run.error_message,
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
@@ -343,7 +300,7 @@ def _resolve_webhook_url(request: Request, raw_url: Any) -> str:
 
 def _resolve_webhook_events(raw_events: Any) -> list[str]:
     default_events = ["pull_request", "issues", "issue_comment"]
-    allowed_events = {"pull_request", "issues", "issue_comment", "create"}
+    allowed_events = set(default_events)
     if raw_events is None:
         return default_events
     if not isinstance(raw_events, list):
@@ -660,86 +617,6 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             service = DBService(session)
             return await check_repo_config_health(service, owner, repo)
 
-    @router.get("/repos/{owner}/{repo}/tags")
-    async def list_repo_tags(owner: str, repo: str, request: Request, limit: int = Query(50, ge=1, le=200)):
-        user_client = await _require_repo_admin_client(context, owner, repo, request)
-        tags = await user_client.list_tags(owner, repo, limit=limit)
-        if tags is None:
-            raise HTTPException(status_code=502, detail="无法从 Gitea 获取 tag 列表")
-        return {"tags": tags}
-
-    @router.post("/repos/{owner}/{repo}/tag-review")
-    async def trigger_tag_review(
-        owner: str, repo: str, request: Request, background_tasks: BackgroundTasks, payload: TagReviewPayload
-    ):
-        await _require_repo_admin_client(context, owner, repo, request)
-        if not payload.from_tag or not payload.to_tag:
-            raise HTTPException(status_code=400, detail="from_tag 与 to_tag 不能为空")
-        if payload.from_tag == payload.to_tag:
-            raise HTTPException(status_code=400, detail="from_tag 与 to_tag 不能相同")
-
-        session_obj = await context.auth_manager.get_session_async(
-            request, getattr(request.state, "database", None)
-        )
-        actor_username = session_obj.user.get("username") if session_obj else None
-
-        background_tasks.add_task(
-            _run_tag_review_background,
-            context.webhook_handler,
-            owner,
-            repo,
-            payload.from_tag,
-            payload.to_tag,
-            "manual",
-            actor_username,
-        )
-        if getattr(request.state, "database", None):
-            async with request.state.database.session() as session:
-                service = DBService(session)
-                audit = AuditService(service)
-                repo_obj = await service.get_or_create_repository(owner, repo)
-                await audit.record_success(
-                    action="trigger_tag_review",
-                    resource_type="repository",
-                    resource_id=repo_obj.id if repo_obj else None,
-                    context={"repository_id": repo_obj.id if repo_obj else None, "from_tag": payload.from_tag, "to_tag": payload.to_tag},
-                )
-        return {"success": True, "from_tag": payload.from_tag, "to_tag": payload.to_tag}
-
-    @public_router.post("/feishu/command")
-    async def feishu_command(request: Request, background_tasks: BackgroundTasks, payload: FeishuCommandPayload):
-        if getattr(request.state, "database", None):
-            async with request.state.database.session() as session:
-                service = DBService(session)
-                verification_token = await service.get_app_setting(
-                    "feishu_verification_token", None
-                )
-                if verification_token and payload.token != verification_token:
-                    raise HTTPException(status_code=401, detail="invalid_verification_token")
-
-        text = (payload.text or "").strip()
-        parts = text.split()
-        if len(parts) < 4 or parts[0] != "审查":
-            return {"success": False, "msg": "格式：审查 owner/repo from_tag to_tag"}
-        repo_arg = parts[1]
-        from_tag = parts[2]
-        to_tag = parts[3]
-        if "/" not in repo_arg:
-            return {"success": False, "msg": "仓库格式应为 owner/repo"}
-        owner, repo = repo_arg.split("/", 1)
-
-        background_tasks.add_task(
-            _run_tag_review_background,
-            context.webhook_handler,
-            owner,
-            repo,
-            from_tag,
-            to_tag,
-            "feishu",
-            None,
-        )
-        return {"success": True, "msg": f"已触发 {owner}/{repo} {from_tag}...{to_tag} 区间审查"}
-
     @router.get("/provider-credentials")
     async def list_provider_credentials(request: Request):
         async with request.state.database.session() as session:
@@ -1027,22 +904,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
 
     @public_router.post("/webhook")
     async def webhook(request: Request, background_tasks: BackgroundTasks):
-        raw_body = await request.body()
-        # Webhook 签名验证：WEBHOOK_SECRET 已配置时校验 X-Gitea-Signature（HMAC-SHA256 of raw body）
-        secret = settings.webhook_secret
-        if secret:
-            signature = request.headers.get("X-Gitea-Signature", "")
-            expected = hmac.new(
-                secret.encode("utf-8"), raw_body, hashlib.sha256
-            ).hexdigest()
-            if not hmac.compare_digest(signature, expected):
-                raise HTTPException(status_code=401, detail="invalid_signature")
-
-        try:
-            payload = json.loads(raw_body)
-        except json.JSONDecodeError:
-            raise HTTPException(status_code=400, detail="invalid_json")
-
+        payload = await request.json()
         event = request.headers.get("X-Gitea-Event", "")
         if event == "pull_request":
             background_tasks.add_task(context.webhook_handler.handle_pull_request, payload, None, None)
@@ -1050,8 +912,6 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             background_tasks.add_task(context.webhook_handler.handle_issue, payload)
         elif event == "issue_comment":
             background_tasks.add_task(context.webhook_handler.handle_issue_comment, payload)
-        elif event == "create":
-            background_tasks.add_task(context.webhook_handler.handle_create, payload)
         return {"status": "accepted", "api": "v2"}
 
     return router, public_router, legacy_auth_router

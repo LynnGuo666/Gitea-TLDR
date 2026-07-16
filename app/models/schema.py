@@ -99,7 +99,7 @@ class AuthSession(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     session_token_hash: Mapped[str] = mapped_column(
-        String(64), unique=True, nullable=False
+        String(64), unique=True, nullable=False, index=True
     )
     actor_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("actors.id", ondelete="SET NULL"), nullable=True, index=True
@@ -350,8 +350,6 @@ class AnalysisRun(Base, TimestampMixin):
     source_branch: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     target_branch: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     head_sha: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    from_tag: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    to_tag: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     trigger_type: Mapped[str] = mapped_column(String(50), nullable=False)
     source_comment_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     bot_comment_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -374,6 +372,64 @@ class AnalysisRun(Base, TimestampMixin):
     duration_seconds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     repository: Mapped[Repository] = relationship("Repository")
+
+    @property
+    def pr_number(self) -> int:
+        return self.external_number
+
+    @property
+    def issue_number(self) -> int:
+        return self.external_number
+
+    @property
+    def pr_title(self) -> Optional[str]:
+        return self.external_title
+
+    @property
+    def issue_title(self) -> Optional[str]:
+        return self.external_title
+
+    @property
+    def pr_author(self) -> Optional[str]:
+        return self.external_author
+
+    @property
+    def issue_author(self) -> Optional[str]:
+        return self.external_author
+
+    @property
+    def issue_state(self) -> Optional[str]:
+        return self.external_state
+
+    @property
+    def head_branch(self) -> Optional[str]:
+        return self.source_branch
+
+    @property
+    def base_branch(self) -> Optional[str]:
+        return self.target_branch
+
+    @property
+    def engine(self) -> Optional[str]:
+        return self.effective_engine
+
+    @property
+    def model(self) -> Optional[str]:
+        return self.effective_model
+
+    @property
+    def model_name(self) -> Optional[str]:
+        return self.effective_model
+
+    @property
+    def config_source(self) -> Optional[str]:
+        data = self.get_analysis_payload()
+        value = data.get("config_source")
+        return value if isinstance(value, str) else None
+
+    @property
+    def analysis_payload(self) -> Optional[str]:
+        return self.result_payload_json
 
     def get_analysis_payload(self) -> dict:
         import json
@@ -479,6 +535,9 @@ class UsageEvent(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     analysis_run_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("analysis_runs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    provider_run_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("provider_runs.id", ondelete="SET NULL"), nullable=True, index=True
     )
     repository_id: Mapped[int] = mapped_column(
         ForeignKey("repositories.id", ondelete="CASCADE"),

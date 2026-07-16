@@ -86,14 +86,12 @@ export type AnalysisAnnotation = {
 
 export type AnalysisRunSummary = {
   id: number;
-  kind: 'review' | 'issue' | 'tag_review' | string;
+  kind: 'review' | 'issue' | string;
   repository_id: number;
   repo_full_name: string | null;
   external_number: number;
   external_title: string | null;
   external_author: string | null;
-  from_tag: string | null;
-  to_tag: string | null;
   status: string;
   trigger_type: string;
   effective_engine: string | null;

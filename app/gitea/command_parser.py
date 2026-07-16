@@ -15,11 +15,9 @@ logger = logging.getLogger(__name__)
 class ReviewCommand:
     """Bot 命令数据类"""
 
-    command: str  # 命令类型，如 "review" / "issue" / "tag_review"
+    command: str  # 命令类型，如 "review" / "issue"
     features: Optional[List[str]] = None  # 功能列表：comment, review, status
     focus_areas: Optional[List[str]] = None  # 审查重点
-    from_tag: Optional[str] = None  # /tag-review 基准 tag
-    to_tag: Optional[str] = None  # /tag-review 目标 tag
 
 
 class CommandParser:
@@ -59,8 +57,7 @@ class CommandParser:
         comment = comment_body.strip()
 
         # 检查是否包含受支持命令
-        supported = ("/review", "/issue", "/tag-review")
-        if not any(token in comment for token in supported):
+        if "/review" not in comment and "/issue" not in comment:
             return None
 
         # 如果配置了bot用户名，检查是否@了bot
@@ -70,8 +67,6 @@ class CommandParser:
                 logger.debug(f"评论中未提及bot用户名 @{self.bot_username}")
                 return None
 
-        if "/tag-review" in comment:
-            return self._parse_tag_review_command(comment)
         if "/review" in comment:
             return self._parse_review_command(comment)
         if "/issue" in comment:
@@ -145,35 +140,6 @@ class CommandParser:
 
         logger.info("解析到 /issue 命令: focus=%s", focus_areas)
         return ReviewCommand(command="issue", focus_areas=focus_areas)
-
-    def _parse_tag_review_command(self, comment: str) -> Optional[ReviewCommand]:
-        """
-        解析 /tag-review 命令。
-
-        支持:
-        - /tag-review v1.0.0 v1.1.0
-        - @bot /tag-review v1.0.0 v1.1.0
-
-        Args:
-            comment: 评论内容
-
-        Returns:
-            ReviewCommand 对象，from_tag/to_tag 缺失时返回 None
-        """
-        # 提取 /tag-review 后面紧跟的两个 token（tag 名）
-        match = re.search(r"/tag-review\s+(\S+)\s+(\S+)", comment)
-        if not match:
-            logger.info("/tag-review 命令缺少 from_tag/to_tag 参数")
-            return ReviewCommand(command="tag_review")
-        from_tag = match.group(1).strip()
-        to_tag = match.group(2).strip()
-        # 去掉末尾可能粘连的标点
-        from_tag = from_tag.rstrip(",;:")
-        to_tag = to_tag.rstrip(",;:")
-        logger.info("解析到 /tag-review 命令: %s...%s", from_tag, to_tag)
-        return ReviewCommand(
-            command="tag_review", from_tag=from_tag, to_tag=to_tag
-        )
 
     def is_bot_command(self, comment_body: str) -> bool:
         """

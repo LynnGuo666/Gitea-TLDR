@@ -9,8 +9,6 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select
-
 from app.core import settings
 from app.core.database import Database
 from app.review.providers.base import (
@@ -21,12 +19,10 @@ from app.review.engine import ReviewEngine
 from app.gitea.command_parser import CommandParser
 from app.services.db_service import DBService
 from app.services.audit_service import AuditService
-from app.services.notifier import FeishuNotifier
 from app.gitea.client import GiteaClient
 from app.review.issue_service import IssueAnalysisService
 from app.gitea.repo_manager import RepoManager
 from app.models import (
-    AnalysisRun,
     WEBHOOK_STATUS_ERROR,
     WEBHOOK_STATUS_PROCESSING,
     WEBHOOK_STATUS_RETRYING,
@@ -348,37 +344,6 @@ class WebhookHandler:
 
             logger.info(f"检测到手动触发命令: {command.command}")
 
-            owner = repo_data.get("owner", {}).get("login")
-            repo_name = repo_data.get("name")
-            actor_username = (
-                comment_data.get("user", {}).get("login")
-                or comment_data.get("user", {}).get("username")
-                or payload.get("sender", {}).get("login")
-                or payload.get("sender", {}).get("username")
-            )
-
-            # /tag-review 命令：在 PR 或 Issue 评论中均可触发 tag 区间审查
-            if command.command == "tag_review":
-                if not command.from_tag or not command.to_tag:
-                    logger.info("/tag-review 命令缺少 from_tag/to_tag，忽略")
-                    return True
-                logger.info(
-                    "手动触发 tag 区间审查: %s/%s %s...%s",
-                    owner,
-                    repo_name,
-                    command.from_tag,
-                    command.to_tag,
-                )
-                return await self.perform_tag_review(
-                    owner=owner,
-                    repo_name=repo_name,
-                    from_tag=command.from_tag,
-                    to_tag=command.to_tag,
-                    trigger_type="manual",
-                    actor_username=actor_username,
-                    source_comment_id=comment_data.get("id"),
-                )
-
             # 检查是否是PR
             pull_request = issue_data.get("pull_request")
             if pull_request:
@@ -386,7 +351,16 @@ class WebhookHandler:
                     logger.info("PR 评论中的命令不是 /review，忽略")
                     return True
 
+                # 提取PR信息
+                owner = repo_data.get("owner", {}).get("login")
+                repo_name = repo_data.get("name")
                 pr_number = issue_data.get("number")
+                actor_username = (
+                    comment_data.get("user", {}).get("login")
+                    or comment_data.get("user", {}).get("username")
+                    or payload.get("sender", {}).get("login")
+                    or payload.get("sender", {}).get("username")
+                )
 
                 logger.info(
                     f"手动触发PR审查: {owner}/{repo_name}#{pr_number} "
@@ -416,6 +390,15 @@ class WebhookHandler:
             if command.command != "issue":
                 logger.info("普通 Issue 评论中的命令不是 /issue，忽略")
                 return True
+
+            owner = repo_data.get("owner", {}).get("login")
+            repo_name = repo_data.get("name")
+            actor_username = (
+                comment_data.get("user", {}).get("login")
+                or comment_data.get("user", {}).get("username")
+                or payload.get("sender", {}).get("login")
+                or payload.get("sender", {}).get("username")
+            )
 
             if not await self._is_issue_manual_enabled(owner, repo_name):
                 logger.info("仓库未启用手动 /issue 命令，忽略")
@@ -1058,15 +1041,6 @@ class WebhookHandler:
                 except Exception as _fse:
                     logger.warning("完成 ProviderRun 失败（非致命）: %s", _fse)
 
-            # 飞书推送（非致命旁路）
-            await self._notify_feishu(
-                title=f"{owner}/{repo_name}#{pr_number}",
-                summary=summary_markdown,
-                severity=analysis_result.overall_severity,
-                link=pr_data.get("html_url"),
-                is_failure=not success,
-            )
-
             logger.info(f"PR审查完成: {owner}/{repo_name}#{pr_number}")
             return success
 
@@ -1102,538 +1076,6 @@ class WebhookHandler:
                     logger.warning("完成 ProviderRun 失败（非致命）: %s", _fse)
 
             return False
-
-    async def perform_tag_review(
-        self,
-        owner: str,
-        repo_name: str,
-        from_tag: str,
-        to_tag: str,
-        *,
-        trigger_type: str = "manual",
-        actor_username: Optional[str] = None,
-        source_comment_id: Optional[int] = None,
-    ) -> bool:
-        """对两个 tag 之间的代码变更执行审查。
-
-        结构仿 _perform_review，但 diff 来自 compare_tags，克隆用
-        clone_for_compare，结果不回写 Gitea 评论（tag 无评论载体），
-        只设置 commit status + 飞书推送。
-        """
-        review_run_id: Optional[int] = None
-        repository_id: Optional[int] = None
-        provider_run_session_id: Optional[str] = None
-        actor_user_id: Optional[int] = None
-        engine = self.review_engine.default_provider_name
-        model: Optional[str] = None
-        api_url: Optional[str] = None
-        api_key: Optional[str] = None
-        wire_api: Optional[str] = None
-        config_source = "global_default"
-        focus_areas: Optional[List[str]] = None
-        features: List[str] = ["status"]
-        gitea_api_calls = 0
-        clone_operations = 0
-
-        try:
-            logger.info(
-                "执行 tag 区间审查: %s/%s %s...%s (trigger=%s)",
-                owner,
-                repo_name,
-                from_tag,
-                to_tag,
-                trigger_type,
-            )
-
-            head_sha = await self.gitea_client.get_tag_sha(owner, repo_name, to_tag)
-            gitea_api_calls += 1
-
-            # 幂等保护：(repo, to_tag, head_sha) 已审查过则跳过
-            if self.database and head_sha:
-                async with self.database.session() as session:
-                    db_service = DBService(session)
-                    existing_repo = await db_service.get_repository(owner, repo_name)
-                    if existing_repo:
-                        existing = await session.scalar(
-                            select(AnalysisRun).where(
-                                AnalysisRun.kind == "tag_review",
-                                AnalysisRun.repository_id == existing_repo.id,
-                                AnalysisRun.to_tag == to_tag,
-                                AnalysisRun.head_sha == head_sha,
-                            ).limit(1)
-                        )
-                        if existing:
-                            logger.info(
-                                "跳过重复 tag 审查: %s/%s %s...%s 已有 run id=%s",
-                                owner,
-                                repo_name,
-                                from_tag,
-                                to_tag,
-                                existing.id,
-                            )
-                            return True
-
-            # 解析配置 + 创建 AnalysisRun
-            if self.database:
-                async with self.database.session() as session:
-                    db_service = DBService(session)
-                    repo = await db_service.get_or_create_repository(owner, repo_name)
-                    repository_id = repo.id
-                    if actor_username:
-                        actor_user = await db_service.get_or_create_user_by_username(
-                            actor_username
-                        )
-                        actor_user_id = actor_user.id
-
-                    assert repository_id is not None  # noqa: S101 - 类型收窄
-                    repo_config = await db_service.get_repository_config(
-                        repository_id, "review"
-                    )
-                    if repo_config is None:
-                        failed = await db_service.create_analysis_run(
-                            kind="tag_review",
-                            repository_id=repository_id,
-                            external_number=0,
-                            trigger_type=trigger_type,
-                            from_tag=from_tag,
-                            to_tag=to_tag,
-                            head_sha=head_sha,
-                            source_comment_id=source_comment_id,
-                        )
-                        await db_service.complete_analysis_run(
-                            failed.id,
-                            status="failed",
-                            overall_success=False,
-                            error_message="configuration_required",
-                        )
-                        raise RuntimeError(
-                            f"configuration_required: 仓库 {owner}/{repo_name} 尚未初始化 review 配置"
-                        )
-                    if not repo_config.credential or not repo_config.credential.is_active:
-                        failed = await db_service.create_analysis_run(
-                            kind="tag_review",
-                            repository_id=repository_id,
-                            external_number=0,
-                            trigger_type=trigger_type,
-                            repository_config_id=repo_config.id,
-                            from_tag=from_tag,
-                            to_tag=to_tag,
-                            head_sha=head_sha,
-                            source_comment_id=source_comment_id,
-                        )
-                        await db_service.complete_analysis_run(
-                            failed.id,
-                            status="failed",
-                            overall_success=False,
-                            error_message="credential_unavailable",
-                        )
-                        raise RuntimeError("credential_unavailable")
-
-                    api_url = repo_config.api_url
-                    api_key = repo_config.api_key
-                    wire_api = repo_config.wire_api
-                    engine = repo_config.engine or engine
-                    model = repo_config.model or model
-                    config_source = "repo_config"
-                    focus_areas = repo_config.get_focus()
-                    features = ["status"]
-
-                    review_run = await db_service.create_analysis_run(
-                        kind="tag_review",
-                        repository_id=repository_id,
-                        external_number=0,
-                        trigger_type=trigger_type,
-                        effective_engine=engine,
-                        effective_model=model,
-                        repository_config_id=repo_config.id,
-                        credential_id=repo_config.credential_id,
-                        from_tag=from_tag,
-                        to_tag=to_tag,
-                        head_sha=head_sha,
-                        source_branch=to_tag,
-                        target_branch=from_tag,
-                        source_comment_id=source_comment_id,
-                        result_payload={
-                            "enabled_features": features,
-                            "focus_areas": focus_areas,
-                            "config_source": config_source,
-                        },
-                    )
-                    review_run_id = review_run.id
-
-            if focus_areas is None:
-                focus_areas = list(settings.default_review_focus)
-
-            # 设置初始 pending status（若拿到 head_sha）
-            if head_sha and "status" in features:
-                await self.gitea_client.create_commit_status(
-                    owner,
-                    repo_name,
-                    head_sha,
-                    "pending",
-                    description="tag 区间审查进行中...",
-                )
-                gitea_api_calls += 1
-
-            # 获取 compare diff
-            compare_data = await self.gitea_client.compare_tags(
-                owner, repo_name, from_tag, to_tag
-            )
-            gitea_api_calls += 1
-            if not compare_data:
-                raise RuntimeError("无法获取 tag 区间 diff")
-            diff_content = self._build_compare_diff(compare_data)
-            if not diff_content.strip():
-                logger.warning("tag 区间 diff 为空，跳过审查")
-                if self.database and review_run_id:
-                    async with self.database.session() as session:
-                        await DBService(session).complete_analysis_run(
-                            review_run_id,
-                            status="completed",
-                            overall_success=True,
-                            overall_severity="none",
-                            summary_markdown="tag 区间无代码变更。",
-                            result_payload={
-                                "config_source": config_source,
-                                "diff_size_bytes": 0,
-                            },
-                        )
-                return True
-
-            diff_size = len(diff_content)
-
-            # 克隆 tag 区间工作区
-            clone_url = self.gitea_client.get_clone_url(owner, repo_name)
-            repo_path = await self.repo_manager.clone_for_compare(
-                clone_url,
-                owner,
-                repo_name,
-                review_run_id or 0,
-                base_tag=from_tag,
-                head_tag=to_tag,
-                auth_token=self.gitea_client.token,
-            )
-            if not repo_path:
-                raise RuntimeError("无法克隆 tag 区间工作区，审查中止")
-            clone_operations += 1
-
-            # 创建 ProviderRun
-            if self.database and repository_id:
-                try:
-                    async with self.database.session() as session:
-                        _db = DBService(session)
-                        _fs = await _db.create_provider_run(
-                            repository_id,
-                            "review",
-                            provider=engine,
-                            analysis_run_id=review_run_id,
-                        )
-                        provider_run_session_id = _fs.session_id
-                except Exception as _fse:
-                    logger.warning("创建 ProviderRun 失败（非致命）: %s", _fse)
-
-            # 构造 pr_info，让 forge 提示词识别区间语义
-            pr_info = {
-                "title": f"{from_tag}...{to_tag}",
-                "head": {"ref": to_tag, "sha": head_sha or ""},
-                "base": {"ref": from_tag},
-                "user": {"login": actor_username or "tag-review"},
-                "is_tag_range": True,
-                "number": 0,
-            }
-
-            analysis_result = await self.review_engine.analyze_pr(
-                repo_path,
-                diff_content,
-                focus_areas,
-                pr_info,
-                api_url=api_url,
-                api_key=api_key,
-                engine=engine,
-                model=model,
-                wire_api=wire_api,
-            )
-
-            self.repo_manager.cleanup_compare_workspace(
-                owner, repo_name, review_run_id or 0
-            )
-
-            if analysis_result is None:
-                analysis_error = (
-                    self.review_engine.last_error or "tag 区间审查分析过程出错"
-                )
-                if self.database and review_run_id:
-                    async with self.database.session() as session:
-                        await DBService(session).complete_analysis_run(
-                            review_run_id,
-                            status="failed",
-                            overall_success=False,
-                            result_payload={
-                                "config_source": config_source,
-                                "diff_size_bytes": diff_size,
-                            },
-                            error_message=analysis_error,
-                        )
-                if provider_run_session_id and self.database:
-                    try:
-                        async with self.database.session() as session:
-                            await DBService(session).complete_provider_run(
-                                provider_run_session_id,
-                                status="failed",
-                                model=model,
-                                analysis_run_id=review_run_id,
-                                error=analysis_error,
-                            )
-                    except Exception as _fse:
-                        logger.warning("完成 ProviderRun 失败（非致命）: %s", _fse)
-                if head_sha and "status" in features:
-                    await self.gitea_client.create_commit_status(
-                        owner,
-                        repo_name,
-                        head_sha,
-                        "error",
-                        description=(analysis_error.replace("\n", " ").strip()[:120] or "审查失败"),
-                    )
-                    gitea_api_calls += 1
-                return False
-
-            success = True
-            summary_markdown = analysis_result.summary_text() or "未生成审查报告"
-
-            # 设置 commit status（tag 无评论载体）
-            if head_sha and "status" in features:
-                state = "failure" if analysis_result.indicates_failure() else "success"
-                success &= await self.gitea_client.create_commit_status(
-                    owner,
-                    repo_name,
-                    head_sha,
-                    state,
-                    description="tag 区间审查完成",
-                )
-                gitea_api_calls += 1
-
-            # 落库
-            if self.database and review_run_id:
-                async with self.database.session() as session:
-                    db_service = DBService(session)
-                    await db_service.complete_analysis_run(
-                        review_run_id,
-                        status="completed" if success else "failed",
-                        overall_severity=analysis_result.overall_severity,
-                        summary_markdown=summary_markdown,
-                        overall_success=success,
-                        result_payload={
-                            "config_source": config_source,
-                            "diff_size_bytes": diff_size,
-                            "inline_comments_count": len(analysis_result.inline_comments),
-                            "enabled_features": features,
-                            "focus_areas": focus_areas,
-                        },
-                    )
-                    if analysis_result.inline_comments:
-                        comments_data = [
-                            {
-                                "path": c.path,
-                                "new_line": c.new_line,
-                                "old_line": c.old_line,
-                                "severity": c.severity,
-                                "comment": c.comment,
-                                "suggestion": c.suggestion,
-                            }
-                            for c in analysis_result.inline_comments
-                        ]
-                        await db_service.save_analysis_annotations(
-                            review_run_id, comments_data
-                        )
-                    if repository_id:
-                        meta = analysis_result.usage_metadata
-                        await db_service.record_usage_event(
-                            repository_id=repository_id,
-                            analysis_run_id=review_run_id,
-                            user_id=actor_user_id,
-                            input_tokens=meta.get("input_tokens", 0),
-                            output_tokens=meta.get("output_tokens", 0),
-                            cache_creation_input_tokens=meta.get(
-                                "cache_creation_input_tokens", 0
-                            ),
-                            cache_read_input_tokens=meta.get(
-                                "cache_read_input_tokens", 0
-                            ),
-                            gitea_api_calls=gitea_api_calls,
-                            provider_api_calls=1,
-                            clone_operations=clone_operations,
-                        )
-
-            # 完成 ProviderRun（成功）
-            if provider_run_session_id and self.database:
-                try:
-                    import json as _json
-
-                    meta = analysis_result.usage_metadata
-                    _msgs = meta.get("forge_messages") or []
-                    async with self.database.session() as session:
-                        _db = DBService(session)
-                        await _db.complete_provider_run(
-                            provider_run_session_id,
-                            status="completed",
-                            model=meta.get("model") or model,
-                            turns=meta.get("turns", 0),
-                            tool_calls_count=meta.get("tool_calls", 0),
-                            messages_json=_json.dumps(_msgs, ensure_ascii=False) if _msgs else None,
-                            input_tokens=meta.get("input_tokens", 0),
-                            output_tokens=meta.get("output_tokens", 0),
-                            cache_creation_input_tokens=meta.get("cache_creation_input_tokens", 0),
-                            cache_read_input_tokens=meta.get("cache_read_input_tokens", 0),
-                            analysis_run_id=review_run_id,
-                        )
-                except Exception as _fse:
-                    logger.warning("完成 ProviderRun 失败（非致命）: %s", _fse)
-
-            # 飞书推送
-            compare_link = (
-                f"{self.gitea_client.base_url}/{owner}/{repo_name}"
-                f"/compare/{from_tag}...{to_tag}"
-            )
-            await self._notify_feishu(
-                title=f"{owner}/{repo_name} {from_tag}...{to_tag}",
-                summary=summary_markdown,
-                severity=analysis_result.overall_severity,
-                link=compare_link,
-                is_failure=not success,
-            )
-
-            logger.info(
-                "tag 区间审查完成: %s/%s %s...%s",
-                owner,
-                repo_name,
-                from_tag,
-                to_tag,
-            )
-            return success
-
-        except Exception as e:
-            logger.error(f"执行 tag 区间审查异常: {e}", exc_info=True)
-            if self.database and review_run_id:
-                try:
-                    async with self.database.session() as session:
-                        await DBService(session).complete_analysis_run(
-                            review_run_id,
-                            status="failed",
-                            overall_success=False,
-                            error_message=str(e),
-                        )
-                except Exception as db_error:
-                    logger.error(f"更新数据库记录失败: {db_error}")
-            if provider_run_session_id and self.database:
-                try:
-                    async with self.database.session() as session:
-                        _db = DBService(session)
-                        await _db.complete_provider_run(
-                            provider_run_session_id,
-                            status="failed",
-                            analysis_run_id=review_run_id,
-                            error=str(e),
-                        )
-                except Exception as _fse:
-                    logger.warning("完成 ProviderRun 失败（非致命）: %s", _fse)
-            return False
-
-    @staticmethod
-    def _build_compare_diff(compare_data: Dict[str, Any]) -> str:
-        """把 compare_tags 返回的 files[].patch 拼成 unified diff 文本。"""
-        files = compare_data.get("files") or []
-        if not isinstance(files, list):
-            return ""
-        chunks: List[str] = []
-        for item in files:
-            if not isinstance(item, dict):
-                continue
-            filename = item.get("filename") or item.get("old_filename") or "unknown"
-            patch = item.get("patch")
-            if not patch:
-                continue  # 二进制/大文件无 patch，跳过
-            chunks.append(f"--- a/{filename}\n+++ b/{filename}\n{patch}")
-        return "\n".join(chunks)
-
-    async def handle_create(self, payload: Dict[str, Any]) -> bool:
-        """处理 Gitea create 事件（tag 创建时自动审查「上一个 tag → 新 tag」）。"""
-        try:
-            if payload.get("ref_type") != "tag":
-                logger.debug("create 事件非 tag 类型，忽略")
-                return True
-            new_tag = payload.get("ref")
-            repo_data = payload.get("repository", {})
-            owner = repo_data.get("owner", {}).get("login")
-            repo_name = repo_data.get("name")
-            if not new_tag or not owner or not repo_name:
-                logger.info("create tag 事件缺少必要字段，忽略")
-                return True
-
-            actor_username = (
-                payload.get("sender", {}).get("login")
-                or payload.get("sender", {}).get("username")
-            )
-            if self._is_bot_actor(actor_username):
-                logger.info("跳过 bot 自触发 tag 创建事件")
-                return True
-
-            # 仓库 feature 开关：tag_review 场景的 auto_on_create
-            if not await self._is_tag_review_auto_enabled(owner, repo_name):
-                logger.info("仓库未启用 tag 创建自动审查，忽略")
-                return True
-
-            # 取「上一个 tag」作为 from_tag
-            tags = await self.gitea_client.list_tags(owner, repo_name, limit=50)
-            if not tags:
-                logger.info("仓库无 tag 历史，跳过 tag 创建自动审查")
-                return True
-            tag_names = [t.get("name") for t in tags if isinstance(t, dict) and t.get("name")]
-            if new_tag in tag_names:
-                idx = tag_names.index(new_tag)
-            else:
-                idx = 0
-            if idx + 1 >= len(tag_names):
-                logger.info("新 tag %s 无前一个 tag，跳过自动审查", new_tag)
-                return True
-            from_tag = tag_names[idx + 1]
-            if not from_tag or not new_tag:
-                logger.info("tag 名称为空，跳过自动审查")
-                return True
-
-            logger.info(
-                "tag 创建自动触发区间审查: %s/%s %s...%s",
-                owner,
-                repo_name,
-                from_tag,
-                new_tag,
-            )
-            return await self.perform_tag_review(
-                owner=owner,
-                repo_name=repo_name,
-                from_tag=from_tag,
-                to_tag=new_tag,
-                trigger_type="auto",
-                actor_username=actor_username,
-            )
-        except Exception as e:
-            logger.error(f"处理 create 事件异常: {e}", exc_info=True)
-            return False
-
-    async def _is_tag_review_auto_enabled(
-        self, owner: Optional[str], repo_name: Optional[str]
-    ) -> bool:
-        """判断仓库是否启用 tag 创建自动审查。"""
-        if not self.database or not owner or not repo_name:
-            return False
-        async with self.database.session() as session:
-            db_service = DBService(session)
-            repo = await db_service.get_repository(owner, repo_name)
-            if not repo:
-                return False
-            feature = await db_service.get_repository_feature(repo.id, "tag_review")
-            if not feature:
-                return False
-            return bool(feature.enabled and feature.auto_on_open)
 
     def _extract_actor_username(self, payload: Dict[str, Any]) -> Optional[str]:
         """从 Webhook payload 中提取触发者用户名。"""
@@ -1740,28 +1182,3 @@ class WebhookHandler:
             if not feature:
                 return True
             return bool(feature.enabled and feature.manual_command_enabled)
-
-    async def _notify_feishu(
-        self,
-        *,
-        title: str,
-        summary: str,
-        severity: Optional[str],
-        link: Optional[str],
-        is_failure: bool,
-    ) -> None:
-        """飞书推送非致命旁路：失败只 log，不抛。"""
-        if not self.database:
-            return
-        try:
-            async with self.database.session() as session:
-                _db = DBService(session)
-                await FeishuNotifier(_db).send(
-                    title=title,
-                    summary=summary,
-                    severity=severity,
-                    link=link,
-                    is_failure=is_failure,
-                )
-        except Exception as exc:
-            logger.warning("飞书推送失败（非致命）: %s", exc)

@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "2.3.0"
-__release_date__ = "2026-07-06"
+__version__ = "2.2.6"
+__release_date__ = "2026-05-25"
 __author__ = "LynnGuo666"
 
 
@@ -17,19 +17,6 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
-    "2.3.0": {
-        "date": "2026-07-06",
-        "changes": [
-            "新增：tag 区间审查——对两个 tag 之间的代码变更做 release 间 diff 审查，支持前端仓库页手动触发、Gitea tag 创建 webhook 自动触发（上一个 tag → 新 tag）、PR/Issue 评论 /tag-review 命令触发、飞书 outgoing 命令触发",
-            "新增：GiteaClient.compare_tags / get_tag_sha / list_tags 三个 API 方法，RepoManager.clone_for_compare 克隆 head tag 并 fetch base tag",
-            "新增：飞书群机器人推送通道——审查完成后把摘要 + 严重级别 + 链接推送到飞书，可配置 feishu_mode=all 总推 / failure_only 仅失败才推，支持加签（secret）",
-            "新增：POST /api/v2/repos/{owner}/{repo}/tag-review 手动触发端点、POST /api/v2/feishu/command 飞书命令端点、GET /api/v2/repos/{owner}/{repo}/tags tag 列表端点",
-            "新增：AnalysisRun 新增 from_tag / to_tag 列，kind 增加 tag_review 类型，前端仓库页新增「Tag 区间审查」Tab（含 tag 下拉与历史记录）",
-            "安全：补齐 webhook 签名验证——WEBHOOK_SECRET 已配置时校验 X-Gitea-Signature（HMAC-SHA256 of raw body），此前缺失违反 AGENTS.md；event 白名单加入 create（tag 创建）",
-            "数据库：SQLite 连接开启 PRAGMA foreign_keys=ON，让 ondelete=CASCADE/SET NULL 真正生效；新增 analysis_runs.started_at/completed_at、webhook_events.created_at、audit_events.created_at、provider_runs.started_at 高频排序索引与 repository_id+kind+external_number+head_sha 复合索引；删除 repositories owner/name/full_name 冗余单列索引与 usage_events.provider_run_id 死列",
-            "清理：删除 AnalysisRun 13 个未用兼容 property、DBService.get_usage_stats / update_issue_settings 死方法；list_repositories / list_provider_credentials / list_usage_events 加 limit/offset 参数防止无界查询；AuthSession.session_token_hash 去除 unique+index 重复（Alembic migration 0003）",
-        ],
-    },
     "2.2.6": {
         "date": "2026-05-25",
         "changes": [

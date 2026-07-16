@@ -5,7 +5,7 @@ import { Button, Card, CardBody, Chip, Input, Select, SelectItem, Switch, Tab, T
 import PageHeader from '../../../components/PageHeader';
 import SectionHeader from '../../../components/SectionHeader';
 import { apiFetch } from '../../../lib/api';
-import { ProviderCredential, RepositoryConfiguration, AnalysisRunSummary } from '../../../lib/types';
+import { ProviderCredential, RepositoryConfiguration } from '../../../lib/types';
 
 type Scenario = 'review' | 'issue';
 
@@ -34,25 +34,6 @@ type PullRequest = {
   html_url: string;
   merged: boolean;
   merged_at: string | null;
-};
-
-type RepoTag = {
-  name: string;
-  commit?: { sha?: string };
-};
-
-type TagReviewState = {
-  fromTag: string;
-  toTag: string;
-  loading: boolean;
-  error: string;
-  success: string;
-};
-
-type TagReviewHistoryState = {
-  loading: boolean;
-  runs: AnalysisRunSummary[];
-  error: string;
 };
 
 const FOCUS_CATALOG = [
@@ -120,20 +101,6 @@ export default function RepoPage() {
 
   const [pulls, setPulls] = useState<PullRequest[]>([]);
   const [pullsLoading, setPullsLoading] = useState(true);
-
-  const [tags, setTags] = useState<RepoTag[]>([]);
-  const [tagReview, setTagReview] = useState<TagReviewState>({
-    fromTag: '',
-    toTag: '',
-    loading: false,
-    error: '',
-    success: '',
-  });
-  const [tagHistory, setTagHistory] = useState<TagReviewHistoryState>({
-    loading: true,
-    runs: [],
-    error: '',
-  });
 
   const isReadOnly = hasAdmin === false;
 
@@ -234,69 +201,12 @@ export default function RepoPage() {
     }
   };
 
-  const loadTags = async () => {
-    if (!owner || !repo) return;
-    try {
-      const res = await apiFetch(`/api/v2/repos/${owner}/${repo}/tags?limit=100`);
-      if (res.ok) {
-        const data = (await res.json()) as { tags: RepoTag[] };
-        setTags(data.tags || []);
-      }
-    } catch {
-      // non-critical
-    }
-  };
-
-  const loadTagReviewHistory = async () => {
-    if (!owner || !repo) return;
-    setTagHistory({ loading: true, runs: [], error: '' });
-    try {
-      const res = await apiFetch(`/api/v2/runs?limit=10`);
-      if (res.ok) {
-        const data = (await res.json()) as { runs: AnalysisRunSummary[] };
-        const tagRuns = (data.runs || []).filter((r) => r.kind === 'tag_review');
-        setTagHistory({ loading: false, runs: tagRuns, error: '' });
-      } else {
-        setTagHistory({ loading: false, runs: [], error: '无法加载 tag 区间审查历史' });
-      }
-    } catch {
-      setTagHistory({ loading: false, runs: [], error: '加载历史失败，请稍后重试' });
-    }
-  };
-
-  const triggerTagReview = async () => {
-    if (tagReview.loading) return;
-    setTagReview({ ...tagReview, loading: true, error: '', success: '' });
-    try {
-      const res = await apiFetch(`/api/v2/repos/${owner}/${repo}/tag-review`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from_tag: tagReview.fromTag, to_tag: tagReview.toTag }),
-      });
-      if (!res.ok) {
-        const msg = await readErrorMessage(res, '触发失败');
-        setTagReview({ ...tagReview, loading: false, error: msg });
-        return;
-      }
-      setTagReview({
-        ...tagReview,
-        loading: false,
-        success: `已触发 ${tagReview.fromTag}...${tagReview.toTag} 区间审查，结果稍后出现在历史记录中`,
-      });
-      void loadTagReviewHistory();
-    } catch {
-      setTagReview({ ...tagReview, loading: false, error: '触发失败，请检查网络或稍后重试' });
-    }
-  };
-
   useEffect(() => {
     if (!router.isReady) return;
     void loadStatic();
     void loadPermissions();
     void loadWebhook();
     void loadPulls();
-    void loadTags();
-    void loadTagReviewHistory();
   }, [router.isReady]);
 
   useEffect(() => {
@@ -383,7 +293,6 @@ export default function RepoPage() {
           <Tab key="focus" title="审查方向" />
           <Tab key="config" title="场景配置" />
           <Tab key="pulls" title="最新 PR" />
-          <Tab key="tag-review" title="Tag 区间审查" />
         </Tabs>
 
         {activeTab === 'webhook' && (
@@ -672,111 +581,6 @@ export default function RepoPage() {
                 })}
               </div>
             )}
-          </section>
-        )}
-
-        {activeTab === 'tag-review' && (
-          <section className="flex flex-col gap-6">
-            <SectionHeader title="Tag 区间审查" />
-            <div className="flex flex-col gap-4">
-              <p className="text-sm text-default-500">
-                选择两个 tag，对它们之间的代码变更做 release 间 diff 审查。结果回写 commit status 并推送飞书（若已配置）。
-              </p>
-
-              {tags.length === 0 ? (
-                <div className="rounded-md border border-default-200 bg-default-50 p-4 text-sm text-default-500">
-                  {hasAdmin === null ? '加载 tag 列表中…' : '该仓库暂无 tag，无法进行区间审查。'}
-                </div>
-              ) : (
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Select
-                    label="From Tag（基准）"
-                    selectedKeys={tagReview.fromTag ? new Set([tagReview.fromTag]) : new Set([])}
-                    isDisabled={isReadOnly || tagReview.loading}
-                    onSelectionChange={(keys) => {
-                      const v = String(Array.from(keys)[0] || '');
-                      setTagReview({ ...tagReview, fromTag: v, error: '', success: '' });
-                    }}
-                  >
-                    {tags.map((t) => <SelectItem key={t.name}>{t.name}</SelectItem>)}
-                  </Select>
-                  <Select
-                    label="To Tag（目标）"
-                    selectedKeys={tagReview.toTag ? new Set([tagReview.toTag]) : new Set([])}
-                    isDisabled={isReadOnly || tagReview.loading}
-                    onSelectionChange={(keys) => {
-                      const v = String(Array.from(keys)[0] || '');
-                      setTagReview({ ...tagReview, toTag: v, error: '', success: '' });
-                    }}
-                  >
-                    {tags.map((t) => <SelectItem key={t.name}>{t.name}</SelectItem>)}
-                  </Select>
-                </div>
-              )}
-
-              {tagReview.error && (
-                <div className="rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
-                  {tagReview.error}
-                </div>
-              )}
-              {tagReview.success && (
-                <div className="rounded-md border border-success/40 bg-success/10 p-3 text-sm text-success">
-                  {tagReview.success}
-                </div>
-              )}
-
-              <Button
-                color="primary"
-                onPress={triggerTagReview}
-                isLoading={tagReview.loading}
-                isDisabled={isReadOnly || !tagReview.fromTag || !tagReview.toTag || tagReview.fromTag === tagReview.toTag}
-              >
-                触发区间审查
-              </Button>
-            </div>
-
-            <div className="h-px bg-divider" />
-
-            <div className="flex flex-col gap-3">
-              <p className="text-sm font-medium">历史记录</p>
-              {tagHistory.loading ? (
-                <div className="text-sm text-default-400">加载中…</div>
-              ) : tagHistory.error ? (
-                <div className="text-sm text-danger">{tagHistory.error}</div>
-              ) : tagHistory.runs.length === 0 ? (
-                <div className="text-sm text-default-400">暂无 tag 区间审查记录。</div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {tagHistory.runs.map((run) => {
-                    const stateColor = run.status === 'completed' ? (run.overall_success ? 'success' : 'danger') : run.status === 'failed' ? 'danger' : 'primary';
-                    const stateLabel = run.status === 'completed' ? (run.overall_success ? '通过' : '存在风险') : run.status === 'failed' ? '失败' : '进行中';
-                    return (
-                      <div key={run.id} className="flex items-start gap-4 rounded-lg border border-divider p-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-sm">{run.from_tag}...{run.to_tag}</span>
-                            <Chip size="sm" color={stateColor} variant="flat">{stateLabel}</Chip>
-                            {run.overall_severity && (
-                              <Chip size="sm" variant="flat">{run.overall_severity}</Chip>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 mt-1 text-xs text-default-500 flex-wrap">
-                            <span>{run.trigger_type}</span>
-                            <span>·</span>
-                            <span>{run.repo_full_name || `${owner}/${repo}`}</span>
-                            <span>·</span>
-                            <span>{run.started_at ? relativeTime(run.started_at) : '-'}</span>
-                          </div>
-                          {run.summary_markdown && (
-                            <p className="mt-2 text-xs text-default-600 line-clamp-3 whitespace-pre-line">{run.summary_markdown}</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
           </section>
         )}
       </div>
