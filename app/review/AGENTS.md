@@ -6,12 +6,31 @@
 ## 目录结构
 ```text
 review/
-├── webhook_handler.py   # Webhook 事件入口（核心编排）
+├── webhook_handler.py   # Webhook 事件入口（路由 + 重试，审查编排薄委托到 orchestrator）
+├── orchestrator/        # PR 审查编排子包（拆分自原 _perform_review 603 行单体）
+│   ├── orchestrator.py      # ReviewOrchestrator — 编排 + 幂等 + 克隆 + 引擎调用 + 异常
+│   ├── config_resolver.py   # ConfigResolver — repo/config/credential 解析 + 缺失分支
+│   ├── recorder.py          # RunRecorder — analysis_run/provider_run/annotations/usage DB 协调
+│   └── publisher.py         # ReviewPublisher — 评论/review/status 发布
 ├── issue_service.py     # Issue 智能分析服务
 ├── engine.py            # 审查引擎调度（Provider 路由，默认 forge）
 ├── config_health.py     # 仓库配置健康检查
 └── providers/           # 多引擎实现 → 详见 providers/AGENTS.md
 ```
+
+## 编排分层（orchestrator/）
+`WebhookHandler._perform_review` 现为薄委托，实际编排由 `ReviewOrchestrator.run()` 驱动：
+- `ConfigResolver`：在 DB session 内解析 repo / config / credential + engine / api_url /
+  api_key / wire_api / model / focus / features；配置缺失或凭证不可用时落 failed run +
+  audit 后 raise `ConfigurationError`。
+- `RunRecorder`：协调 analysis_run 创建/收尾、provider_run 创建/收尾、annotations 保存、
+  usage_event 记录。
+- `ReviewPublisher`：发布「变更概览」+「审查发现」评论、create_review / request_reviewer、
+  create_commit_status（pending/error/success/failure）。
+- `ReviewOrchestrator`：编排上述三者 + 幂等检查（get_review_run_by_head）+ 克隆 +
+  `review_engine.analyze_pr` + 三类失败/异常收尾。
+
+各协作类在 `async with database.session()` 内构造，不改变 session 生命周期。
 
 ## 代码定位
 | 任务 | 位置 | 说明 |
