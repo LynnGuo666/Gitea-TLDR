@@ -460,7 +460,7 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         </aside>
 
-        <main className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 sm:px-8 pb-12 bg-default-50">
+        <main className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 sm:px-8 pb-12 bg-content1">
           {backendReachable === true && !authStatus.enabled ? (
             <section className="max-w-lg mx-auto mt-16 text-center flex flex-col gap-4">
               <h1 className="m-0">需要配置 OAuth</h1>

@@ -134,6 +134,22 @@ export type AnalysisRunSummary = {
   duration_seconds: number | null;
 };
 
+/** `/runs/{id}` 返回的完整详情（在 Summary 基础上展开 payload 与 annotations）。 */
+export type AnalysisRunDetail = AnalysisRunSummary & {
+  config_source: string | null;
+  result_payload: Record<string, unknown>;
+  analysis_payload: Record<string, unknown>;
+  related_issues: unknown[];
+  solution_suggestions: unknown[];
+  related_issue_count: number;
+  solution_count: number;
+  related_files: unknown[];
+  next_actions: unknown[];
+  fallback_mode: string;
+  focus_areas: string[];
+  annotations?: AnalysisAnnotation[];
+};
+
 export type ProviderRunSummary = {
   id: number;
   analysis_run_id: number | null;
@@ -154,6 +170,11 @@ export type ProviderRunSummary = {
   duration_seconds: number | null;
   error_message: string | null;
   repo_full_name: string | null;
+};
+
+/** `/provider-runs/{id}` 返回的详情（含 messages）。 */
+export type ProviderRunDetail = ProviderRunSummary & {
+  messages: unknown[];
 };
 
 export type UsageEvent = {

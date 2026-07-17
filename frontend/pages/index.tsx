@@ -90,7 +90,7 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>仪表盘 - LCPU AI Reviewer</title>
+        <title>仪表盘 - Gitea TLDR</title>
       </Head>
       <div className="max-w-[1100px] mx-auto flex flex-col gap-8">
         <section className="flex flex-col gap-6">

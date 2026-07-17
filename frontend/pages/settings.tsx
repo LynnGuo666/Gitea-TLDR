@@ -73,7 +73,7 @@ export default function SettingsPage() {
   return (
     <>
       <Head>
-        <title>用户中心 - LCPU AI Reviewer</title>
+        <title>用户中心 - Gitea TLDR</title>
       </Head>
       <div className="max-w-[1100px] mx-auto">
         <div className="pb-4">

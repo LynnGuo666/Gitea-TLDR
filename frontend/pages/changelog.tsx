@@ -37,7 +37,7 @@ function VersionCard({ entry, isLatest, isLast }: { entry: ChangelogEntry; isLat
       {/* 时间线轴 */}
       <div className="flex flex-col items-center shrink-0">
         <div
-          className={`w-3 h-3 rounded-full mt-1 ring-2 ring-offset-2 ring-offset-default-50 shrink-0 ${
+          className={`w-3 h-3 rounded-full mt-1 ring-2 ring-offset-2 ring-offset-background shrink-0 ${
             isLatest ? 'bg-primary ring-primary' : 'bg-default-300 ring-default-300'
           }`}
         />
@@ -99,7 +99,7 @@ export default function ChangelogPage() {
   return (
     <>
       <Head>
-        <title>更新日志</title>
+        <title>更新日志 - Gitea TLDR</title>
       </Head>
       <div className="max-w-[780px] mx-auto flex flex-col gap-5">
         <PageHeader
@@ -119,7 +119,7 @@ export default function ChangelogPage() {
         />
 
         {error && (
-          <div className="p-3 bg-danger-50 border border-danger rounded-lg text-danger text-sm">
+          <div className="p-3 bg-danger/10 border border-danger/40 rounded-lg text-danger text-sm">
             {error}
           </div>
         )}

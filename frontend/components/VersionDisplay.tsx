@@ -91,7 +91,7 @@ export function VersionDisplay({ compact = false, inline = false }: VersionDispl
                 </span>
               </div>
               {!versionMatch && !loading && (
-                <div className="mt-2 p-1.5 bg-warning-50 border border-warning rounded text-warning text-[10px] text-center font-medium">
+                <div className="mt-2 p-1.5 bg-warning/10 border border-warning/40 rounded text-warning text-[10px] text-center font-medium">
                   前后端版本不一致，建议刷新页面
                 </div>
               )}

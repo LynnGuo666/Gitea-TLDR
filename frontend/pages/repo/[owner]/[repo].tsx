@@ -1,4 +1,5 @@
 import Head from 'next/head';
+import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import { Button, Card, CardBody, Chip, Input, Select, SelectItem, Switch, Tab, Tabs, Textarea } from '@heroui/react';
@@ -225,13 +226,13 @@ export default function RepoPage() {
   return (
     <>
       <Head>
-        <title>{owner}/{repo} - 仓库配置</title>
+        <title>{owner}/{repo} - 仓库配置 - Gitea TLDR</title>
       </Head>
       <div className="max-w-[1100px] mx-auto flex flex-col gap-6">
         <PageHeader title={`${owner}/${repo}`} subtitle="仓库独立配置，运行时不会从全局 fallback" />
 
         {isReadOnly && (
-          <div className="rounded-md border border-default-300 bg-default-50 p-4 text-sm text-default-600 flex items-center gap-3">
+          <div className="rounded-md border border-default-300 bg-default-100 p-4 text-sm text-default-600 flex items-center gap-3">
             <Chip size="sm" variant="flat" color="default">只读</Chip>
             你没有此仓库的管理权限，配置为只读查看。如需修改请联系仓库管理员。
           </div>
@@ -381,7 +382,7 @@ export default function RepoPage() {
             {permissionsLoading ? (
               <div className="text-sm text-default-400">加载权限…</div>
             ) : configurationRequired ? (
-              <div className="rounded-md border border-warning/50 bg-warning/10 p-4 text-sm text-warning-700">
+              <div className="rounded-md border border-warning/50 bg-warning/10 p-4 text-sm text-warning">
                 此仓库尚未为「{SCENARIO_OPTIONS.find((s) => s.key === scenario)?.label}」场景初始化配置，请联系管理员完成初始化后再访问此页面。
               </div>
             ) : config ? (
@@ -475,7 +476,7 @@ export default function RepoPage() {
                   onValueChange={(custom_prompt) => setForm({ ...form, custom_prompt })}
                 />
 
-                <div className="rounded-md border border-default-200 bg-default-50 p-3 text-sm text-default-500">
+                <div className="rounded-md border border-default-200 bg-default-100 p-3 text-sm text-default-500">
                   ℹ 审查方向（focus）请在&ldquo;审查方向&rdquo; Tab 中配置。
                 </div>
 
@@ -499,8 +500,13 @@ export default function RepoPage() {
                   const chipLabel = pr.merged ? '已合并' : pr.state === 'closed' ? '已关闭' : '开放';
                   return (
                     <div key={pr.id} className="flex items-start gap-4 rounded-lg border border-divider p-4">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={pr.user.avatar_url} alt={pr.user.login} className="w-8 h-8 rounded-full shrink-0 mt-0.5" />
+                      <Image
+                        src={pr.user.avatar_url}
+                        alt={pr.user.login}
+                        width={32}
+                        height={32}
+                        className="w-8 h-8 rounded-full shrink-0 mt-0.5"
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <a
