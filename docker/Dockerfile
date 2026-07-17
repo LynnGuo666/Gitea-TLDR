@@ -1,3 +1,4 @@
+# ---- Frontend builder ----
 FROM node:20-alpine AS frontend-builder
 
 WORKDIR /frontend
@@ -9,20 +10,20 @@ COPY frontend/ ./
 RUN npm run build
 
 
-FROM python:3.11-slim
+# ---- Runtime（默认 target，不含 legacy CLI） ----
+# 仅 Forge 引擎；claude_code / codex_cli legacy provider 需要的 nodejs + CLI
+# 不进入默认镜像。需要 legacy 时构建 runtime-with-legacy target：
+#   docker build -f docker/Dockerfile --target runtime-with-legacy -t gitea-tldr:legacy .
+FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     ca-certificates \
     gosu \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
-
-RUN npm install -g @anthropic-ai/claude-code @openai/codex && claude --version
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
@@ -42,3 +43,17 @@ RUN groupadd -r appuser && useradd -r -g appuser -u 1000 -d /app appuser \
 EXPOSE 8000
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
+
+
+# ---- Runtime with legacy CLI（可选 target） ----
+# 在 runtime 基础上追加 nodejs 20 runtime + claude-code / codex CLI 全局安装，
+# 供 ENABLE_LEGACY_PROVIDERS=true 时 claude_code / codex_cli provider 调用。
+# 默认 runtime target 不含这些二进制，镜像显著更小。
+FROM runtime AS runtime-with-legacy
+
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /etc/apt/sources.list.d/nodesource.list /etc/apt/keyrings/nodesource.gpg \
+    && npm install -g @anthropic-ai/claude-code @openai/codex \
+    && claude --version
