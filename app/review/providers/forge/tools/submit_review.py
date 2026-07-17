@@ -78,7 +78,11 @@ class SubmitReviewTool(ForgeTool):
                     "description": "行级批注列表，最多 10 条，专注最重要发现，无问题时填 []",
                 },
             },
-            "required": ["pr_overview_markdown", "summary_markdown", "overall_severity"],
+            "required": [
+                "pr_overview_markdown",
+                "summary_markdown",
+                "overall_severity",
+            ],
         }
 
     async def execute(self, arguments: Dict[str, Any], repo_path) -> str:

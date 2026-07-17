@@ -269,7 +269,9 @@ class UsageCapturingProxy:
         last_chunk_at = loop.time()
 
         try:
-            async with client.stream(method, url, headers=headers, content=body) as resp:
+            async with client.stream(
+                method, url, headers=headers, content=body
+            ) as resp:
                 self._set_captured_response_headers(resp.headers)
                 sse_decoder = self._create_sse_decoder()
                 self._write_status_and_headers(
@@ -295,9 +297,7 @@ class UsageCapturingProxy:
                         self._consume_sse_chunk(
                             parser_buffer, chunk, event_state, sse_decoder
                         )
-                    self._flush_sse_decoder(
-                        parser_buffer, event_state, sse_decoder
-                    )
+                    self._flush_sse_decoder(parser_buffer, event_state, sse_decoder)
                     return True
 
                 chunk_iter = resp.aiter_raw().__aiter__()
@@ -332,10 +332,7 @@ class UsageCapturingProxy:
                     self._consume_sse_chunk(
                         parser_buffer, chunk, event_state, sse_decoder
                     )
-                    if (
-                        chunk_count == 1
-                        or chunk_count % _SSE_CHUNK_LOG_EVERY == 0
-                    ):
+                    if chunk_count == 1 or chunk_count % _SSE_CHUNK_LOG_EVERY == 0:
                         logger.info(
                             "Usage proxy conn=%s req=%s SSE chunk=%s chunk_bytes=%s total_bytes=%s gap_ms=%s",
                             conn_id,
@@ -347,9 +344,7 @@ class UsageCapturingProxy:
                         )
                 self._flush_sse_decoder(parser_buffer, event_state, sse_decoder)
         except Exception as exc:
-            self.last_error = (
-                f"SSE 转发失败: {type(exc).__name__}: {exc}"
-            )
+            self.last_error = f"SSE 转发失败: {type(exc).__name__}: {exc}"
             raise
 
         if self._debug:
@@ -379,9 +374,7 @@ class UsageCapturingProxy:
         try:
             resp = await client.request(method, url, headers=headers, content=body)
         except Exception as exc:
-            self.last_error = (
-                f"上游请求失败: {type(exc).__name__}: {exc}"
-            )
+            self.last_error = f"上游请求失败: {type(exc).__name__}: {exc}"
             raise
 
         content = resp.content

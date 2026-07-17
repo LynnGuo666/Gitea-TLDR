@@ -82,10 +82,14 @@ async def ensure_initial_admin(
     if not initial_username:
         return
 
-    stmt = select(Actor).where(
-        Actor.role == "super_admin",
-        Actor.is_active.is_(True),
-    ).limit(1)
+    stmt = (
+        select(Actor)
+        .where(
+            Actor.role == "super_admin",
+            Actor.is_active.is_(True),
+        )
+        .limit(1)
+    )
     result = await session.execute(stmt)
     existing = result.scalar_one_or_none()
 
@@ -169,6 +173,7 @@ def admin_required(resource: Optional[str] = None, action: Optional[str] = None)
     Returns:
         可注入 FastAPI 路由的依赖函数。
     """
+
     async def dependency(request: Request) -> Actor:
         """执行管理员权限校验。
 

@@ -536,14 +536,18 @@ def _migrate_configs(repo_map: dict[int, int], system_actor_id: int) -> None:
         rows = bind.execute(sa.text(f"SELECT * FROM {source_table}")).mappings().all()
         for row in rows:
             old_repo_id = row.get("repository_id")
-            repo_id = repo_map.get(int(old_repo_id)) if old_repo_id is not None else None
+            repo_id = (
+                repo_map.get(int(old_repo_id)) if old_repo_id is not None else None
+            )
             engine = row.get("engine") or default_engine
             model = _valid_model(row.get("model"))
             scope_key = "system" if repo_id is None else f"repo:{repo_id}"
             cred = _credential_for(
                 scope_key=scope_key,
                 name=f"{scenario}-{engine}-credential",
-                provider="anthropic" if engine in {"claude_code", "forge"} else "custom",
+                provider="anthropic"
+                if engine in {"claude_code", "forge"}
+                else "custom",
                 api_url=row.get("api_url"),
                 api_key=row.get("api_key"),
                 system_actor_id=system_actor_id,
@@ -556,7 +560,10 @@ def _migrate_configs(repo_map: dict[int, int], system_actor_id: int) -> None:
                         "SELECT id FROM config_templates "
                         "WHERE scope_key='system' AND scenario=:scenario AND name=:name"
                     ),
-                    {"scenario": scenario, "name": row.get("config_name") or f"default-{scenario}"},
+                    {
+                        "scenario": scenario,
+                        "name": row.get("config_name") or f"default-{scenario}",
+                    },
                 ).fetchone()
                 if exists:
                     continue
@@ -676,7 +683,11 @@ def _migrate_runs(repo_map: dict[int, int]) -> dict[tuple[str, int], int]:
                 continue
             completed_at = row.get("completed_at")
             success = row.get("overall_success")
-            status = "running" if not completed_at else ("completed" if success else "failed")
+            status = (
+                "running"
+                if not completed_at
+                else ("completed" if success else "failed")
+            )
             payload: dict[str, object] = {}
             if kind == "review":
                 for key in [
@@ -803,7 +814,11 @@ def _migrate_provider_runs(
             run_id = run_map.get(("review", int(old_review_id)))
         if run_id is None and old_issue_id is not None:
             run_id = run_map.get(("issue", int(old_issue_id)))
-        repo_id = repo_map.get(int(row["repository_id"])) if row.get("repository_id") else None
+        repo_id = (
+            repo_map.get(int(row["repository_id"]))
+            if row.get("repository_id")
+            else None
+        )
         result = bind.execute(
             sa.text(
                 """
@@ -842,14 +857,18 @@ def _migrate_provider_runs(
                 "duration_seconds": row.get("duration_seconds"),
                 "error": row.get("error"),
                 "created_at": row.get("started_at") or _now(),
-                "updated_at": row.get("completed_at") or row.get("started_at") or _now(),
+                "updated_at": row.get("completed_at")
+                or row.get("started_at")
+                or _now(),
             },
         )
         mapping[int(row["id"])] = int(result.lastrowid)
     return mapping
 
 
-def _migrate_usage(repo_map: dict[int, int], actor_map: dict[int, int], run_map) -> None:
+def _migrate_usage(
+    repo_map: dict[int, int], actor_map: dict[int, int], run_map
+) -> None:
     bind = op.get_bind()
     source_table = _source_table("usage_stats")
     if not source_table:

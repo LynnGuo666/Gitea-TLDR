@@ -24,7 +24,11 @@ from app.core.context import AppContext
 from app.models import Actor, WEBHOOK_STATUS_QUEUED
 from app.services.audit_service import AuditService
 from app.services.db_service import DBService
-from app.services.repositories import AuditRepository, UsageRepository, WebhookRepository
+from app.services.repositories import (
+    AuditRepository,
+    UsageRepository,
+    WebhookRepository,
+)
 
 
 class ProviderCredentialPayload(BaseModel):
@@ -44,7 +48,6 @@ class ProviderCredentialUpdatePayload(BaseModel):
 
 class ProviderCredentialRotatePayload(BaseModel):
     api_key: str
-
 
 
 class RepositoryConfigUpdatePayload(BaseModel):
@@ -109,7 +112,9 @@ def _serialize_actor(actor) -> dict[str, Any]:
         "role": actor.role,
         "permissions": _loads_list(actor.permissions_json),
         "is_active": actor.is_active,
-        "last_login_at": actor.last_login_at.isoformat() if actor.last_login_at else None,
+        "last_login_at": actor.last_login_at.isoformat()
+        if actor.last_login_at
+        else None,
         "created_at": actor.created_at.isoformat() if actor.created_at else None,
         "updated_at": actor.updated_at.isoformat() if actor.updated_at else None,
     }
@@ -129,7 +134,6 @@ def _serialize_app_setting(setting) -> dict[str, Any]:
         "updated_by_actor_id": setting.updated_by_actor_id,
         "updated_at": setting.updated_at.isoformat() if setting.updated_at else None,
     }
-
 
 
 def _serialize_repo_config(config) -> dict[str, Any]:
@@ -156,12 +160,16 @@ def _serialize_repo_config(config) -> dict[str, Any]:
 def _serialize_run(run) -> dict[str, Any]:
     payload = run.get_analysis_payload()
     related_issues = payload.get("related_issues") if isinstance(payload, dict) else []
-    solution_suggestions = payload.get("solution_suggestions") if isinstance(payload, dict) else []
+    solution_suggestions = (
+        payload.get("solution_suggestions") if isinstance(payload, dict) else []
+    )
     return {
         "id": run.id,
         "kind": run.kind,
         "repository_id": run.repository_id,
-        "repo_full_name": run.repository.full_name if getattr(run, "repository", None) else None,
+        "repo_full_name": run.repository.full_name
+        if getattr(run, "repository", None)
+        else None,
         "external_number": run.external_number,
         "pr_number": run.external_number if run.kind == "review" else None,
         "issue_number": run.external_number if run.kind == "issue" else None,
@@ -178,20 +186,36 @@ def _serialize_run(run) -> dict[str, Any]:
         "effective_model": run.effective_model,
         "engine": run.effective_engine,
         "model": run.effective_model,
-        "config_source": payload.get("config_source") if isinstance(payload.get("config_source"), str) else None,
+        "config_source": payload.get("config_source")
+        if isinstance(payload.get("config_source"), str)
+        else None,
         "overall_success": run.overall_success,
         "overall_severity": run.overall_severity,
         "summary_markdown": run.summary_markdown,
         "result_payload": payload,
         "analysis_payload": payload,
         "related_issues": related_issues if isinstance(related_issues, list) else [],
-        "solution_suggestions": solution_suggestions if isinstance(solution_suggestions, list) else [],
-        "related_issue_count": len(related_issues) if isinstance(related_issues, list) else 0,
-        "solution_count": len(solution_suggestions) if isinstance(solution_suggestions, list) else 0,
-        "related_files": payload.get("related_files", []) if isinstance(payload, dict) else [],
-        "next_actions": payload.get("next_actions", []) if isinstance(payload, dict) else [],
-        "fallback_mode": payload.get("fallback_mode", "tool") if isinstance(payload, dict) else "tool",
-        "focus_areas": payload.get("focus_areas", []) if isinstance(payload, dict) else [],
+        "solution_suggestions": solution_suggestions
+        if isinstance(solution_suggestions, list)
+        else [],
+        "related_issue_count": len(related_issues)
+        if isinstance(related_issues, list)
+        else 0,
+        "solution_count": len(solution_suggestions)
+        if isinstance(solution_suggestions, list)
+        else 0,
+        "related_files": payload.get("related_files", [])
+        if isinstance(payload, dict)
+        else [],
+        "next_actions": payload.get("next_actions", [])
+        if isinstance(payload, dict)
+        else [],
+        "fallback_mode": payload.get("fallback_mode", "tool")
+        if isinstance(payload, dict)
+        else "tool",
+        "focus_areas": payload.get("focus_areas", [])
+        if isinstance(payload, dict)
+        else [],
         "error_message": run.error_message,
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
@@ -236,7 +260,9 @@ def _serialize_provider_run(run) -> dict[str, Any]:
         "duration_seconds": run.duration_seconds,
         "error_message": run.error_message,
         "error": run.error_message,
-        "repo_full_name": run.repository.full_name if getattr(run, "repository", None) else None,
+        "repo_full_name": run.repository.full_name
+        if getattr(run, "repository", None)
+        else None,
     }
 
 
@@ -251,7 +277,9 @@ def _serialize_annotation(annotation) -> dict[str, Any]:
         "severity": annotation.severity,
         "body": annotation.body,
         "suggestion": annotation.suggestion,
-        "created_at": annotation.created_at.isoformat() if annotation.created_at else None,
+        "created_at": annotation.created_at.isoformat()
+        if annotation.created_at
+        else None,
     }
 
 
@@ -272,7 +300,9 @@ def _serialize_webhook_event(event) -> dict[str, Any]:
     }
 
 
-async def _require_repo_admin_client(context: AppContext, owner: str, repo: str, request: Request):
+async def _require_repo_admin_client(
+    context: AppContext, owner: str, repo: str, request: Request
+):
     session = await context.auth_manager.get_session_async(
         request, getattr(request.state, "database", None)
     )
@@ -295,7 +325,9 @@ def _resolve_webhook_url(request: Request, raw_url: Any) -> str:
         raise HTTPException(status_code=400, detail="Webhook URL 必须是字符串")
     hook_url = raw_url.strip()
     if not hook_url.startswith(("http://", "https://")):
-        raise HTTPException(status_code=400, detail="Webhook URL 必须是完整的 http(s) 地址")
+        raise HTTPException(
+            status_code=400, detail="Webhook URL 必须是完整的 http(s) 地址"
+        )
     return hook_url
 
 
@@ -356,7 +388,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             "gitea_url": settings.gitea_url,
             "bot_username": settings.bot_username,
             "debug": settings.debug,
-            "oauth_enabled": bool(settings.oauth_client_id and settings.oauth_redirect_url),
+            "oauth_enabled": bool(
+                settings.oauth_client_id and settings.oauth_redirect_url
+            ),
         }
 
     @router.get("/version")
@@ -381,14 +415,21 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             }
             for name in context.review_engine.registry.list_providers()
         ]
-        return {"providers": items, "default": context.review_engine.default_provider_name}
+        return {
+            "providers": items,
+            "default": context.review_engine.default_provider_name,
+        }
 
     @router.get("/auth/status")
     async def auth_status(request: Request):
         session = await context.auth_manager.get_session_async(
             request, getattr(request.state, "database", None)
         )
-        return {"enabled": context.auth_manager.enabled, "loggedIn": bool(session), "user": session.user if session else None}
+        return {
+            "enabled": context.auth_manager.enabled,
+            "loggedIn": bool(session),
+            "user": session.user if session else None,
+        }
 
     @router.get("/auth/admin-status")
     async def admin_status(request: Request):
@@ -400,7 +441,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
         if session and getattr(request.state, "database", None):
             async with request.state.database.session() as db_session:
                 service = DBService(db_session)
-                actor = await service.get_or_create_user_by_username(session.user.get("username", ""))
+                actor = await service.get_or_create_user_by_username(
+                    session.user.get("username", "")
+                )
                 role = actor.role
                 is_admin = actor.role in {"admin", "super_admin"}
         return {
@@ -454,16 +497,24 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             actors = await service.list_actors(
                 role=role, is_active=is_active, limit=limit, offset=offset
             )
-            return {"actors": [_serialize_actor(actor) for actor in actors], "limit": limit, "offset": offset}
+            return {
+                "actors": [_serialize_actor(actor) for actor in actors],
+                "limit": limit,
+                "offset": offset,
+            }
 
     @router.put("/actors/{actor_id}")
-    async def update_actor(actor_id: int, payload: ActorUpdatePayload, request: Request):
+    async def update_actor(
+        actor_id: int, payload: ActorUpdatePayload, request: Request
+    ):
         async with request.state.database.session() as session:
             service = DBService(session)
             audit = AuditService(session)
             before = await service.session.get(Actor, actor_id)
             before_snapshot = _serialize_actor(before) if before else None
-            actor = await service.update_actor(actor_id, **payload.model_dump(exclude_unset=True))
+            actor = await service.update_actor(
+                actor_id, **payload.model_dump(exclude_unset=True)
+            )
             if not actor:
                 raise HTTPException(status_code=404, detail="actor_not_found")
             await audit.record_success(
@@ -483,7 +534,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             return {"settings": [_serialize_app_setting(row) for row in settings_rows]}
 
     @router.put("/app-settings/{key}")
-    async def update_app_setting(key: str, payload: AppSettingPayload, request: Request):
+    async def update_app_setting(
+        key: str, payload: AppSettingPayload, request: Request
+    ):
         async with request.state.database.session() as session:
             service = DBService(session)
             audit = AuditService(session)
@@ -546,7 +599,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
 
     @router.get("/repos/{owner}/{repo}/pulls")
     async def list_pulls(owner: str, repo: str, state: str = "all", limit: int = 10):
-        pulls = await context.gitea_client.list_pull_requests(owner, repo, state=state, limit=limit)
+        pulls = await context.gitea_client.list_pull_requests(
+            owner, repo, state=state, limit=limit
+        )
         if pulls is None:
             raise HTTPException(status_code=502, detail="无法从 Gitea 获取 PR 列表")
         return {"pulls": pulls}
@@ -561,7 +616,11 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
     async def configure_webhook(owner: str, repo: str, request: Request):
         payload = await request.json()
         user_client = await _require_repo_admin_client(context, owner, repo, request)
-        secret = payload.get("webhook_secret") or payload.get("secret") or secrets.token_urlsafe(24)
+        secret = (
+            payload.get("webhook_secret")
+            or payload.get("secret")
+            or secrets.token_urlsafe(24)
+        )
         hook_url = _resolve_webhook_url(request, payload.get("url"))
         hook_events = _resolve_webhook_events(payload.get("events"))
         hook = {
@@ -622,10 +681,17 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
     async def list_provider_credentials(request: Request):
         async with request.state.database.session() as session:
             service = DBService(session)
-            return {"credentials": [_serialize_credential(c) for c in await service.list_provider_credentials()]}
+            return {
+                "credentials": [
+                    _serialize_credential(c)
+                    for c in await service.list_provider_credentials()
+                ]
+            }
 
     @router.post("/provider-credentials")
-    async def create_provider_credential(payload: ProviderCredentialPayload, request: Request):
+    async def create_provider_credential(
+        payload: ProviderCredentialPayload, request: Request
+    ):
         async with request.state.database.session() as session:
             service = DBService(session)
             cred = await service.create_provider_credential(**payload.model_dump())
@@ -639,7 +705,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             return _serialize_credential(cred)
 
     @router.put("/provider-credentials/{credential_id}")
-    async def update_provider_credential(credential_id: int, payload: ProviderCredentialUpdatePayload, request: Request):
+    async def update_provider_credential(
+        credential_id: int, payload: ProviderCredentialUpdatePayload, request: Request
+    ):
         async with request.state.database.session() as session:
             service = DBService(session)
             cred = await service.update_provider_credential(
@@ -658,10 +726,14 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             return _serialize_credential(cred)
 
     @router.post("/provider-credentials/{credential_id}/rotate")
-    async def rotate_provider_credential(credential_id: int, payload: ProviderCredentialRotatePayload, request: Request):
+    async def rotate_provider_credential(
+        credential_id: int, payload: ProviderCredentialRotatePayload, request: Request
+    ):
         async with request.state.database.session() as session:
             service = DBService(session)
-            cred = await service.rotate_provider_credential(credential_id, payload.api_key)
+            cred = await service.rotate_provider_credential(
+                credential_id, payload.api_key
+            )
             if not cred:
                 raise HTTPException(status_code=404, detail="凭证不存在")
             audit = AuditService(session)
@@ -681,7 +753,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
                 deleted = await service.delete_provider_credential(credential_id)
             except ValueError as exc:
                 if str(exc) == "credential_in_use":
-                    raise HTTPException(status_code=409, detail="credential_in_use") from exc
+                    raise HTTPException(
+                        status_code=409, detail="credential_in_use"
+                    ) from exc
                 raise
             if not deleted:
                 raise HTTPException(status_code=404, detail="凭证不存在")
@@ -694,7 +768,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             return {"success": True}
 
     @router.get("/repos/{owner}/{repo}/configurations")
-    async def get_repo_configuration(owner: str, repo: str, scenario: str, request: Request):
+    async def get_repo_configuration(
+        owner: str, repo: str, scenario: str, request: Request
+    ):
         async with request.state.database.session() as session:
             service = DBService(session)
             repo_obj = await service.get_repository(owner, repo)
@@ -706,7 +782,13 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             return _serialize_repo_config(config)
 
     @router.put("/repos/{owner}/{repo}/configurations/{scenario}")
-    async def update_repo_config(owner: str, repo: str, scenario: str, payload: RepositoryConfigUpdatePayload, request: Request):
+    async def update_repo_config(
+        owner: str,
+        repo: str,
+        scenario: str,
+        payload: RepositoryConfigUpdatePayload,
+        request: Request,
+    ):
         async with request.state.database.session() as session:
             service = DBService(session)
             repo_obj = await service.get_or_create_repository(owner, repo)
@@ -726,13 +808,29 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             return _serialize_repo_config(config)
 
     @router.get("/runs")
-    async def list_runs(request: Request, kind: Optional[str] = None, repository_id: Optional[int] = None, status: Optional[str] = None, limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+    async def list_runs(
+        request: Request,
+        kind: Optional[str] = None,
+        repository_id: Optional[int] = None,
+        status: Optional[str] = None,
+        limit: int = Query(50, ge=1, le=200),
+        offset: int = Query(0, ge=0),
+    ):
         async with request.state.database.session() as session:
             service = DBService(session)
             runs = await service.list_analysis_runs(
-                kind=kind, repository_id=repository_id, status=status, limit=limit, offset=offset
+                kind=kind,
+                repository_id=repository_id,
+                status=status,
+                limit=limit,
+                offset=offset,
             )
-            return {"runs": [_serialize_run(r) for r in runs], "total": len(runs), "limit": limit, "offset": offset}
+            return {
+                "runs": [_serialize_run(r) for r in runs],
+                "total": len(runs),
+                "limit": limit,
+                "offset": offset,
+            }
 
     @router.get("/runs/{run_id}")
     async def get_run(run_id: int, request: Request):
@@ -748,14 +846,29 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
         async with request.state.database.session() as session:
             service = DBService(session)
             annotations = await service.list_analysis_annotations(run_id)
-            return {"annotations": [_serialize_annotation(item) for item in annotations]}
+            return {
+                "annotations": [_serialize_annotation(item) for item in annotations]
+            }
 
     @router.get("/provider-runs")
-    async def list_provider_runs(request: Request, provider: Optional[str] = "forge", scenario: Optional[str] = None, limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+    async def list_provider_runs(
+        request: Request,
+        provider: Optional[str] = "forge",
+        scenario: Optional[str] = None,
+        limit: int = Query(50, ge=1, le=200),
+        offset: int = Query(0, ge=0),
+    ):
         async with request.state.database.session() as session:
             service = DBService(session)
-            runs = await service.list_provider_runs(provider=provider, scenario=scenario, limit=limit, offset=offset)
-            return {"runs": [_serialize_provider_run(r) for r in runs], "total": len(runs), "limit": limit, "offset": offset}
+            runs = await service.list_provider_runs(
+                provider=provider, scenario=scenario, limit=limit, offset=offset
+            )
+            return {
+                "runs": [_serialize_provider_run(r) for r in runs],
+                "total": len(runs),
+                "limit": limit,
+                "offset": offset,
+            }
 
     @router.get("/provider-runs/{provider_session_id}")
     async def get_provider_run(provider_session_id: str, request: Request):
@@ -767,11 +880,27 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             return _serialize_provider_run(run)
 
     @router.get("/usage")
-    async def usage(request: Request, repository_id: Optional[int] = None, actor_id: Optional[int] = None, start: Optional[date] = None, end: Optional[date] = None):
+    async def usage(
+        request: Request,
+        repository_id: Optional[int] = None,
+        actor_id: Optional[int] = None,
+        start: Optional[date] = None,
+        end: Optional[date] = None,
+    ):
         async with request.state.database.session() as session:
             repo = UsageRepository(session)
-            summary = await repo.get_usage_summary(repository_id=repository_id, actor_id=actor_id, start_date=start, end_date=end)
-            events = await repo.list_usage_events(repository_id=repository_id, actor_id=actor_id, start_date=start, end_date=end)
+            summary = await repo.get_usage_summary(
+                repository_id=repository_id,
+                actor_id=actor_id,
+                start_date=start,
+                end_date=end,
+            )
+            events = await repo.list_usage_events(
+                repository_id=repository_id,
+                actor_id=actor_id,
+                start_date=start,
+                end_date=end,
+            )
             return {
                 "summary": summary,
                 "events": [
@@ -842,7 +971,11 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             events = await repo.list_webhook_events(
                 repository_id=repository_id, status=status, limit=limit, offset=offset
             )
-            return {"events": [_serialize_webhook_event(event) for event in events], "limit": limit, "offset": offset}
+            return {
+                "events": [_serialize_webhook_event(event) for event in events],
+                "limit": limit,
+                "offset": offset,
+            }
 
     @router.get("/webhook-events/{event_id}")
     async def webhook_event_detail(event_id: int, request: Request):
@@ -854,7 +987,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             return _serialize_webhook_event(event)
 
     @router.post("/webhook-events/{event_id}/replay")
-    async def replay_webhook_event(event_id: int, request: Request, background_tasks: BackgroundTasks):
+    async def replay_webhook_event(
+        event_id: int, request: Request, background_tasks: BackgroundTasks
+    ):
         async with request.state.database.session() as session:
             repo = WebhookRepository(session)
             audit = AuditService(session)
@@ -870,11 +1005,15 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
                 context={"repository_id": event.repository_id},
             )
         if event.event_type == "pull_request":
-            background_tasks.add_task(context.webhook_handler.handle_pull_request, payload, None, None)
+            background_tasks.add_task(
+                context.webhook_handler.handle_pull_request, payload, None, None
+            )
         elif event.event_type == "issues":
             background_tasks.add_task(context.webhook_handler.handle_issue, payload)
         elif event.event_type == "issue_comment":
-            background_tasks.add_task(context.webhook_handler.handle_issue_comment, payload)
+            background_tasks.add_task(
+                context.webhook_handler.handle_issue_comment, payload
+            )
         return {"success": True}
 
     @router.get("/audit-events/{event_id}")
@@ -908,11 +1047,15 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
         payload = await request.json()
         event = request.headers.get("X-Gitea-Event", "")
         if event == "pull_request":
-            background_tasks.add_task(context.webhook_handler.handle_pull_request, payload, None, None)
+            background_tasks.add_task(
+                context.webhook_handler.handle_pull_request, payload, None, None
+            )
         elif event == "issues":
             background_tasks.add_task(context.webhook_handler.handle_issue, payload)
         elif event == "issue_comment":
-            background_tasks.add_task(context.webhook_handler.handle_issue_comment, payload)
+            background_tasks.add_task(
+                context.webhook_handler.handle_issue_comment, payload
+            )
         return {"status": "accepted", "api": "v2"}
 
     return router, public_router, legacy_auth_router

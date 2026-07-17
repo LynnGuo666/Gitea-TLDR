@@ -1,6 +1,7 @@
 """
 Alembic 异步迁移环境配置
 """
+
 import asyncio
 from logging.config import fileConfig
 

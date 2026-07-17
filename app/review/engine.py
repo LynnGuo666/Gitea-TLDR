@@ -119,9 +119,7 @@ class ReviewEngine:
                 )
                 target = _FORGE_FALLBACK
             else:
-                raise ValueError(
-                    f"未知的 Provider: {target}，可用: {available}"
-                )
+                raise ValueError(f"未知的 Provider: {target}，可用: {available}")
 
         if target in self._provider_cache:
             logger.debug("使用 provider: %s (缓存)", target)
@@ -129,9 +127,7 @@ class ReviewEngine:
 
         cli_path = self._cli_paths.get(target, target)
         try:
-            provider = self.registry.create(
-                target, cli_path=cli_path, debug=self.debug
-            )
+            provider = self.registry.create(target, cli_path=cli_path, debug=self.debug)
         except Exception as exc:
             logger.exception("构造 provider %s 失败: %s", target, exc)
             if target != _FORGE_FALLBACK and _FORGE_FALLBACK in available:

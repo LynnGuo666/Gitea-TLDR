@@ -593,7 +593,9 @@ class GiteaClient:
                 while True:
                     params = {"limit": limit, "page": page}
                     self._log_debug("GET", url)
-                    response = await client.get(url, headers=self.headers, params=params)
+                    response = await client.get(
+                        url, headers=self.headers, params=params
+                    )
                     self._log_response(response)
                     response.raise_for_status()
                     batch: List[Dict[str, Any]] = response.json()
@@ -818,7 +820,9 @@ class GiteaClient:
         """为 Issue 追加 label（Gitea 会与现有 label 合并）"""
         if not labels:
             return True
-        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/issues/{issue_number}/labels"
+        url = (
+            f"{self.base_url}/api/v1/repos/{owner}/{repo}/issues/{issue_number}/labels"
+        )
         payload = {"labels": labels}
         try:
             self._log_debug("POST", url, json=payload)

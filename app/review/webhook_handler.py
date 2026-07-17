@@ -134,11 +134,11 @@ class WebhookHandler:
             actor_username = self._extract_actor_username(payload)
 
             # Bot 自触发防护：PR 作者或发送者是 bot 时直接忽略
-            pr_author = pr_data.get("user", {}).get("login") or pr_data.get("user", {}).get("username")
+            pr_author = pr_data.get("user", {}).get("login") or pr_data.get(
+                "user", {}
+            ).get("username")
             if self._is_bot_actor(pr_author) or self._is_bot_actor(actor_username):
-                logger.info(
-                    "跳过 bot 自触发 PR: %s/%s#%s", owner, repo_name, pr_number
-                )
+                logger.info("跳过 bot 自触发 PR: %s/%s#%s", owner, repo_name, pr_number)
                 return True
 
             logger.info(
@@ -216,7 +216,9 @@ class WebhookHandler:
                 if log_id and self.database:
                     await self._update_log(
                         log_id,
-                        status=WEBHOOK_STATUS_SUCCESS if success else WEBHOOK_STATUS_ERROR,
+                        status=WEBHOOK_STATUS_SUCCESS
+                        if success
+                        else WEBHOOK_STATUS_ERROR,
                         processing_time_ms=elapsed_ms,
                         error_message=None if success else "handler returned False",
                     )
@@ -232,14 +234,16 @@ class WebhookHandler:
                 if log_id and self.database:
                     await self._update_log(
                         log_id,
-                        status=WEBHOOK_STATUS_RETRYING if attempt < max_retries else WEBHOOK_STATUS_ERROR,
+                        status=WEBHOOK_STATUS_RETRYING
+                        if attempt < max_retries
+                        else WEBHOOK_STATUS_ERROR,
                         processing_time_ms=elapsed_ms,
                         error_message=last_error,
                         increment_retry=True,
                     )
 
                 if attempt < max_retries:
-                    delay = base_delay * (2 ** attempt)
+                    delay = base_delay * (2**attempt)
                     logger.info(f"将在 {delay:.1f}s 后重试...")
                     await asyncio.sleep(delay)
                 else:
@@ -331,10 +335,9 @@ class WebhookHandler:
                 logger.debug("评论中未包含有效的bot命令")
                 return True
 
-            commenter = (
-                comment_data.get("user", {}).get("login")
-                or comment_data.get("user", {}).get("username")
-            )
+            commenter = comment_data.get("user", {}).get("login") or comment_data.get(
+                "user", {}
+            ).get("username")
             if self._is_bot_actor(commenter):
                 logger.info("忽略 bot 自发评论中的命令")
                 return True
@@ -446,7 +449,9 @@ class WebhookHandler:
                 or issue_data.get("user", {}).get("username")
             )
 
-            issue_author = issue_data.get("user", {}).get("login") or issue_data.get("user", {}).get("username")
+            issue_author = issue_data.get("user", {}).get("login") or issue_data.get(
+                "user", {}
+            ).get("username")
             if self._is_bot_actor(issue_author) or self._is_bot_actor(actor_username):
                 logger.info(
                     "跳过 bot 自开 Issue: %s/%s#%s",

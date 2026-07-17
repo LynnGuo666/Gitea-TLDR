@@ -47,7 +47,9 @@ class WebhookRepository:
         await self.session.flush()
         return event
 
-    async def update_webhook_event(self, event_id: int, **kwargs: object) -> Optional[WebhookEvent]:
+    async def update_webhook_event(
+        self, event_id: int, **kwargs: object
+    ) -> Optional[WebhookEvent]:
         event = await self.session.get(WebhookEvent, event_id)
         if not event:
             return None
@@ -68,7 +70,9 @@ class WebhookRepository:
             WebhookEvent.created_at >= now - timedelta(hours=max_age_hours),
             WebhookEvent.created_at <= now - timedelta(seconds=min_age_seconds),
         )
-        result = await self.session.execute(stmt.order_by(WebhookEvent.created_at.asc()))
+        result = await self.session.execute(
+            stmt.order_by(WebhookEvent.created_at.asc())
+        )
         return list(result.scalars().all())
 
     async def list_webhook_events(

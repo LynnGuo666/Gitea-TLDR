@@ -106,9 +106,7 @@ async def _recover_pending_webhooks(context: AppContext) -> None:
         try:
             _time_start = _time.monotonic()
             if event_type == "pull_request":
-                await context.webhook_handler.handle_pull_request(
-                    payload, None, None
-                )
+                await context.webhook_handler.handle_pull_request(payload, None, None)
             elif event_type == "issue_comment":
                 await context.webhook_handler.handle_issue_comment(payload)
             elif event_type == "issues":
@@ -291,7 +289,9 @@ def create_app() -> FastAPI:
         app_context = getattr(request.app.state, "context", None)
         if app_context:
             database = getattr(app_context, "database", None)
-            session = await app_context.auth_manager.get_session_async(request, database=database)
+            session = await app_context.auth_manager.get_session_async(
+                request, database=database
+            )
             request.state.auth_status = {
                 "loggedIn": bool(session),
                 "user": session.user if session else None,

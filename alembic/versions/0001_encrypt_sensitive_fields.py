@@ -5,6 +5,7 @@ Revises: d1e2f3a4b5c6
 Create Date: 2026-03-20 00:00:00.000000
 
 """
+
 import base64
 import binascii
 import logging
@@ -112,9 +113,7 @@ def upgrade() -> None:
 
     # --- user_sessions.access_token / refresh_token ---
     rows = bind.execute(
-        sa.text(
-            "SELECT session_id, access_token, refresh_token FROM user_sessions"
-        )
+        sa.text("SELECT session_id, access_token, refresh_token FROM user_sessions")
     ).fetchall()
     for session_id, access_token, refresh_token in rows:
         updates: dict = {}

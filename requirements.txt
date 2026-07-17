@@ -1,21 +1,18 @@
+aiosqlite==0.22.1
+alembic==1.18.5
 fastapi==0.109.0
-uvicorn[standard]==0.27.0
+greenlet==3.5.3
 httpx==0.26.0
-# pydantic 升至 2.13.4：2.5.3 的 pydantic-core 2.14.6 在 Python 3.13 上需源码编译且因
-# ForwardRef._evaluate 签名变更而构建失败；2.13.4 提供 cp311/cp313 预编译 wheel。
-# 仍在 pydantic 2.x 大版本内，未跨大版本升级。
+
+# Chinese tokenization (for Issue similarity scoring)
+jieba==0.42.1
 pydantic==2.13.4
 pydantic-settings==2.14.2
+
+# Encryption
+PyNaCl==1.6.2
 python-dotenv==1.0.0
 
 # Database
 sqlalchemy==2.0.51
-alembic==1.18.5
-aiosqlite==0.22.1
-greenlet==3.5.3
-
-# Encryption
-PyNaCl==1.6.2
-
-# Chinese tokenization (for Issue similarity scoring)
-jieba==0.42.1
+uvicorn[standard]==0.27.0

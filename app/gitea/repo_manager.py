@@ -142,7 +142,9 @@ class RepoManager:
 
             if process.returncode != 0:
                 stderr_text = stderr.decode(errors="ignore")
-                logger.error("克隆仓库失败: %s", self._classify_clone_error(stderr_text))
+                logger.error(
+                    "克隆仓库失败: %s", self._classify_clone_error(stderr_text)
+                )
                 return None
 
             logger.info(f"成功克隆仓库到: {repo_path}")
@@ -184,7 +186,9 @@ class RepoManager:
             工作区路径，失败返回 None
         """
         repo_path = self.get_workspace_path(owner, repo, workspace_kind, workspace_id)
-        lock = await self._acquire_workspace_lock(owner, repo, workspace_kind, workspace_id)
+        lock = await self._acquire_workspace_lock(
+            owner, repo, workspace_kind, workspace_id
+        )
 
         askpass_script: Optional[Path] = None
         try:
@@ -233,7 +237,9 @@ class RepoManager:
                     askpass_script.unlink()
                 except OSError:
                     pass
-            await self._release_workspace_lock(owner, repo, workspace_kind, workspace_id)
+            await self._release_workspace_lock(
+                owner, repo, workspace_kind, workspace_id
+            )
 
     async def checkout_pr_branch(
         self, repo_path: Path, base_branch: str, head_branch: str
@@ -339,7 +345,9 @@ class RepoManager:
             logger.error(f"清理所有仓库目录失败: {e}")
             return False
 
-    def _build_git_env(self, auth_token: Optional[str]) -> tuple[dict[str, str], Optional[Path]]:
+    def _build_git_env(
+        self, auth_token: Optional[str]
+    ) -> tuple[dict[str, str], Optional[Path]]:
         """构造 git 子进程环境，避免把 token 写入命令参数。"""
         env = os.environ.copy()
         env["GIT_TERMINAL_PROMPT"] = "0"
@@ -381,11 +389,17 @@ class RepoManager:
             字符串结果。
         """
         normalized = stderr_text.lower()
-        if "authentication failed" in normalized or "could not read username" in normalized:
+        if (
+            "authentication failed" in normalized
+            or "could not read username" in normalized
+        ):
             return "认证失败（请检查 Gitea Token 权限）"
         if "remote branch" in normalized and "not found" in normalized:
             return "目标分支不存在"
-        if "could not resolve host" in normalized or "name or service not known" in normalized:
+        if (
+            "could not resolve host" in normalized
+            or "name or service not known" in normalized
+        ):
             return "网络或域名解析失败"
         if "repository not found" in normalized:
             return "仓库不存在或无访问权限"

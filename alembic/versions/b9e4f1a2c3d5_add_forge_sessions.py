@@ -24,7 +24,9 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("session_id", sa.String(length=32), nullable=False),
         sa.Column("scenario", sa.String(length=32), nullable=False),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="running"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="running"
+        ),
         sa.Column("repository_id", sa.Integer(), nullable=True),
         sa.Column("review_session_id", sa.Integer(), nullable=True),
         sa.Column("issue_session_id", sa.Integer(), nullable=True),
@@ -34,8 +36,15 @@ def upgrade() -> None:
         sa.Column("messages_json", sa.Text(), nullable=True),
         sa.Column("input_tokens", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("output_tokens", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("cache_creation_input_tokens", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("cache_read_input_tokens", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column(
+            "cache_creation_input_tokens",
+            sa.Integer(),
+            nullable=False,
+            server_default="0",
+        ),
+        sa.Column(
+            "cache_read_input_tokens", sa.Integer(), nullable=False, server_default="0"
+        ),
         sa.Column("started_at", sa.DateTime(), nullable=False),
         sa.Column("completed_at", sa.DateTime(), nullable=True),
         sa.Column("duration_seconds", sa.Float(), nullable=True),

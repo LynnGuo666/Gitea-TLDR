@@ -123,7 +123,9 @@ class ClaudeCodeProvider(ReviewProvider):
         diff_content: str,
         custom_prompt: Optional[str] = None,
     ) -> str:
-        return build_cli_review_prompt(focus_areas, pr_info, diff_content, custom_prompt)
+        return build_cli_review_prompt(
+            focus_areas, pr_info, diff_content, custom_prompt
+        )
 
     def _resolve_api_url(self, api_url: Optional[str]) -> Optional[str]:
         """规范化本次调用的 API 地址。

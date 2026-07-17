@@ -62,7 +62,9 @@ class ReadFileTool(ForgeTool):
             not isinstance(limit, int) or limit < 1 or limit > MAX_LIMIT
         ):
             return f"错误: limit 必须是 1 到 {MAX_LIMIT} 之间的整数"
-        if start_line is not None and (not isinstance(start_line, int) or start_line < 1):
+        if start_line is not None and (
+            not isinstance(start_line, int) or start_line < 1
+        ):
             return "错误: start_line 必须是大于等于 1 的整数"
         if end_line is not None and (not isinstance(end_line, int) or end_line < 1):
             return "错误: end_line 必须是大于等于 1 的整数"

@@ -24,7 +24,9 @@ SYMBOL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("class", re.compile(r"^\s*(?:export\s+)?class\s+([A-Za-z_]\w*)", re.MULTILINE)),
     (
         "function",
-        re.compile(r"^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_]\w*)", re.MULTILINE),
+        re.compile(
+            r"^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_]\w*)", re.MULTILINE
+        ),
     ),
     (
         "function",
@@ -33,11 +35,20 @@ SYMBOL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             re.MULTILINE,
         ),
     ),
-    ("interface", re.compile(r"^\s*(?:export\s+)?interface\s+([A-Za-z_]\w*)", re.MULTILINE)),
+    (
+        "interface",
+        re.compile(r"^\s*(?:export\s+)?interface\s+([A-Za-z_]\w*)", re.MULTILINE),
+    ),
     ("type", re.compile(r"^\s*(?:export\s+)?type\s+([A-Za-z_]\w*)", re.MULTILINE)),
     ("enum", re.compile(r"^\s*(?:export\s+)?enum\s+([A-Za-z_]\w*)", re.MULTILINE)),
-    ("function", re.compile(r"^\s*func\s+(?:\([^)]+\)\s*)?([A-Za-z_]\w*)", re.MULTILINE)),
-    ("type", re.compile(r"^\s*type\s+([A-Za-z_]\w*)\s+(?:struct|interface)", re.MULTILINE)),
+    (
+        "function",
+        re.compile(r"^\s*func\s+(?:\([^)]+\)\s*)?([A-Za-z_]\w*)", re.MULTILINE),
+    ),
+    (
+        "type",
+        re.compile(r"^\s*type\s+([A-Za-z_]\w*)\s+(?:struct|interface)", re.MULTILINE),
+    ),
     ("function", re.compile(r"^\s*(?:pub\s+)?fn\s+([A-Za-z_]\w*)", re.MULTILINE)),
     ("struct", re.compile(r"^\s*(?:pub\s+)?struct\s+([A-Za-z_]\w*)", re.MULTILINE)),
     ("enum", re.compile(r"^\s*(?:pub\s+)?enum\s+([A-Za-z_]\w*)", re.MULTILINE)),
@@ -95,8 +106,7 @@ class LSPTool(ForgeTool):
         if method == "textDocument/documentSymbol":
             return self._document_symbol(repo_path, params)
         return (
-            "错误: 当前 lsp 工具仅支持 workspace/symbol 和 "
-            "textDocument/documentSymbol"
+            "错误: 当前 lsp 工具仅支持 workspace/symbol 和 textDocument/documentSymbol"
         )
 
     def _workspace_symbol(self, repo_path: Path, params: Dict[str, Any]) -> str:
@@ -175,7 +185,9 @@ class LSPTool(ForgeTool):
         query_lower = query.lower()
 
         if base_dir.is_file():
-            for symbol in self._extract_file_symbols(repo_path.resolve(), base_dir.resolve()):
+            for symbol in self._extract_file_symbols(
+                repo_path.resolve(), base_dir.resolve()
+            ):
                 if query_lower in str(symbol["name"]).lower():
                     matches.append(symbol)
                 if len(matches) >= limit:
@@ -221,5 +233,7 @@ class LSPTool(ForgeTool):
                         "line": line,
                     }
                 )
-        symbols.sort(key=lambda item: (str(item["path"]), int(item["line"]), str(item["name"])))
+        symbols.sort(
+            key=lambda item: (str(item["path"]), int(item["line"]), str(item["name"]))
+        )
         return symbols

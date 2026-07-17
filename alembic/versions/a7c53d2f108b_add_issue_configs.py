@@ -24,7 +24,9 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("repository_id", sa.Integer(), nullable=True),
         sa.Column("config_name", sa.String(length=100), nullable=False),
-        sa.Column("engine", sa.String(length=100), nullable=False, server_default="forge"),
+        sa.Column(
+            "engine", sa.String(length=100), nullable=False, server_default="forge"
+        ),
         sa.Column("model", sa.String(length=200), nullable=True),
         sa.Column("api_url", sa.String(length=500), nullable=True),
         sa.Column("api_key", sa.Text(), nullable=True),

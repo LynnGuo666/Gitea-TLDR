@@ -81,8 +81,7 @@ def pytest_pyfunc_call(pyfuncitem):
         return None
 
     func_args = {
-        name: pyfuncitem.funcargs[name]
-        for name in pyfuncitem._fixtureinfo.argnames
+        name: pyfuncitem.funcargs[name] for name in pyfuncitem._fixtureinfo.argnames
     }
     asyncio.run(test_func(**func_args))
     return True

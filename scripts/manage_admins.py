@@ -40,15 +40,13 @@ async def add_admin(
             return
 
         # 创建新管理员
-        await create_user(
-            session=session, username=username, email=email, role=role
-        )
+        await create_user(session=session, username=username, email=email, role=role)
         await session.commit()
 
         print(f"✅ 成功添加管理员: {username}")
         print(f"   角色: {role}")
         print(f"   邮箱: {email or '未设置'}")
-        print(f"\n现在你可以使用该用户名登录并访问管理后台了！")
+        print("\n现在你可以使用该用户名登录并访问管理后台了！")
 
     await database.close()
 

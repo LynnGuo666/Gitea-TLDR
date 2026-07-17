@@ -99,11 +99,15 @@ class DBService:
 
     # ==================== App settings ====================
 
-    async def list_app_settings(self, category: Optional[str] = None) -> list[AppSetting]:
+    async def list_app_settings(
+        self, category: Optional[str] = None
+    ) -> list[AppSetting]:
         stmt = select(AppSetting)
         if category:
             stmt = stmt.where(AppSetting.category == category)
-        result = await self.session.execute(stmt.order_by(AppSetting.category, AppSetting.key))
+        result = await self.session.execute(
+            stmt.order_by(AppSetting.category, AppSetting.key)
+        )
         return list(result.scalars().all())
 
     async def update_app_setting(
@@ -115,7 +119,9 @@ class DBService:
         description: Optional[str] = None,
         actor_id: Optional[int] = None,
     ) -> AppSetting:
-        result = await self.session.execute(select(AppSetting).where(AppSetting.key == key))
+        result = await self.session.execute(
+            select(AppSetting).where(AppSetting.key == key)
+        )
         setting = result.scalar_one_or_none()
         if not setting:
             setting = AppSetting(
@@ -137,7 +143,9 @@ class DBService:
         return setting
 
     async def delete_app_setting(self, key: str) -> bool:
-        result = await self.session.execute(select(AppSetting).where(AppSetting.key == key))
+        result = await self.session.execute(
+            select(AppSetting).where(AppSetting.key == key)
+        )
         setting = result.scalar_one_or_none()
         if not setting:
             return False
@@ -147,7 +155,9 @@ class DBService:
 
     async def get_app_setting(self, key: str, fallback: Any = None) -> Any:
         """从 DB 读取一个 app setting 值，不存在时返回 fallback。"""
-        result = await self.session.execute(select(AppSetting).where(AppSetting.key == key))
+        result = await self.session.execute(
+            select(AppSetting).where(AppSetting.key == key)
+        )
         row = result.scalar_one_or_none()
         if not row:
             return fallback
@@ -192,7 +202,9 @@ class DBService:
         return result.scalar_one_or_none()
 
     async def get_repository_by_id(self, repo_id: int) -> Optional[Repository]:
-        result = await self.session.execute(select(Repository).where(Repository.id == repo_id))
+        result = await self.session.execute(
+            select(Repository).where(Repository.id == repo_id)
+        )
         return result.scalar_one_or_none()
 
     async def list_repositories(
@@ -453,7 +465,9 @@ class DBService:
         await self.session.flush()
         return run
 
-    async def update_analysis_run(self, run_id: int, **fields: Any) -> Optional[AnalysisRun]:
+    async def update_analysis_run(
+        self, run_id: int, **fields: Any
+    ) -> Optional[AnalysisRun]:
         run = await self.session.get(AnalysisRun, run_id)
         if not run:
             return None
@@ -523,7 +537,9 @@ class DBService:
             AnalysisRun.external_number == issue_number,
             AnalysisRun.status == "running",
         )
-        result = await self.session.execute(stmt.order_by(AnalysisRun.started_at.desc()).limit(1))
+        result = await self.session.execute(
+            stmt.order_by(AnalysisRun.started_at.desc()).limit(1)
+        )
         return result.scalar_one_or_none()
 
     async def get_recent_successful_issue_run(
@@ -537,7 +553,9 @@ class DBService:
             AnalysisRun.overall_success.is_(True),
             AnalysisRun.completed_at >= threshold,
         )
-        result = await self.session.execute(stmt.order_by(AnalysisRun.completed_at.desc()).limit(1))
+        result = await self.session.execute(
+            stmt.order_by(AnalysisRun.completed_at.desc()).limit(1)
+        )
         return result.scalar_one_or_none()
 
     # ==================== Annotations ====================
@@ -573,7 +591,13 @@ class DBService:
 
     # ==================== Provider runs ====================
 
-    async def create_provider_run(self, repository_id: Optional[int], scenario: str, provider: str = "forge", analysis_run_id: Optional[int] = None):
+    async def create_provider_run(
+        self,
+        repository_id: Optional[int],
+        scenario: str,
+        provider: str = "forge",
+        analysis_run_id: Optional[int] = None,
+    ):
         run = ProviderRun(
             analysis_run_id=analysis_run_id,
             repository_id=repository_id,
@@ -589,7 +613,9 @@ class DBService:
 
     async def complete_provider_run(self, provider_session_id: str, **kwargs):
         result = await self.session.execute(
-            select(ProviderRun).where(ProviderRun.provider_session_id == provider_session_id)
+            select(ProviderRun).where(
+                ProviderRun.provider_session_id == provider_session_id
+            )
         )
         run = result.scalar_one_or_none()
         if not run:
@@ -612,7 +638,14 @@ class DBService:
         await self.session.flush()
         return run
 
-    async def list_provider_runs(self, provider: Optional[str] = None, scenario: Optional[str] = None, limit: int = 50, offset: int = 0, repository_ids: Optional[list[int]] = None):
+    async def list_provider_runs(
+        self,
+        provider: Optional[str] = None,
+        scenario: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+        repository_ids: Optional[list[int]] = None,
+    ):
         stmt = select(ProviderRun).options(selectinload(ProviderRun.repository))
         if provider:
             stmt = stmt.where(ProviderRun.provider == provider)
@@ -631,4 +664,3 @@ class DBService:
             .where(ProviderRun.provider_session_id == provider_session_id)
         )
         return result.scalar_one_or_none()
-

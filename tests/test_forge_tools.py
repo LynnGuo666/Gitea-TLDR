@@ -117,7 +117,9 @@ def test_glob_tool_skips_ignored_directories(tmp_path: Path):
     assert "ignore.py" not in result
 
 
-def test_search_code_supports_files_with_matches_mode_and_skips_ignored_directories(tmp_path: Path):
+def test_search_code_supports_files_with_matches_mode_and_skips_ignored_directories(
+    tmp_path: Path,
+):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "app.py").write_text("needle\nother\nneedle\n", encoding="utf-8")

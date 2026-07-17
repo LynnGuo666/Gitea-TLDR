@@ -81,8 +81,12 @@ class UsageRepository:
         stmt = select(
             func.sum(UsageEvent.input_tokens).label("total_input_tokens"),
             func.sum(UsageEvent.output_tokens).label("total_output_tokens"),
-            func.sum(UsageEvent.cache_creation_input_tokens).label("total_cache_creation_tokens"),
-            func.sum(UsageEvent.cache_read_input_tokens).label("total_cache_read_tokens"),
+            func.sum(UsageEvent.cache_creation_input_tokens).label(
+                "total_cache_creation_tokens"
+            ),
+            func.sum(UsageEvent.cache_read_input_tokens).label(
+                "total_cache_read_tokens"
+            ),
             func.sum(UsageEvent.gitea_api_calls).label("total_gitea_calls"),
             func.sum(UsageEvent.provider_api_calls).label("total_provider_calls"),
             func.sum(UsageEvent.clone_operations).label("total_clone_operations"),

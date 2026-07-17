@@ -77,7 +77,9 @@ def test_anthropic_client_retries_529_three_times_then_succeeds(
         "app.review.providers.forge.api_client.httpx.AsyncClient",
         FakeAsyncClient,
     )
-    monkeypatch.setattr("app.review.providers.forge.api_client.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr(
+        "app.review.providers.forge.api_client.asyncio.sleep", fake_sleep
+    )
 
     data, usage = asyncio.run(
         AnthropicClient(api_key="secret", max_retries=3).create_message(
@@ -116,7 +118,9 @@ def test_anthropic_client_does_not_retry_permission_error(monkeypatch):
         "app.review.providers.forge.api_client.httpx.AsyncClient",
         FakeAsyncClient,
     )
-    monkeypatch.setattr("app.review.providers.forge.api_client.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr(
+        "app.review.providers.forge.api_client.asyncio.sleep", fake_sleep
+    )
 
     try:
         asyncio.run(

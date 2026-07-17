@@ -116,7 +116,9 @@ class AppSetting(Base, TimestampMixin):
     __tablename__ = "app_settings"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    key: Mapped[str] = mapped_column(
+        String(100), unique=True, nullable=False, index=True
+    )
     category: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     value_json: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -181,7 +183,9 @@ class ProviderCredential(Base, TimestampMixin):
 
     __tablename__ = "provider_credentials"
     __table_args__ = (
-        UniqueConstraint("scope_key", "name", name="uq_provider_credentials_scope_name"),
+        UniqueConstraint(
+            "scope_key", "name", name="uq_provider_credentials_scope_name"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -206,7 +210,6 @@ class ProviderCredential(Base, TimestampMixin):
     @api_key.setter
     def api_key(self, value: Optional[str]) -> None:
         self.api_key_enc = encryption_service.encrypt(value) if value else value
-
 
 
 class RepositoryConfig(Base, TimestampMixin):
@@ -500,7 +503,9 @@ class AuditEvent(Base):
     action: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     resource_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     resource_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    repository_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    repository_id: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, index=True
+    )
     request_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     source: Mapped[str] = mapped_column(String(50), nullable=False)
     ip_address: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

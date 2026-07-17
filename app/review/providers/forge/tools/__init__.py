@@ -99,7 +99,9 @@ def iter_repo_files(
             and (current_dir / dirname).resolve().is_relative_to(repo_root)
         ]
 
-        if any(part in ignored or part.startswith(".") for part in current_relative.parts):
+        if any(
+            part in ignored or part.startswith(".") for part in current_relative.parts
+        ):
             continue
 
         for filename in filenames:

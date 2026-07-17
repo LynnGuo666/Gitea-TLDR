@@ -202,7 +202,9 @@ class SearchCodeTool(ForgeTool):
                 for line_no, line in enumerate(lines, start=1):
                     if not regex.search(line):
                         continue
-                    prefix = f"{relative}:{line_no}: " if line_numbers else f"{relative}: "
+                    prefix = (
+                        f"{relative}:{line_no}: " if line_numbers else f"{relative}: "
+                    )
                     content_lines.append(prefix + line.strip()[:MAX_LINE_LENGTH])
             except Exception as e:
                 logger.debug("search_code 跳过文件 %s: %s", file_path, e)

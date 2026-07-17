@@ -204,11 +204,20 @@ def test_success_path_completes_run_and_publishes(db):
         summary="## 审查发现\n\n- 文件 file.py 第 10 行有空指针风险",
         overview="## 变更概览\n\n新增逻辑",
         inline_comments=[
-            InlineComment(path="file.py", new_line=10, severity="medium",
-                          comment="空指针风险", suggestion="加 None 判断")
+            InlineComment(
+                path="file.py",
+                new_line=10,
+                severity="medium",
+                comment="空指针风险",
+                suggestion="加 None 判断",
+            )
         ],
         overall_severity="medium",
-        usage={"input_tokens": 120, "output_tokens": 80, "model": "claude-sonnet-4-20250514"},
+        usage={
+            "input_tokens": 120,
+            "output_tokens": 80,
+            "model": "claude-sonnet-4-20250514",
+        },
     )
     handler, gitea, repo_mgr, engine = _build_handler(
         db, engine=StubReviewEngine(result=result)
@@ -236,18 +245,26 @@ def test_success_path_completes_run_and_publishes(db):
         async with db.session() as session:
             from sqlalchemy import select
 
-            run = (await session.execute(
-                select(AnalysisRun).where(AnalysisRun.kind == "review")
-            )).scalar_one()
+            run = (
+                await session.execute(
+                    select(AnalysisRun).where(AnalysisRun.kind == "review")
+                )
+            ).scalar_one()
             assert run.status == "completed"
             assert run.overall_success is True
             assert run.overall_severity == "medium"
 
-            anns = list((await session.execute(
-                select(AnalysisAnnotation).where(
-                    AnalysisAnnotation.analysis_run_id == run.id
+            anns = list(
+                (
+                    await session.execute(
+                        select(AnalysisAnnotation).where(
+                            AnalysisAnnotation.analysis_run_id == run.id
+                        )
+                    )
                 )
-            )).scalars().all())
+                .scalars()
+                .all()
+            )
             assert len(anns) == 1
             assert anns[0].file_path == "file.py"
 
@@ -286,9 +303,11 @@ def test_failure_path_analyze_returns_none(db):
         async with db.session() as session:
             from sqlalchemy import select
 
-            run = (await session.execute(
-                select(AnalysisRun).where(AnalysisRun.kind == "review")
-            )).scalar_one()
+            run = (
+                await session.execute(
+                    select(AnalysisRun).where(AnalysisRun.kind == "review")
+                )
+            ).scalar_one()
             assert run.status == "failed"
             assert run.overall_success is False
 
@@ -317,9 +336,11 @@ def test_exception_path_analyze_raises(db):
         async with db.session() as session:
             from sqlalchemy import select
 
-            run = (await session.execute(
-                select(AnalysisRun).where(AnalysisRun.kind == "review")
-            )).scalar_one()
+            run = (
+                await session.execute(
+                    select(AnalysisRun).where(AnalysisRun.kind == "review")
+                )
+            ).scalar_one()
             assert run.status == "failed"
             assert "boom" in (run.error_message or "")
 
@@ -374,6 +395,7 @@ def test_idempotent_skips_existing_completed_run(db):
 
 def test_configuration_required_when_no_config(db):
     """仓库无 review config → configuration_required，Gitea 无副作用。"""
+
     # 只建 repo，不建 config
     async def _seed_repo():
         async with db.session() as session:
@@ -431,9 +453,11 @@ def test_clone_failure_fails(db):
         async with db.session() as session:
             from sqlalchemy import select
 
-            run = (await session.execute(
-                select(AnalysisRun).where(AnalysisRun.kind == "review")
-            )).scalar_one()
+            run = (
+                await session.execute(
+                    select(AnalysisRun).where(AnalysisRun.kind == "review")
+                )
+            ).scalar_one()
             assert run.status == "failed"
 
     asyncio.run(_verify())
@@ -457,9 +481,7 @@ def test_handle_issue_comment_routes_review_command(db, monkeypatch):
         engine=StubReviewEngine(result=result),
     )
 
-    payload = _comment_payload(
-        body="/review --features comment --focus security"
-    )
+    payload = _comment_payload(body="/review --features comment --focus security")
     ok = asyncio.run(handler.handle_issue_comment(payload))
     assert ok is True
 
@@ -597,9 +619,7 @@ def test_bot_self_comment_is_ignored(db, monkeypatch):
     """bot 自发评论中的命令被忽略。"""
     seed_review_config(db)
     monkeypatch.setattr(settings, "bot_username", "pr-reviewer-bot")
-    handler, _g, _rm, engine = _build_handler(
-        db, bot_username="pr-reviewer-bot"
-    )
+    handler, _g, _rm, engine = _build_handler(db, bot_username="pr-reviewer-bot")
     payload = _comment_payload(body="/review", sender="pr-reviewer-bot")
     ok = asyncio.run(handler.handle_issue_comment(payload))
     assert ok is True

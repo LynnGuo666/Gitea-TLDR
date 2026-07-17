@@ -227,6 +227,4 @@ class ReviewProvider(ABC):
         默认实现抛出 NotImplementedError；实现此方法的 Provider 必须同时
         让 supports_issue() 返回 True。
         """
-        raise NotImplementedError(
-            f"Provider {self.name} 尚未实现 Issue 分析场景"
-        )
+        raise NotImplementedError(f"Provider {self.name} 尚未实现 Issue 分析场景")

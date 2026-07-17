@@ -200,7 +200,9 @@ def test_provider_global_write_requires_admin() -> None:
         database=DummyDatabase(),
     )
     assert (
-        client.put("/api/config/global?type=review", json={"engine": "claude_code"}).status_code
+        client.put(
+            "/api/config/global?type=review", json={"engine": "claude_code"}
+        ).status_code
         == 404
     )
 

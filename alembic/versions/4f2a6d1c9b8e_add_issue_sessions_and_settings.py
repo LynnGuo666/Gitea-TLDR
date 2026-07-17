@@ -21,7 +21,9 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     with op.batch_alter_table("repositories") as batch_op:
         batch_op.add_column(
-            sa.Column("issue_enabled", sa.Boolean(), nullable=False, server_default=sa.true())
+            sa.Column(
+                "issue_enabled", sa.Boolean(), nullable=False, server_default=sa.true()
+            )
         )
         batch_op.add_column(
             sa.Column(
@@ -62,15 +64,31 @@ def upgrade() -> None:
         sa.Column("started_at", sa.DateTime(), nullable=False),
         sa.Column("completed_at", sa.DateTime(), nullable=True),
         sa.Column("duration_seconds", sa.Float(), nullable=True),
-        sa.ForeignKeyConstraint(["repository_id"], ["repositories.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["repository_id"], ["repositories.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_issue_sessions_repository_id"), "issue_sessions", ["repository_id"], unique=False)
-    op.create_index(op.f("ix_issue_sessions_issue_number"), "issue_sessions", ["issue_number"], unique=False)
+    op.create_index(
+        op.f("ix_issue_sessions_repository_id"),
+        "issue_sessions",
+        ["repository_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_issue_sessions_issue_number"),
+        "issue_sessions",
+        ["issue_number"],
+        unique=False,
+    )
 
     with op.batch_alter_table("usage_stats") as batch_op:
         batch_op.add_column(sa.Column("issue_session_id", sa.Integer(), nullable=True))
-        batch_op.create_index(batch_op.f("ix_usage_stats_issue_session_id"), ["issue_session_id"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_usage_stats_issue_session_id"),
+            ["issue_session_id"],
+            unique=False,
+        )
         batch_op.create_foreign_key(
             "fk_usage_stats_issue_session_id_issue_sessions",
             "issue_sessions",
@@ -82,7 +100,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     with op.batch_alter_table("usage_stats") as batch_op:
-        batch_op.drop_constraint("fk_usage_stats_issue_session_id_issue_sessions", type_="foreignkey")
+        batch_op.drop_constraint(
+            "fk_usage_stats_issue_session_id_issue_sessions", type_="foreignkey"
+        )
         batch_op.drop_index(batch_op.f("ix_usage_stats_issue_session_id"))
         batch_op.drop_column("issue_session_id")
 

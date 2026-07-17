@@ -57,10 +57,14 @@ def _normalize_issue_payload(raw: Dict[str, Any]) -> Dict[str, Any]:
         "related_issues": related_issues,
         "solution_suggestions": solution_suggestions,
         "related_files": [
-            str(path) for path in raw.get("related_files", []) or [] if str(path).strip()
+            str(path)
+            for path in raw.get("related_files", []) or []
+            if str(path).strip()
         ],
         "next_actions": [
-            str(action) for action in raw.get("next_actions", []) or [] if str(action).strip()
+            str(action)
+            for action in raw.get("next_actions", []) or []
+            if str(action).strip()
         ],
     }
 

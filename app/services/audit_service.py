@@ -144,4 +144,6 @@ class AuditService:
                 error_message=error_message,
             )
         except Exception:
-            logger.exception("写入审计事件失败: action=%s resource=%s", action, resource_type)
+            logger.exception(
+                "写入审计事件失败: action=%s resource=%s", action, resource_type
+            )

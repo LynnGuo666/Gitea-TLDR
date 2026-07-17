@@ -44,9 +44,7 @@ def _make_auth_manager(monkeypatch: pytest.MonkeyPatch, **settings_overrides: An
 
 
 def test_disabled_when_no_oauth_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    mgr = _make_auth_manager(
-        monkeypatch, oauth_client_id=None, oauth_redirect_url=None
-    )
+    mgr = _make_auth_manager(monkeypatch, oauth_client_id=None, oauth_redirect_url=None)
     assert not mgr.enabled
 
 
@@ -72,9 +70,7 @@ def test_build_authorize_url_structure(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_build_authorize_url_raises_when_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    mgr = _make_auth_manager(
-        monkeypatch, oauth_client_id=None, oauth_redirect_url=None
-    )
+    mgr = _make_auth_manager(monkeypatch, oauth_client_id=None, oauth_redirect_url=None)
     with pytest.raises(HTTPException) as exc_info:
         mgr.build_authorize_url()
     assert exc_info.value.status_code == 400
@@ -135,9 +131,7 @@ async def test_handle_callback_success(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_handle_callback_raises_when_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    mgr = _make_auth_manager(
-        monkeypatch, oauth_client_id=None, oauth_redirect_url=None
-    )
+    mgr = _make_auth_manager(monkeypatch, oauth_client_id=None, oauth_redirect_url=None)
     with pytest.raises(HTTPException) as exc_info:
         await mgr.handle_callback("code", "state", Response())
     assert exc_info.value.status_code == 400

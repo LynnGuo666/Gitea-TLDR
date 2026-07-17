@@ -4,6 +4,44 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [2.5.0] - 2026-07-18
+
+### 概述
+
+开源治理收尾——让仓库达到可对外发布的工程化标准：有质量门、依赖可复现、Docker 部署无 bug、文档齐全且不过期、关键路径有测试网兜底、603 行单体拆分。区别于 2.4.0 的前端 + 数据库优化，本轮聚焦工程基础 + 文档 + 测试 + 重构。
+
+### 工程基础 (Engineering)
+
+- **Python 版本统一 + 依赖 pin + 真实 lockfile**：`pyproject.toml` 加 `[project]` 表（`requires-python>=3.11`、`license=MIT`、`dependencies` 从 requirements.txt 迁移并全 pin）；`requirements.txt`/`requirements-dev.txt` 把裸的 `sqlalchemy`/`alembic`/`aiosqlite`/`greenlet`/`pytest`/`ruff`/`mypy` 补 pin；`pydantic` 2.5.3→2.13.4（2.5.3 的 `pydantic-core` 2.14.6 在 Python 3.13 上源码编译因 `ForwardRef._evaluate` 签名变更失败，2.13.4 提供 cp311/cp313 预编译 wheel；仍在 pydantic 2.x 大版本内）；删除手写 4 行占位 `uv.lock`（`requires-python=>=3.13`），用 `uv lock` 重新生成真实锁文件（47 packages，`requires-python=>=3.11`）。
+- **CI quality 门**：新增 `.github/workflows/quality.yml`——PR 到 main + push 到 main 触发；Python 3.11 + `uv sync --extra dev --frozen`；后端 `ruff check app` + `mypy app` + `pytest -m "not live"` + 前端 `npm ci` + `lint` + `tsc --noEmit` + `build` 全量门。
+- **Dependabot + pre-commit**：新增 `.github/dependabot.yml`（pip/npm/github-actions weekly，`open-pull-requests-limit: 5`，分组 bundler/pip）+ `.pre-commit-config.yaml`（ruff check+format、`requirements-txt-fixer`、`check-merge-conflict`、`detect-private-key`、`gitleaks`）。
+
+### Docker
+
+- **Dockerfile 拆 legacy CLI 可选 layer**：原硬编码安装 nodejs 20 runtime + 全局 `@anthropic-ai/claude-code` + `@openai/codex`，但 `ENABLE_LEGACY_PROVIDERS` 默认 `false`，这些二进制默认永不调用却 always 预装。拆为多 target：`runtime`（默认，仅 Forge，不含 nodejs/CLI，镜像显著更小）vs `runtime-with-legacy`（追加 nodesource nodejs + 两个 CLI）。apt 加 `--no-install-recommends` + 清理 nodesource 源。
+- **compose 卷路径修复**：`docker-compose.yml` volumes 原用 `./docker/...`，但 `compose -f docker/docker-compose.yml` 的 project dir 是 `docker/`，相对路径双重嵌套。改为 `../docker/docker-entrypoint.sh` 与 `../review-workspace`，与 `env_file: ../.env` 同基准。删除根目录残留的空 `docker-entrypoint.sh` 目录。
+
+### 文档 (Documentation)
+
+- 新建 `LICENSE`（MIT，Copyright (c) 2026 LynnGuo666）、`CONTRIBUTING.md`（开发环境 uv 流程、Conventional Commits 不带 Co-Author、版本同步三文件规则、测试命令、PR 流程、AGENTS.md 体系）。
+- `README.md` 重写到 2.4.0：部署命令改 uv 流程；功能特性反映「Forge 默认引擎、CLI legacy extras」定位；Docker 双 target 说明；MIT 段指向 LICENSE。
+- `CHANGELOG.md` 补齐 2.2.5/2.2.3/2.2.2/2.2.1/2.2.0/2.1.0/2.0.7/2.0.6 + 从 `version.py` 迁移 17 个缺失 1.x 条目；`version.py` VERSION_HISTORY 与 CHANGELOG 版本集合经脚本 diff 完全一致（94==94）。
+- `.env.example` 补 `DATABASE_URL`（config.py 有但未文档化）；`CODEX_API_KEY`/`ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN` 标注为 legacy CLI 透传环境变量。
+- `AGENTS.md` 头部元信息刷新到 2.4.0。
+
+### 测试 (Tests)
+
+- **in-memory sqlite fixture + Fake 替身**：`tests/conftest.py` 加 `db` fixture（`Database("sqlite+aiosqlite:///:memory:")` + StaticPool + FK PRAGMA，init+create_tables+yield+close）+ `db_session_factory`；新建 `tests/fakes/` 包——`FakeGiteaClient`（覆盖 `_perform_review` 所需全部 Gitea 方法，记录调用参数）、`FakeRepoManager`（clone/cleanup no-op，`fail_clone` 可测克隆失败）、`StubReviewEngine`（`analyze_pr` 返回可配置 `ReviewResult`/None/raise）。
+- **`_perform_review` 端到端覆盖**：新增 `tests/test_webhook_handler.py` 16 用例——成功路径（analysis_run completed / provider_run completed / usage_event 落库 / Gitea create_review + commit_status / annotations 保存）、失败路径（analyze_pr 返回 None）、异常路径（raise）、幂等保护、配置缺失、凭证缺失、空 diff、克隆失败、`/review` 命令解析、`_process_with_retry` 重试状态机、bot 自触发过滤。`webhook_handler.py` 行覆盖 74%（目标 >70%）。
+
+### 重构 (Refactored)
+
+- **webhook_handler 完整拆分**：`_perform_review` 603 行单体拆分为 `app/review/orchestrator/` 子包——`ReviewOrchestrator`（编排 + 幂等 + 克隆 + 引擎调用 + 异常）+ `ConfigResolver`（repo/config/credential 解析 + 缺失分支）+ `RunRecorder`（analysis_run/provider_run/annotations/usage DB 协调）+ `ReviewPublisher`（评论/review/status 发布）。`WebhookHandler._perform_review` 变为薄委托 `orchestrator.run(...)`。`webhook_handler.py` 1185→564 行；阶段 7 测试不改一行仍全绿（行为保持的重构）。
+
+### 维护 (Maintenance)
+
+- **版本一致性**：同步后端 `app/core/version.py`、前端 `package.json`、`frontend/lib/version.ts` 到 `2.5.0`。
+
 ## [2.4.0] - 2026-07-17
 
 ### 概述

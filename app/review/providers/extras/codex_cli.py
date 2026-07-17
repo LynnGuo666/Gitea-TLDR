@@ -58,7 +58,12 @@ _REVIEW_OUTPUT_SCHEMA: Dict[str, Any] = {
             },
         },
     },
-    "required": ["pr_overview_markdown", "summary_markdown", "overall_severity", "inline_comments"],
+    "required": [
+        "pr_overview_markdown",
+        "summary_markdown",
+        "overall_severity",
+        "inline_comments",
+    ],
     "additionalProperties": False,
 }
 
@@ -127,7 +132,9 @@ class CodexProvider(ReviewProvider):
         pr_info: dict,
         custom_prompt: Optional[str] = None,
     ) -> str:
-        return build_cli_review_prompt(focus_areas, pr_info, diff_content, custom_prompt)
+        return build_cli_review_prompt(
+            focus_areas, pr_info, diff_content, custom_prompt
+        )
 
     # ------------------------------------------------------------------
     # CODEX_HOME / config.toml 生成

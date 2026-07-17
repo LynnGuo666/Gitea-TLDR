@@ -100,7 +100,9 @@ class AnthropicClient:
                     continue
 
                 if response.status_code == 401:
-                    raise PermissionError(f"Anthropic API 认证失败: {response.text[:200]}")
+                    raise PermissionError(
+                        f"Anthropic API 认证失败: {response.text[:200]}"
+                    )
                 if 400 <= response.status_code < 500 and response.status_code != 429:
                     response.raise_for_status()
 

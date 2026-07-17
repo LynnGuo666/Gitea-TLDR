@@ -49,7 +49,9 @@ async def check_config_health(
     issue_resolution = "从模板初始化 issue 配置，并选择可用 Forge 凭证"
 
     if repository_id is not None:
-        repo_issue_config = await db_service.get_repository_config(repository_id, "issue")
+        repo_issue_config = await db_service.get_repository_config(
+            repository_id, "issue"
+        )
         if repo_issue_config and repo_issue_config.api_key:
             issue_status = "ok"
             issue_message = "Issue 分析已配置 Forge API Key"

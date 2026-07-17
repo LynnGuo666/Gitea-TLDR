@@ -61,9 +61,15 @@ def downgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("scope_key", "scenario", "name", name="uq_config_templates_scope_scenario"),
+        sa.UniqueConstraint(
+            "scope_key", "scenario", "name", name="uq_config_templates_scope_scenario"
+        ),
     )
 
     with op.batch_alter_table("repository_configs") as batch_op:
-        batch_op.add_column(sa.Column("source_template_id", sa.Integer(), nullable=True))
-        batch_op.add_column(sa.Column("template_version_copied_at", sa.DateTime(), nullable=True))
+        batch_op.add_column(
+            sa.Column("source_template_id", sa.Integer(), nullable=True)
+        )
+        batch_op.add_column(
+            sa.Column("template_version_copied_at", sa.DateTime(), nullable=True)
+        )

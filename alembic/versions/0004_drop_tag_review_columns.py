@@ -56,4 +56,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     # no-op：tag_review 功能已永久移除，不还原 from_tag / to_tag 列。
     # 回退到 0002 后再 upgrade 会再次进入本迁移，upgrade 是幂等的，无需在 downgrade 重建列。
-    logger.info("0004 downgrade 为 no-op：tag_review 功能已永久移除，不还原 from_tag/to_tag")
+    logger.info(
+        "0004 downgrade 为 no-op：tag_review 功能已永久移除，不还原 from_tag/to_tag"
+    )

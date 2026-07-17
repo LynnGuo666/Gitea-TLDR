@@ -136,7 +136,9 @@ class IssueAnalysisService:
         issue_data = payload.get("issue", {})
         repo_data = payload.get("repository", {})
 
-        owner = repo_data.get("owner", {}).get("login") or repo_data.get("owner", {}).get("username")
+        owner = repo_data.get("owner", {}).get("login") or repo_data.get(
+            "owner", {}
+        ).get("username")
         repo_name = repo_data.get("name")
         issue_number = issue_data.get("number")
         issue_title = issue_data.get("title")
@@ -307,14 +309,21 @@ class IssueAnalysisService:
                             await _db_fs.complete_provider_run(
                                 provider_run_session_id,
                                 status="completed" if result is not None else "failed",
-                                model=_meta.get("model") or (result.model if result else None),
+                                model=_meta.get("model")
+                                or (result.model if result else None),
                                 turns=_meta.get("turns", 0),
                                 tool_calls_count=_meta.get("tool_calls", 0),
-                                messages_json=_json.dumps(_msgs, ensure_ascii=False) if _msgs else None,
+                                messages_json=_json.dumps(_msgs, ensure_ascii=False)
+                                if _msgs
+                                else None,
                                 input_tokens=_meta.get("input_tokens", 0),
                                 output_tokens=_meta.get("output_tokens", 0),
-                                cache_creation_input_tokens=_meta.get("cache_creation_input_tokens", 0),
-                                cache_read_input_tokens=_meta.get("cache_read_input_tokens", 0),
+                                cache_creation_input_tokens=_meta.get(
+                                    "cache_creation_input_tokens", 0
+                                ),
+                                cache_read_input_tokens=_meta.get(
+                                    "cache_read_input_tokens", 0
+                                ),
                                 analysis_run_id=issue_run_id,
                                 error=provider.last_error if result is None else None,
                             )
@@ -388,9 +397,17 @@ class IssueAnalysisService:
             logger.info("Issue 分析完成: %s/%s#%s", owner, repo_name, issue_number)
             return success
         except Exception as e:
-            logger.error("Issue 分析失败: %s/%s#%s", owner, repo_name, issue_number, exc_info=True)
+            logger.error(
+                "Issue 分析失败: %s/%s#%s",
+                owner,
+                repo_name,
+                issue_number,
+                exc_info=True,
+            )
             if self.repo_manager:
-                self.repo_manager.cleanup_workspace(owner, repo_name, WORKSPACE_KIND, issue_number)
+                self.repo_manager.cleanup_workspace(
+                    owner, repo_name, WORKSPACE_KIND, issue_number
+                )
 
             failure_body = self._build_failure_comment(str(e))
             if bot_comment_id:
@@ -448,10 +465,14 @@ class IssueAnalysisService:
             repository_id = repo.id
 
             if actor_username:
-                actor_user = await db_service.get_or_create_user_by_username(actor_username)
+                actor_user = await db_service.get_or_create_user_by_username(
+                    actor_username
+                )
                 actor_user_id = actor_user.id
 
-            repo_issue_config = await db_service.get_repository_config(repository_id, "issue")
+            repo_issue_config = await db_service.get_repository_config(
+                repository_id, "issue"
+            )
             if repo_issue_config is None:
                 failed = await db_service.create_analysis_run(
                     kind="issue",
@@ -480,7 +501,10 @@ class IssueAnalysisService:
                 raise RuntimeError(
                     f"configuration_required: 仓库 {owner}/{repo_name} 尚未初始化 issue 配置"
                 )
-            if not repo_issue_config.credential or not repo_issue_config.credential.is_active:
+            if (
+                not repo_issue_config.credential
+                or not repo_issue_config.credential.is_active
+            ):
                 failed = await db_service.create_analysis_run(
                     kind="issue",
                     repository_id=repository_id,
@@ -516,7 +540,8 @@ class IssueAnalysisService:
                 temperature=repo_issue_config.temperature,
                 max_tokens=repo_issue_config.max_tokens,
                 custom_prompt=repo_issue_config.custom_prompt,
-                default_focus=repo_issue_config.get_focus() or list(DEFAULT_ISSUE_FOCUS),
+                default_focus=repo_issue_config.get_focus()
+                or list(DEFAULT_ISSUE_FOCUS),
             )
 
             effective_focus = list(
@@ -616,16 +641,18 @@ class IssueAnalysisService:
 
         overlap_words = current_words & candidate_words
         overlap_labels = current_labels & candidate_labels
-        title_overlap = self._extract_keywords(current_issue.get("title", "")) & self._extract_keywords(
-            candidate_issue.get("title", "")
-        )
+        title_overlap = self._extract_keywords(
+            current_issue.get("title", "")
+        ) & self._extract_keywords(candidate_issue.get("title", ""))
 
         score = len(overlap_words) + len(title_overlap) * 2 + len(overlap_labels) * 3
         reason_parts = []
         if title_overlap:
             reason_parts.append(f"标题重合词 {', '.join(sorted(title_overlap)[:3])}")
         if overlap_words:
-            reason_parts.append(f"描述关键词重合 {', '.join(sorted(overlap_words)[:3])}")
+            reason_parts.append(
+                f"描述关键词重合 {', '.join(sorted(overlap_words)[:3])}"
+            )
         if overlap_labels:
             reason_parts.append(f"标签重合 {', '.join(sorted(overlap_labels)[:3])}")
         return score, "；".join(reason_parts) or "关键词重合"
@@ -646,9 +673,7 @@ class IssueAnalysisService:
             ]
         else:  # fallback：直接按 2-gram 切分连续中文块
             for chunk in re.findall(r"[\u4e00-\u9fff]+", text):
-                chinese_tokens.extend(
-                    chunk[i : i + 2] for i in range(len(chunk) - 1)
-                )
+                chinese_tokens.extend(chunk[i : i + 2] for i in range(len(chunk) - 1))
 
         tokens = english_tokens + chinese_tokens
         counts = Counter(tokens)
@@ -677,7 +702,11 @@ class IssueAnalysisService:
         elif fallback_mode == "raw_text":
             header += "\n\n> _注：本次结果为原始文本降级输出，未产生结构化结果。_"
 
-        parts = [header, "", payload.get("summary_markdown", "").strip() or "未生成摘要"]
+        parts = [
+            header,
+            "",
+            payload.get("summary_markdown", "").strip() or "未生成摘要",
+        ]
 
         related_issues = payload.get("related_issues") or []
         if related_issues:

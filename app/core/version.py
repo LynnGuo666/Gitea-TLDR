@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "2.4.0"
-__release_date__ = "2026-07-17"
+__version__ = "2.5.0"
+__release_date__ = "2026-07-18"
 __author__ = "LynnGuo666"
 
 
@@ -17,6 +17,19 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.5.0": {
+        "date": "2026-07-18",
+        "changes": [
+            "工程基础：pyproject.toml 加 [project] 表（requires-python>=3.11、license=MIT、dependencies 全 pin）；requirements.txt/requirements-dev.txt 补 pin sqlalchemy/alembic/aiosqlite/greenlet/pytest/ruff/mypy；pydantic 2.5.3→2.13.4（2.5.3 的 pydantic-core 2.14.6 在 Python 3.13 源码编译失败，2.13.4 提供 cp311/cp313 预编译 wheel）；删除手写 4 行占位 uv.lock，用 uv lock 重新生成真实锁文件（47 packages）",
+            "CI：新增 .github/workflows/quality.yml（PR + push 到 main 触发；Python 3.11 + uv sync --frozen；后端 ruff/mypy/pytest -m 'not live' + 前端 lint/tsc/build 全量质量门）",
+            "Docker：Dockerfile 拆 legacy CLI 可选 layer——默认 runtime target 仅 Forge 引擎不含 nodejs/CLI（镜像显著更小），runtime-with-legacy target 追加 nodesource nodejs + claude-code/codex；apt 加 --no-install-recommends + 清理 nodesource 源",
+            "Docker：修复 docker-compose 卷路径双重嵌套（./docker/... → ../docker/...，与 env_file: ../.env 同基准）；删除根目录残留空 docker-entrypoint.sh 目录",
+            "文档：新建 LICENSE（MIT）、CONTRIBUTING.md；README 重写到 2.4.0+uv 流程 + Forge 默认引擎定位；CHANGELOG 补齐 2.2.5/2.2.3-2.2.0/2.1.0/2.0.7/2.0.6 + 从 version.py 迁移 17 个缺失 1.x 条目，version.py VERSION_HISTORY 与 CHANGELOG 版本集合经脚本 diff 完全一致（94==94）；.env.example 补 DATABASE_URL + legacy CLI 透传变量标注",
+            "测试：tests/conftest.py 加 in-memory sqlite fixture（StaticPool + FK PRAGMA）+ db_session_factory；新建 tests/fakes/ 包（FakeGiteaClient/FakeRepoManager/StubReviewEngine 覆盖 _perform_review 全链路）；_perform_review 端到端 16 用例覆盖成功/失败/异常/幂等/配置缺失/凭证缺失/空 diff/克隆失败/命令解析/重试状态机/bot 自触发，行覆盖 74%",
+            "重构：webhook_handler.py _perform_review 603 行单体拆分为 app/review/orchestrator/ 子包——ReviewOrchestrator + ConfigResolver + RunRecorder + ReviewPublisher，_perform_review 变薄委托；webhook_handler.py 1185→564 行；阶段 7 测试不改一行仍全绿（行为保持）",
+            "工程：新增 .github/dependabot.yml（pip/npm/github-actions weekly）+ .pre-commit-config.yaml（ruff check+format、requirements-txt-fixer、check-merge-conflict、detect-private-key、gitleaks）",
+        ],
+    },
     "2.4.0": {
         "date": "2026-07-17",
         "changes": [
@@ -112,7 +125,7 @@ VERSION_HISTORY = {
     "2.0.5": {
         "date": "2026-05-11",
         "changes": [
-            '修复：只读仓库现可点击进入查看详情，不再阻止跳转；权限判断逻辑维持 admin 为准（仅 admin 可管理配置）',
+            "修复：只读仓库现可点击进入查看详情，不再阻止跳转；权限判断逻辑维持 admin 为准（仅 admin 可管理配置）",
         ],
     },
     "2.0.4": {
@@ -226,7 +239,7 @@ VERSION_HISTORY = {
         "date": "2026-04-24",
         "changes": [
             "安全：Docker 容器切换到非 root 用户运行，增加内存/CPU 资源限制，端口绑定到 localhost，隔离 Docker 网络",
-            "安全：移除 Codex CLI 不存在的 \"gpt-5.3-codex\" 默认模型，要求显式配置模型名",
+            '安全：移除 Codex CLI 不存在的 "gpt-5.3-codex" 默认模型，要求显式配置模型名',
             "修复：Codex CLI 子进程添加 300s 超时，避免调用挂起导致永久等待",
             "修复：GiteaClient 全部 23 处 HTTP 请求添加 60s 超时，网络故障不再卡死",
             "修复：所有 Webhook 处理入口写入持久化 WebhookLog，失败时自动重试（3 次指数退避）",

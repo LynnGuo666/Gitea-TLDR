@@ -20,6 +20,7 @@ class TestEncryptionService:
     def teardown_method(self):
         """清理临时文件"""
         import shutil
+
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_encrypt_decrypt_roundtrip(self):

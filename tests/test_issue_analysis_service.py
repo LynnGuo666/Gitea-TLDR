@@ -12,7 +12,9 @@ from app.review.issue_service import IssueAnalysisService
 
 
 class DummyGiteaClient:
-    async def list_issues(self, owner: str, repo: str, state: str = "all", limit: int = 100):
+    async def list_issues(
+        self, owner: str, repo: str, state: str = "all", limit: int = 100
+    ):
         del owner, repo, state, limit
         return [
             {
@@ -43,7 +45,9 @@ class DummyGiteaClient:
 
 
 class ChineseGiteaClient:
-    async def list_issues(self, owner: str, repo: str, state: str = "all", limit: int = 100):
+    async def list_issues(
+        self, owner: str, repo: str, state: str = "all", limit: int = 100
+    ):
         del owner, repo, state, limit
         return [
             {

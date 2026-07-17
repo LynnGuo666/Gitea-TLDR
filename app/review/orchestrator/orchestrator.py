@@ -64,8 +64,10 @@ class ReviewOrchestrator:
         )
 
         # 幂等保护：同 PR/head_sha 已有 completed run 则跳过
-        if self.database and head_sha and await self._already_reviewed(
-            owner, repo_name, pr_number, head_sha
+        if (
+            self.database
+            and head_sha
+            and await self._already_reviewed(owner, repo_name, pr_number, head_sha)
         ):
             logger.info(f"跳过重复审查: {owner}/{repo_name}#{pr_number}")
             return True
@@ -145,10 +147,17 @@ class ReviewOrchestrator:
             if not diff_content:
                 logger.error("无法获取PR diff")
                 await self._fail_without_result(
-                    owner, repo_name, comment_id, pr_number, head_sha,
-                    features_resolved, review_run_id,
-                    error="无法获取PR diff", analysis_mode=analysis_mode,
-                    diff_size=diff_size, config_source=config_source,
+                    owner,
+                    repo_name,
+                    comment_id,
+                    pr_number,
+                    head_sha,
+                    features_resolved,
+                    review_run_id,
+                    error="无法获取PR diff",
+                    analysis_mode=analysis_mode,
+                    diff_size=diff_size,
+                    config_source=config_source,
                 )
                 return False
             diff_size = len(diff_content)
@@ -156,16 +165,27 @@ class ReviewOrchestrator:
             # 4. 克隆
             clone_url = self.gitea_client.get_clone_url(owner, repo_name)
             repo_path = await self.repo_manager.clone_repository(
-                clone_url, owner, repo_name, pr_number, head_branch,
+                clone_url,
+                owner,
+                repo_name,
+                pr_number,
+                head_branch,
                 auth_token=self.gitea_client.token,
             )
             if not repo_path:
                 logger.error("无法克隆仓库，跳过审查")
                 await self._fail_without_result(
-                    owner, repo_name, comment_id, pr_number, head_sha,
-                    features_resolved, review_run_id,
-                    error="无法克隆仓库，审查中止", analysis_mode=analysis_mode,
-                    diff_size=diff_size, config_source=config_source,
+                    owner,
+                    repo_name,
+                    comment_id,
+                    pr_number,
+                    head_sha,
+                    features_resolved,
+                    review_run_id,
+                    error="无法克隆仓库，审查中止",
+                    analysis_mode=analysis_mode,
+                    diff_size=diff_size,
+                    config_source=config_source,
                 )
                 return False
             clone_operations = 1
@@ -183,22 +203,37 @@ class ReviewOrchestrator:
 
             # 6. 引擎分析
             analysis_result = await self.review_engine.analyze_pr(
-                repo_path, diff_content, focus_resolved, pr_data,
-                api_url=api_url, api_key=api_key, engine=engine,
-                model=model, wire_api=wire_api,
+                repo_path,
+                diff_content,
+                focus_resolved,
+                pr_data,
+                api_url=api_url,
+                api_key=api_key,
+                engine=engine,
+                model=model,
+                wire_api=wire_api,
             )
             self.repo_manager.cleanup_repository(owner, repo_name, pr_number)
 
             if analysis_result is None:
-                analysis_error = (
-                    self.review_engine.last_error or "审查分析过程出错"
-                )
+                analysis_error = self.review_engine.last_error or "审查分析过程出错"
                 logger.error(f"审查分析失败: {analysis_error}")
                 await self._fail_with_result(
-                    owner, repo_name, comment_id, pr_number, head_sha,
-                    features_resolved, review_run_id, provider_run_session_id,
-                    analysis_error, analysis_mode, diff_size, config_source,
-                    model, gitea_api_calls, clone_operations,
+                    owner,
+                    repo_name,
+                    comment_id,
+                    pr_number,
+                    head_sha,
+                    features_resolved,
+                    review_run_id,
+                    provider_run_session_id,
+                    analysis_error,
+                    analysis_mode,
+                    diff_size,
+                    config_source,
+                    model,
+                    gitea_api_calls,
+                    clone_operations,
                 )
                 return False
 
@@ -206,30 +241,42 @@ class ReviewOrchestrator:
             async with self.database.session() as session:
                 publisher = ReviewPublisher(session, self.gitea_client)
                 success = await publisher.publish_success(
-                    owner=owner, repo_name=repo_name, pr_number=pr_number,
-                    comment_id=comment_id, head_sha=head_sha,
-                    features=features_resolved, analysis_result=analysis_result,
+                    owner=owner,
+                    repo_name=repo_name,
+                    pr_number=pr_number,
+                    comment_id=comment_id,
+                    head_sha=head_sha,
+                    features=features_resolved,
+                    analysis_result=analysis_result,
                 )
 
             # 8. DB 收尾 + usage + provider_run
             async with self.database.session() as session:
                 recorder = RunRecorder(session)
                 await recorder.complete_run(
-                    review_run_id, success=success, analysis_result=analysis_result,
-                    diff_size=diff_size, analysis_mode=analysis_mode,
-                    config_source=config_source, features=features_resolved,
+                    review_run_id,
+                    success=success,
+                    analysis_result=analysis_result,
+                    diff_size=diff_size,
+                    analysis_mode=analysis_mode,
+                    config_source=config_source,
+                    features=features_resolved,
                     focus_areas=focus_resolved,
                 )
                 if repository_id:
                     await recorder.record_usage(
-                        repository_id=repository_id, analysis_run_id=review_run_id,
-                        actor_user_id=actor_user_id, analysis_result=analysis_result,
+                        repository_id=repository_id,
+                        analysis_run_id=review_run_id,
+                        actor_user_id=actor_user_id,
+                        analysis_result=analysis_result,
                         gitea_api_calls=gitea_api_calls,
                         clone_operations=clone_operations,
                     )
                 await recorder.complete_provider_run(
-                    provider_run_session_id, status="completed",
-                    analysis_result=analysis_result, model=model,
+                    provider_run_session_id,
+                    status="completed",
+                    analysis_result=analysis_result,
+                    model=model,
                     analysis_run_id=review_run_id,
                 )
 
@@ -266,41 +313,79 @@ class ReviewOrchestrator:
     # ------------------------------------------------------------------
 
     async def _fail_without_result(
-        self, owner, repo_name, comment_id, pr_number, head_sha,
-        features, review_run_id, *, error, analysis_mode, diff_size, config_source,
+        self,
+        owner,
+        repo_name,
+        comment_id,
+        pr_number,
+        head_sha,
+        features,
+        review_run_id,
+        *,
+        error,
+        analysis_mode,
+        diff_size,
+        config_source,
     ) -> None:
         async with self.database.session() as session:
             publisher = ReviewPublisher(session, self.gitea_client)
             await publisher.publish_error_comment(
-                owner=owner, repo_name=repo_name, comment_id=comment_id,
-                pr_number=pr_number, error_message=error, features=features,
+                owner=owner,
+                repo_name=repo_name,
+                comment_id=comment_id,
+                pr_number=pr_number,
+                error_message=error,
+                features=features,
             )
             await publisher.set_error_status(
-                owner=owner, repo_name=repo_name, head_sha=head_sha,
-                description=error, features=features,
+                owner=owner,
+                repo_name=repo_name,
+                head_sha=head_sha,
+                description=error,
+                features=features,
             )
         if review_run_id:
             async with self.database.session() as session:
                 await RunRecorder(session).fail_run(
-                    review_run_id, error_message=error,
-                    analysis_mode=analysis_mode, diff_size=diff_size,
+                    review_run_id,
+                    error_message=error,
+                    analysis_mode=analysis_mode,
+                    diff_size=diff_size,
                     config_source=config_source,
                 )
 
     async def _fail_with_result(
-        self, owner, repo_name, comment_id, pr_number, head_sha,
-        features, review_run_id, provider_run_session_id,
-        analysis_error, analysis_mode, diff_size, config_source,
-        model, gitea_api_calls, clone_operations,
+        self,
+        owner,
+        repo_name,
+        comment_id,
+        pr_number,
+        head_sha,
+        features,
+        review_run_id,
+        provider_run_session_id,
+        analysis_error,
+        analysis_mode,
+        diff_size,
+        config_source,
+        model,
+        gitea_api_calls,
+        clone_operations,
     ) -> None:
         async with self.database.session() as session:
             publisher = ReviewPublisher(session, self.gitea_client)
             await publisher.publish_error_comment(
-                owner=owner, repo_name=repo_name, comment_id=comment_id,
-                pr_number=pr_number, error_message=analysis_error, features=features,
+                owner=owner,
+                repo_name=repo_name,
+                comment_id=comment_id,
+                pr_number=pr_number,
+                error_message=analysis_error,
+                features=features,
             )
             await publisher.set_error_status(
-                owner=owner, repo_name=repo_name, head_sha=head_sha,
+                owner=owner,
+                repo_name=repo_name,
+                head_sha=head_sha,
                 description=analysis_error.replace("\n", " ").strip()[:120]
                 or "代码审查失败",
                 features=features,
@@ -308,27 +393,34 @@ class ReviewOrchestrator:
         if review_run_id:
             async with self.database.session() as session:
                 await RunRecorder(session).fail_run(
-                    review_run_id, error_message=analysis_error,
-                    analysis_mode=analysis_mode, diff_size=diff_size,
+                    review_run_id,
+                    error_message=analysis_error,
+                    analysis_mode=analysis_mode,
+                    diff_size=diff_size,
                     config_source=config_source,
                 )
         if provider_run_session_id:
             async with self.database.session() as session:
                 await RunRecorder(session).complete_provider_run(
-                    provider_run_session_id, status="failed",
-                    model=model, error=analysis_error,
+                    provider_run_session_id,
+                    status="failed",
+                    model=model,
+                    error=analysis_error,
                     analysis_run_id=review_run_id,
                 )
 
     async def _fail_on_exception(
-        self, review_run_id: Optional[int],
-        provider_run_session_id: Optional[str], exc: Exception,
+        self,
+        review_run_id: Optional[int],
+        provider_run_session_id: Optional[str],
+        exc: Exception,
     ) -> None:
         if review_run_id:
             try:
                 async with self.database.session() as session:
                     await RunRecorder(session).fail_run(
-                        review_run_id, error_message=str(exc),
+                        review_run_id,
+                        error_message=str(exc),
                     )
             except Exception as db_error:
                 logger.error(f"更新数据库记录失败: {db_error}")
@@ -336,8 +428,10 @@ class ReviewOrchestrator:
             try:
                 async with self.database.session() as session:
                     await RunRecorder(session).complete_provider_run(
-                        provider_run_session_id, status="failed",
-                        error=str(exc), analysis_run_id=review_run_id,
+                        provider_run_session_id,
+                        status="failed",
+                        error=str(exc),
+                        analysis_run_id=review_run_id,
                     )
             except Exception as exc2:
                 logger.warning("完成 ProviderRun 失败（非致命）: %s", exc2)

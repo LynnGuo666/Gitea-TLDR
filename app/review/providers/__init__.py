@@ -1,4 +1,10 @@
-from .base import InlineComment, IssueResult, ProviderConfig, ReviewProvider, ReviewResult
+from .base import (
+    InlineComment,
+    IssueResult,
+    ProviderConfig,
+    ReviewProvider,
+    ReviewResult,
+)
 from .forge.provider import ForgeProvider
 from .registry import ProviderRegistry
 

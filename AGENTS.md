@@ -81,6 +81,17 @@ cd frontend && npm run lint && npx tsc --noEmit && npm run build
 docker compose -f docker/docker-compose.yml up --build
 ```
 
+### pre-commit（可选但推荐）
+```bash
+# 安装 git hook（首次）
+pre-commit install
+# 全量跑一遍
+pre-commit run --all-files
+```
+钩子集：ruff check + format、`requirements-txt-fixer`、`check-merge-conflict`、
+`detect-private-key`、`gitleaks`。CI 的 quality workflow 跑等价的后端 ruff/mypy/pytest
++ 前端 lint/tsc/build，pre-commit 是本地提交前的快速反馈层。
+
 ## 发布清单
 - 更新 `CHANGELOG.md`（用户可见的变更）。
 - 同步三个版本文件（后端 + 前端 + 前端 lib）。

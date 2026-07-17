@@ -139,7 +139,9 @@ def test_forge_provider_analyze_pr_passes_configured_max_turns(
             },
         )
 
-    monkeypatch.setattr("app.review.providers.forge.provider.run_review", fake_run_review)
+    monkeypatch.setattr(
+        "app.review.providers.forge.provider.run_review", fake_run_review
+    )
     monkeypatch.setattr(
         "app.review.providers.forge.provider.settings.forge_api_key", "secret"
     )
@@ -191,8 +193,12 @@ def test_forge_provider_prefers_explicit_api_over_settings(
             },
         )
 
-    monkeypatch.setattr("app.review.providers.forge.provider.AnthropicClient", DummyClient)
-    monkeypatch.setattr("app.review.providers.forge.provider.run_review", fake_run_review)
+    monkeypatch.setattr(
+        "app.review.providers.forge.provider.AnthropicClient", DummyClient
+    )
+    monkeypatch.setattr(
+        "app.review.providers.forge.provider.run_review", fake_run_review
+    )
     monkeypatch.setattr(
         "app.review.providers.forge.provider.settings.forge_api_key", "settings-key"
     )
