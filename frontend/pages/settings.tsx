@@ -34,7 +34,7 @@ export default function SettingsPage() {
         if (statsRes.ok) {
           const statsData = await statsRes.json();
           setStats(statsData.summary);
-          setReviewCount(statsData.details?.length || 0);
+          setReviewCount(statsData.events?.length || 0);
         }
 
       } catch (error) {
@@ -53,7 +53,7 @@ export default function SettingsPage() {
       if (statsRes.ok) {
         const statsData = await statsRes.json();
         setStats(statsData.summary);
-        setReviewCount(statsData.details?.length || 0);
+        setReviewCount(statsData.events?.length || 0);
       }
     } catch (error) {
       console.error('Failed to refresh stats:', error);

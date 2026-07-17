@@ -10,6 +10,35 @@ export type Repository = {
 
 export type Repo = Repository;
 
+// ===== Webhook / Gitea 集成 =====
+
+export type GiteaHook = {
+  id: number;
+  active: boolean;
+  events: string[];
+  config: { url?: string; content_type?: string };
+  type: string;
+};
+
+export type WebhookStatus = {
+  configured: boolean;
+  hooks: GiteaHook[];
+};
+
+export type PullRequest = {
+  id: number;
+  number: number;
+  title: string;
+  state: string;
+  created_at: string;
+  user: { login: string; avatar_url: string };
+  head: { ref: string };
+  base: { ref: string };
+  html_url: string;
+  merged: boolean;
+  merged_at: string | null;
+};
+
 export type PublicConfig = {
   gitea_url: string;
   bot_username?: string | null;
@@ -105,12 +134,6 @@ export type AnalysisRunSummary = {
   duration_seconds: number | null;
 };
 
-export type AnalysisRunDetail = AnalysisRunSummary & {
-  result_payload: Record<string, unknown>;
-  analysis_payload: Record<string, unknown>;
-  annotations?: AnalysisAnnotation[];
-};
-
 export type ProviderRunSummary = {
   id: number;
   analysis_run_id: number | null;
@@ -131,10 +154,6 @@ export type ProviderRunSummary = {
   duration_seconds: number | null;
   error_message: string | null;
   repo_full_name: string | null;
-};
-
-export type ProviderRunDetail = ProviderRunSummary & {
-  messages: unknown[];
 };
 
 export type UsageEvent = {

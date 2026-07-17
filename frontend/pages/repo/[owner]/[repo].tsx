@@ -5,36 +5,10 @@ import { Button, Card, CardBody, Chip, Input, Select, SelectItem, Switch, Tab, T
 import PageHeader from '../../../components/PageHeader';
 import SectionHeader from '../../../components/SectionHeader';
 import { apiFetch } from '../../../lib/api';
-import { ProviderCredential, RepositoryConfiguration } from '../../../lib/types';
+import { relativeTime, readErrorMessage } from '../../../lib/utils';
+import { ProviderCredential, RepositoryConfiguration, WebhookStatus, PullRequest } from '../../../lib/types';
 
 type Scenario = 'review' | 'issue';
-
-type GiteaHook = {
-  id: number;
-  active: boolean;
-  events: string[];
-  config: { url?: string; content_type?: string };
-  type: string;
-};
-
-type WebhookStatus = {
-  configured: boolean;
-  hooks: GiteaHook[];
-};
-
-type PullRequest = {
-  id: number;
-  number: number;
-  title: string;
-  state: string;
-  created_at: string;
-  user: { login: string; avatar_url: string };
-  head: { ref: string };
-  base: { ref: string };
-  html_url: string;
-  merged: boolean;
-  merged_at: string | null;
-};
 
 const FOCUS_CATALOG = [
   { key: 'quality', label: '质量保障', detail: '架构、风格一致性、重复代码' },
@@ -47,26 +21,6 @@ const SCENARIO_OPTIONS: { key: Scenario; label: string; detail: string }[] = [
   { key: 'review', label: 'PR 审查', detail: '分析代码变更，生成内联评论与概览' },
   { key: 'issue', label: 'Issue 分析', detail: '定位 Issue 根因，提供解决方案' },
 ];
-
-function relativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins} 分钟前`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} 小时前`;
-  return `${Math.floor(hours / 24)} 天前`;
-}
-
-async function readErrorMessage(res: Response, fallback: string): Promise<string> {
-  try {
-    const data = (await res.json()) as { detail?: unknown; message?: unknown };
-    const detail = data.detail ?? data.message;
-    if (typeof detail === 'string' && detail.trim()) return detail;
-  } catch {
-    // Response body is not JSON.
-  }
-  return fallback;
-}
 
 export default function RepoPage() {
   const router = useRouter();
@@ -219,10 +173,10 @@ export default function RepoPage() {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        engine: 'forge',
+        engine: form.engine || config?.engine || 'forge',
         model: form.model || null,
         credential_id: form.credential_id ? Number(form.credential_id) : null,
-        wire_api: null,
+        wire_api: form.wire_api || config?.wire_api || null,
         temperature: form.temperature ? Number(form.temperature) : null,
         max_tokens: form.max_tokens ? Number(form.max_tokens) : null,
         custom_prompt: form.custom_prompt || null,
