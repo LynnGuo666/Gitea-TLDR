@@ -23,6 +23,7 @@ from app.core.database import Database
 from app.models import DEFAULT_ISSUE_FOCUS
 from app.services.db_service import DBService
 from app.services.audit_service import AuditService
+from app.services.repositories import UsageRepository
 from app.gitea.client import GiteaClient
 from app.review.providers.base import IssueResult
 from app.review.providers.forge.provider import (
@@ -369,7 +370,7 @@ class IssueAnalysisService:
                         overall_success=success,
                     )
                     usage = result.usage_metadata
-                    await db_service.record_usage_event(
+                    await UsageRepository(session).record_usage_event(
                         repository_id=repository_id,
                         analysis_run_id=issue_run_id,
                         user_id=actor_user_id,
@@ -468,7 +469,7 @@ class IssueAnalysisService:
                     overall_success=False,
                     error_message="configuration_required",
                 )
-                await AuditService(db_service).record_failure(
+                await AuditService(session).record_failure(
                     actor_id=actor_user_id,
                     action="trigger_analysis",
                     resource_type="analysis_run",
@@ -497,7 +498,7 @@ class IssueAnalysisService:
                     overall_success=False,
                     error_message="credential_unavailable",
                 )
-                await AuditService(db_service).record_failure(
+                await AuditService(session).record_failure(
                     actor_id=actor_user_id,
                     action="trigger_analysis",
                     resource_type="analysis_run",

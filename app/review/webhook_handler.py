@@ -19,6 +19,7 @@ from app.review.engine import ReviewEngine
 from app.gitea.command_parser import CommandParser
 from app.services.db_service import DBService
 from app.services.audit_service import AuditService
+from app.services.repositories import UsageRepository, WebhookRepository
 from app.gitea.client import GiteaClient
 from app.review.issue_service import IssueAnalysisService
 from app.gitea.repo_manager import RepoManager
@@ -197,8 +198,8 @@ class WebhookHandler:
         if self.database:
             try:
                 async with self.database.session() as session:
-                    db_service = DBService(session)
-                    log = await db_service.create_webhook_event(
+                    webhook_repo = WebhookRepository(session)
+                    log = await webhook_repo.create_webhook_event(
                         request_id=request_id,
                         repository_id=repository_id,
                         event_type=event_type,
@@ -262,8 +263,8 @@ class WebhookHandler:
             if not self.database:
                 return
             async with self.database.session() as session:
-                db_service = DBService(session)
-                await db_service.update_webhook_event(
+                repo = WebhookRepository(session)
+                await repo.update_webhook_event(
                     event_id=log_id,
                     status=status,
                     error_message=error_message,
@@ -580,7 +581,7 @@ class WebhookHandler:
                             overall_success=False,
                             error_message="configuration_required",
                         )
-                        await AuditService(db_service).record_failure(
+                        await AuditService(session).record_failure(
                             actor_id=actor_user_id,
                             action="trigger_analysis",
                             resource_type="analysis_run",
@@ -610,7 +611,7 @@ class WebhookHandler:
                             overall_success=False,
                             error_message="credential_unavailable",
                         )
-                        await AuditService(db_service).record_failure(
+                        await AuditService(session).record_failure(
                             actor_id=actor_user_id,
                             action="trigger_analysis",
                             resource_type="analysis_run",
@@ -999,7 +1000,7 @@ class WebhookHandler:
                     # 记录使用量
                     if repository_id:
                         meta = analysis_result.usage_metadata
-                        await db_service.record_usage_event(
+                        await UsageRepository(session).record_usage_event(
                             repository_id=repository_id,
                             analysis_run_id=review_run_id,
                             user_id=actor_user_id,

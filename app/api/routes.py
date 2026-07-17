@@ -24,6 +24,7 @@ from app.core.context import AppContext
 from app.models import Actor, WEBHOOK_STATUS_QUEUED
 from app.services.audit_service import AuditService
 from app.services.db_service import DBService
+from app.services.repositories import AuditRepository, UsageRepository, WebhookRepository
 
 
 class ProviderCredentialPayload(BaseModel):
@@ -459,7 +460,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
     async def update_actor(actor_id: int, payload: ActorUpdatePayload, request: Request):
         async with request.state.database.session() as session:
             service = DBService(session)
-            audit = AuditService(service)
+            audit = AuditService(session)
             before = await service.session.get(Actor, actor_id)
             before_snapshot = _serialize_actor(before) if before else None
             actor = await service.update_actor(actor_id, **payload.model_dump(exclude_unset=True))
@@ -485,7 +486,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
     async def update_app_setting(key: str, payload: AppSettingPayload, request: Request):
         async with request.state.database.session() as session:
             service = DBService(session)
-            audit = AuditService(service)
+            audit = AuditService(session)
             row = await service.update_app_setting(
                 key,
                 payload.value,
@@ -504,7 +505,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
     async def delete_app_setting(key: str, request: Request):
         async with request.state.database.session() as session:
             service = DBService(session)
-            audit = AuditService(service)
+            audit = AuditService(session)
             deleted = await service.delete_app_setting(key)
             if not deleted:
                 raise HTTPException(status_code=404, detail="setting_not_found")
@@ -579,7 +580,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
         if getattr(request.state, "database", None):
             async with request.state.database.session() as session:
                 service = DBService(session)
-                audit = AuditService(service)
+                audit = AuditService(session)
                 repo_obj = await service.update_repository_secret(owner, repo, secret)
                 await audit.record_success(
                     action="update",
@@ -595,7 +596,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
         if getattr(request.state, "database", None):
             async with request.state.database.session() as session:
                 service = DBService(session)
-                audit = AuditService(service)
+                audit = AuditService(session)
                 repo_obj = await service.get_or_create_repository(owner, repo)
                 await service.ensure_repository_feature(repo_obj.id, "review")
                 await service.ensure_repository_feature(repo_obj.id, "issue")
@@ -628,7 +629,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
         async with request.state.database.session() as session:
             service = DBService(session)
             cred = await service.create_provider_credential(**payload.model_dump())
-            audit = AuditService(service)
+            audit = AuditService(session)
             await audit.record_success(
                 action="create",
                 resource_type="provider_credential",
@@ -647,7 +648,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             )
             if not cred:
                 raise HTTPException(status_code=404, detail="凭证不存在")
-            audit = AuditService(service)
+            audit = AuditService(session)
             await audit.record_success(
                 action="update",
                 resource_type="provider_credential",
@@ -663,7 +664,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
             cred = await service.rotate_provider_credential(credential_id, payload.api_key)
             if not cred:
                 raise HTTPException(status_code=404, detail="凭证不存在")
-            audit = AuditService(service)
+            audit = AuditService(session)
             await audit.record_success(
                 action="rotate_secret",
                 resource_type="provider_credential",
@@ -684,7 +685,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
                 raise
             if not deleted:
                 raise HTTPException(status_code=404, detail="凭证不存在")
-            audit = AuditService(service)
+            audit = AuditService(session)
             await audit.record_success(
                 action="delete",
                 resource_type="provider_credential",
@@ -714,7 +715,7 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
                 scenario,
                 **payload.model_dump(exclude_unset=True),
             )
-            audit = AuditService(service)
+            audit = AuditService(session)
             await audit.record_success(
                 action="update",
                 resource_type="repository_config",
@@ -768,9 +769,9 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
     @router.get("/usage")
     async def usage(request: Request, repository_id: Optional[int] = None, actor_id: Optional[int] = None, start: Optional[date] = None, end: Optional[date] = None):
         async with request.state.database.session() as session:
-            service = DBService(session)
-            summary = await service.get_usage_summary(repository_id=repository_id, actor_id=actor_id, start_date=start, end_date=end)
-            events = await service.list_usage_events(repository_id=repository_id, actor_id=actor_id, start_date=start, end_date=end)
+            repo = UsageRepository(session)
+            summary = await repo.get_usage_summary(repository_id=repository_id, actor_id=actor_id, start_date=start, end_date=end)
+            events = await repo.list_usage_events(repository_id=repository_id, actor_id=actor_id, start_date=start, end_date=end)
             return {
                 "summary": summary,
                 "events": [
@@ -804,8 +805,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
         offset: int = 0,
     ):
         async with request.state.database.session() as session:
-            service = DBService(session)
-            events = await service.list_audit_events(
+            repo = AuditRepository(session)
+            events = await repo.list_audit_events(
                 limit=limit,
                 offset=offset,
                 actor_id=actor_id,
@@ -837,8 +838,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
         offset: int = Query(0, ge=0),
     ):
         async with request.state.database.session() as session:
-            service = DBService(session)
-            events = await service.list_webhook_events(
+            repo = WebhookRepository(session)
+            events = await repo.list_webhook_events(
                 repository_id=repository_id, status=status, limit=limit, offset=offset
             )
             return {"events": [_serialize_webhook_event(event) for event in events], "limit": limit, "offset": offset}
@@ -846,8 +847,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
     @router.get("/webhook-events/{event_id}")
     async def webhook_event_detail(event_id: int, request: Request):
         async with request.state.database.session() as session:
-            service = DBService(session)
-            event = await service.get_webhook_event(event_id)
+            repo = WebhookRepository(session)
+            event = await repo.get_webhook_event(event_id)
             if not event:
                 raise HTTPException(status_code=404, detail="webhook_event_not_found")
             return _serialize_webhook_event(event)
@@ -855,13 +856,13 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
     @router.post("/webhook-events/{event_id}/replay")
     async def replay_webhook_event(event_id: int, request: Request, background_tasks: BackgroundTasks):
         async with request.state.database.session() as session:
-            service = DBService(session)
-            audit = AuditService(service)
-            event = await service.get_webhook_event(event_id)
+            repo = WebhookRepository(session)
+            audit = AuditService(session)
+            event = await repo.get_webhook_event(event_id)
             if not event:
                 raise HTTPException(status_code=404, detail="webhook_event_not_found")
             payload = json.loads(event.payload_json)
-            await service.update_webhook_event(event.id, status=WEBHOOK_STATUS_QUEUED)
+            await repo.update_webhook_event(event.id, status=WEBHOOK_STATUS_QUEUED)
             await audit.record_success(
                 action="replay_webhook",
                 resource_type="webhook_event",
@@ -879,8 +880,8 @@ def create_api_router(context: AppContext) -> tuple[APIRouter, APIRouter, APIRou
     @router.get("/audit-events/{event_id}")
     async def audit_event_detail(event_id: int, request: Request):
         async with request.state.database.session() as session:
-            service = DBService(session)
-            event = await service.get_audit_event(event_id)
+            repo = AuditRepository(session)
+            event = await repo.get_audit_event(event_id)
             if not event:
                 raise HTTPException(status_code=404, detail="审计事件不存在")
             return {

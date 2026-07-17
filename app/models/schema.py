@@ -438,9 +438,6 @@ class UsageEvent(Base):
     analysis_run_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("analysis_runs.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    provider_run_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("provider_runs.id", ondelete="SET NULL"), nullable=True, index=True
-    )
     repository_id: Mapped[int] = mapped_column(
         ForeignKey("repositories.id", ondelete="CASCADE"),
         nullable=False,

@@ -68,11 +68,11 @@ async def _recover_pending_webhooks(context: AppContext) -> None:
         return
 
     try:
-        from app.services.db_service import DBService
+        from app.services.repositories import WebhookRepository
 
         async with context.database.session() as session:
-            db_service = DBService(session)
-            pending = await db_service.list_pending_webhook_events()
+            repo = WebhookRepository(session)
+            pending = await repo.list_pending_webhook_events()
     except Exception as e:
         logger.warning(f"查询 pending webhook 失败: {e}")
         return
@@ -95,8 +95,8 @@ async def _recover_pending_webhooks(context: AppContext) -> None:
         event_type = log.event_type
         try:
             async with context.database.session() as session:
-                db_service = DBService(session)
-                await db_service.update_webhook_event(
+                repo = WebhookRepository(session)
+                await repo.update_webhook_event(
                     event_id=log.id,
                     status=WEBHOOK_STATUS_RETRYING,
                 )
@@ -120,8 +120,8 @@ async def _recover_pending_webhooks(context: AppContext) -> None:
             _elapsed_ms = int((_time.monotonic() - _time_start) * 1000)
             try:
                 async with context.database.session() as session:
-                    db_service = DBService(session)
-                    await db_service.update_webhook_event(
+                    repo = WebhookRepository(session)
+                    await repo.update_webhook_event(
                         event_id=log.id,
                         status=WEBHOOK_STATUS_SUCCESS,
                         processing_time_ms=_elapsed_ms,

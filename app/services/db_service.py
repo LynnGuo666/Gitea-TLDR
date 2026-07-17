@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import secrets
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import func, select
@@ -21,16 +21,11 @@ from app.models import (
     AnalysisAnnotation,
     AnalysisRun,
     AppSetting,
-    AuditEvent,
     ProviderCredential,
     ProviderRun,
     Repository,
     RepositoryConfig,
     RepositoryFeature,
-    UsageEvent,
-    WebhookEvent,
-    WEBHOOK_PENDING_STATUSES,
-    WEBHOOK_STATUS_QUEUED,
 )
 
 logger = logging.getLogger(__name__)
@@ -637,178 +632,3 @@ class DBService:
         )
         return result.scalar_one_or_none()
 
-    # ==================== Usage ====================
-
-    async def record_usage_event(self, repository_id: int, **kwargs):
-        event = UsageEvent(
-            analysis_run_id=kwargs.get("analysis_run_id"),
-            repository_id=repository_id,
-            actor_id=kwargs.get("actor_id") or kwargs.get("user_id"),
-            event_date=date.today(),
-            provider=kwargs.get("provider"),
-            input_tokens=kwargs.get("input_tokens", 0),
-            output_tokens=kwargs.get("output_tokens", 0),
-            cache_creation_input_tokens=kwargs.get("cache_creation_input_tokens", 0),
-            cache_read_input_tokens=kwargs.get("cache_read_input_tokens", 0),
-            gitea_api_calls=kwargs.get("gitea_api_calls", 0),
-            provider_api_calls=kwargs.get("provider_api_calls", 0),
-            clone_operations=kwargs.get("clone_operations", 0),
-            created_at=_now(),
-        )
-        self.session.add(event)
-        await self.session.flush()
-        return event
-
-    async def list_usage_events(
-        self,
-        repository_id: Optional[int] = None,
-        actor_id: Optional[int] = None,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        *,
-        limit: int = 200,
-        offset: int = 0,
-    ):
-        stmt = select(UsageEvent)
-        if repository_id:
-            stmt = stmt.where(UsageEvent.repository_id == repository_id)
-        if actor_id is not None:
-            stmt = stmt.where(UsageEvent.actor_id == actor_id)
-        if start_date:
-            stmt = stmt.where(UsageEvent.event_date >= start_date)
-        if end_date:
-            stmt = stmt.where(UsageEvent.event_date <= end_date)
-        result = await self.session.execute(
-            stmt.order_by(UsageEvent.event_date.desc()).limit(limit).offset(offset)
-        )
-        return list(result.scalars().all())
-
-    async def get_usage_summary(self, repository_id: Optional[int] = None, actor_id: Optional[int] = None, user_id: Optional[int] = None, start_date: Optional[date] = None, end_date: Optional[date] = None):
-        stmt = select(
-            func.sum(UsageEvent.input_tokens).label("total_input_tokens"),
-            func.sum(UsageEvent.output_tokens).label("total_output_tokens"),
-            func.sum(UsageEvent.cache_creation_input_tokens).label("total_cache_creation_tokens"),
-            func.sum(UsageEvent.cache_read_input_tokens).label("total_cache_read_tokens"),
-            func.sum(UsageEvent.gitea_api_calls).label("total_gitea_calls"),
-            func.sum(UsageEvent.provider_api_calls).label("total_provider_calls"),
-            func.sum(UsageEvent.clone_operations).label("total_clone_operations"),
-            func.count(UsageEvent.id).label("record_count"),
-        )
-        if repository_id:
-            stmt = stmt.where(UsageEvent.repository_id == repository_id)
-        actor_filter = actor_id if actor_id is not None else user_id
-        if actor_filter is not None:
-            stmt = stmt.where(UsageEvent.actor_id == actor_filter)
-        if start_date:
-            stmt = stmt.where(UsageEvent.event_date >= start_date)
-        if end_date:
-            stmt = stmt.where(UsageEvent.event_date <= end_date)
-        row = (await self.session.execute(stmt)).one()
-        return {
-            "total_input_tokens": row.total_input_tokens or 0,
-            "total_output_tokens": row.total_output_tokens or 0,
-            "total_cache_creation_tokens": row.total_cache_creation_tokens or 0,
-            "total_cache_read_tokens": row.total_cache_read_tokens or 0,
-            "total_gitea_calls": row.total_gitea_calls or 0,
-            "total_provider_calls": row.total_provider_calls or 0,
-            "total_clone_operations": row.total_clone_operations or 0,
-            "record_count": row.record_count or 0,
-            "run_count": row.record_count or 0,
-        }
-
-    # ==================== Webhooks ====================
-
-    async def create_webhook_event(self, request_id: str, repository_id: Optional[int], event_type: str, payload: str, status: str = WEBHOOK_STATUS_QUEUED):
-        event = WebhookEvent(
-            request_id=request_id,
-            repository_id=repository_id or None,
-            event_type=event_type,
-            payload_json=payload,
-            status=status,
-            processing_time_ms=0,
-            retry_count=0,
-        )
-        self.session.add(event)
-        await self.session.flush()
-        return event
-
-    async def update_webhook_event(self, event_id: int, **kwargs):
-        event = await self.session.get(WebhookEvent, event_id)
-        if not event:
-            return None
-        for key, value in kwargs.items():
-            if key == "increment_retry" and value:
-                event.retry_count += 1
-            elif hasattr(event, key) and value is not None:
-                setattr(event, key, value)
-        await self.session.flush()
-        return event
-
-    async def list_pending_webhook_events(self, min_age_seconds: int = 60, max_age_hours: int = 6):
-        now = _now()
-        stmt = select(WebhookEvent).where(
-            WebhookEvent.status.in_(WEBHOOK_PENDING_STATUSES),
-            WebhookEvent.created_at >= now - timedelta(hours=max_age_hours),
-            WebhookEvent.created_at <= now - timedelta(seconds=min_age_seconds),
-        )
-        result = await self.session.execute(stmt.order_by(WebhookEvent.created_at.asc()))
-        return list(result.scalars().all())
-
-    async def list_webhook_events(
-        self,
-        *,
-        repository_id: Optional[int] = None,
-        status: Optional[str] = None,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> list[WebhookEvent]:
-        stmt = select(WebhookEvent)
-        if repository_id is not None:
-            stmt = stmt.where(WebhookEvent.repository_id == repository_id)
-        if status:
-            stmt = stmt.where(WebhookEvent.status == status)
-        result = await self.session.execute(
-            stmt.order_by(WebhookEvent.created_at.desc()).limit(limit).offset(offset)
-        )
-        return list(result.scalars().all())
-
-    async def get_webhook_event(self, event_id: int) -> Optional[WebhookEvent]:
-        return await self.session.get(WebhookEvent, event_id)
-
-    # ==================== Audit ====================
-
-    async def record_audit(self, *, actor_id: Optional[int], actor_type: str, action: str, resource_type: str, resource_id: Optional[int] = None, repository_id: Optional[int] = None, request_id: Optional[str] = None, source: str = "api", ip_address: Optional[str] = None, user_agent: Optional[str] = None, status: str = "success", before: Any = None, after: Any = None, error_message: Optional[str] = None):
-        event = AuditEvent(
-            actor_id=actor_id,
-            actor_type=actor_type,
-            action=action,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            repository_id=repository_id,
-            request_id=request_id,
-            source=source,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            before_json=_json(before) if before is not None else None,
-            after_json=_json(after) if after is not None else None,
-            status=status,
-            error_message=error_message,
-            created_at=_now(),
-        )
-        self.session.add(event)
-        await self.session.flush()
-        return event
-
-    async def list_audit_events(self, limit: int = 100, offset: int = 0, **filters):
-        stmt = select(AuditEvent)
-        for attr in ["actor_id", "repository_id", "resource_type", "action"]:
-            value = filters.get(attr)
-            if value is not None:
-                stmt = stmt.where(getattr(AuditEvent, attr) == value)
-        result = await self.session.execute(
-            stmt.order_by(AuditEvent.created_at.desc()).limit(limit).offset(offset)
-        )
-        return list(result.scalars().all())
-
-    async def get_audit_event(self, event_id: int) -> Optional[AuditEvent]:
-        return await self.session.get(AuditEvent, event_id)

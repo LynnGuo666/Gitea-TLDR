@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
-from app.services.db_service import DBService
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.services.repositories.audit_repository import AuditRepository
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +33,17 @@ def redact_payload(value: Any) -> Any:
 
 
 class AuditService:
-    """业务写操作的统一审计入口。"""
+    """业务写操作的统一审计入口。
 
-    def __init__(self, db_service: DBService):
-        self.db_service = db_service
+    依赖 `AsyncSession`（或已有的 `AuditRepository`），消除对 `DBService`
+    的反向依赖——audit 是独立领域，不再借用核心域服务落库。
+    """
+
+    def __init__(self, session_or_repo: "AsyncSession | AuditRepository"):
+        if isinstance(session_or_repo, AuditRepository):
+            self._repo = session_or_repo
+        else:
+            self._repo = AuditRepository(session_or_repo)
 
     async def record_success(
         self,
@@ -118,7 +127,7 @@ class AuditService:
     ) -> None:
         context = context or {}
         try:
-            await self.db_service.record_audit(
+            await self._repo.record_audit(
                 actor_id=actor_id,
                 actor_type=actor_type,
                 action=action,
