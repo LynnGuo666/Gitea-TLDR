@@ -14,7 +14,6 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.api.routes import create_api_router
 from tests.conftest import (
-    FAKE_REPO,
     DummyAuthManager,
     DummyDatabase,
     DummyRepoRegistry,

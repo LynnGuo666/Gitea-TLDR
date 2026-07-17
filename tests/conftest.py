@@ -8,6 +8,7 @@ import types
 from contextlib import asynccontextmanager
 from typing import Any
 
+import pytest
 from fastapi import HTTPException, Request, Response
 
 
@@ -220,3 +221,41 @@ class DummyRepoRegistry:
 
     def delete_secret(self, *_: Any) -> None:
         pass
+
+
+# ---------------------------------------------------------------------------
+# 真实 in-memory SQLite 测试 fixture（阶段 6 新增）
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def db():
+    """真实 in-memory SQLite Database，建表后 yield，teardown 关闭。
+
+    复用 app.core.database.Database（StaticPool + FK PRAGMA 已内置），
+    让 DBService / WebhookRepository / UsageRepository / AuditService 能
+    驱动真实 ORM 落库，供 _perform_review 端到端测试使用。
+    """
+    from app.core.database import Database
+
+    database = Database("sqlite+aiosqlite:///:memory:")
+
+    async def _setup():
+        await database.init()
+        await database.create_tables()
+
+    async def _teardown():
+        await database.close()
+
+    asyncio.run(_setup())
+    yield database
+    asyncio.run(_teardown())
+
+
+@pytest.fixture()
+def db_session_factory(db):
+    """返回一个 async context manager 工厂：`async with factory() as session:`。
+
+    便于在需要直接拿 AsyncSession 的测试里复用同一 in-memory DB。
+    """
+    return db.session

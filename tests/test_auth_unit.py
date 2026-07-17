@@ -160,11 +160,10 @@ def test_get_session_expired_returns_none(monkeypatch: pytest.MonkeyPatch) -> No
     from fastapi import FastAPI
 
     app = FastAPI()
-    client = TestClient(app, cookies={"gitea_session": session_id})
+    TestClient(app, cookies={"gitea_session": session_id})
 
     # 通过 Request 对象调用 get_session
     from starlette.requests import Request as StarletteRequest
-    from starlette.datastructures import Headers
 
     scope = {
         "type": "http",
