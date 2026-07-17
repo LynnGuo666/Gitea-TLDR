@@ -66,6 +66,16 @@
 
 - 新增 `tests/test_review_engine.py`：覆盖默认 provider 懒加载、未知 engine 退回 forge、构造异常 fallback 三类核心路径
 
+## [2.2.5] - 2026-05-18
+
+### 优化 (Improved)
+
+- **场景配置 Tab 改版**: 场景选择改为卡片式双选（PR 审查 / Issue 分析），Engine 改为预设下拉（Forge/Claude Code CLI/Codex CLI），Wire API 改为协议下拉，Features 改为行内评论开关，新增 `is_active` 场景启用开关，移除多余的 focus textarea，字段标签中文化，错误提示去除原始变量名
+
+### 维护 (Maintenance)
+
+- **版本一致性**: 同步更新后端与前端版本号到 `2.2.5`
+
 ## [2.2.4] - 2026-05-14
 
 ### 修复 (Fixed)
@@ -82,6 +92,72 @@
 ### 维护 (Maintenance)
 
 - **版本一致性**: 同步更新后端与前端版本号到 `2.2.4`
+
+## [2.2.3] - 2026-05-14
+
+### 移除 (Removed)
+
+- 删除首页「所有仓库均显示为只读」警告横幅，保留权限筛选等功能性逻辑
+
+## [2.2.2] - 2026-05-13
+
+### 优化 (Improved)
+
+- **审查评论引擎信息**: PR 审查评论底部统一附加审查引擎与模型信息（格式：*审查引擎：Forge · 模型：claude-opus-4-5*），覆盖变更概览和审查发现两条评论
+
+## [2.2.1] - 2026-05-13
+
+### 增强 (Improved)
+
+- **Forge review 提示词升级**: 补充基本规则（新版本行号、行号跨度 ≤100）、Step 5.5 自我验证二次审查、Mermaid 完整指南（变更规模决图数量、业务流/技术流区分、正反例对比、完整颜色表）
+- **禁止评论类型约束**: Forge review 提示词新增全套禁止评论类型约束（纯描述、夸赞、变更叙述、不确定措辞、格式风格）、跳过文件清单、UI 代码处理规则、上下文优先原则
+- **Forge issue 提示词升级**: 完整融入证据驱动方法论——假设状态三分类（已证实/已推翻/无法确认）、证据门硬约束、假设格式规范及四条具体示例
+
+### 修复 (Fixed)
+
+- 移除 webhook_handler 中冗余的 `_build_inline_section` 文本兜底，行内批注统一通过 Gitea 正式 review 接口发送
+
+## [2.2.0] - 2026-05-13
+
+### 增强 (Improved)
+
+- **Forge 7 步工作流**: Forge 提示词重设计为 7 步工作流（了解结构→读取上下文→推断意图→生成 Mermaid 概览→扫描问题→构建问题表格→提交），替代原简单 prompt
+- **PR 审查结果拆分两条评论**: 评论1 为变更概览（含意图说明与 Mermaid 流程图），评论2 仅在有发现时创建（问题表格 + 行内批注正文），行内批注不再单独发 Gitea review
+- **Issue 假设驱动分析**: Issue 分析采用假设驱动根因分析流程——先提出 3-5 个可证伪假设，再用工具代码级验证，最终基于已证实假设给出修复方案
+- **CLI provider prompt 升级**: 新增意图推断步骤，输出结构扩展为 `pr_overview_markdown` + `summary_markdown` 双段 JSON
+- **行内批注上限**: 行内批注上限从 5 条提升至 10 条（非强制）
+
+### 架构 (Architecture)
+
+- `ReviewResult` 新增 `pr_overview_markdown` 字段；`submit_review` 工具 schema 同步更新；`ForgeProvider._convert_result()` 映射新字段
+- `webhook_handler` 新增 `_build_inline_section()` 辅助方法，将行内批注渲染为 Markdown 文本追加在第二条评论正文
+
+## [2.1.0] - 2026-05-13
+
+### 重构 (Refactored)
+
+- **services 按职责拆分**: 将 `app/services/` 按职责拆分为三个独立子包——`app/gitea/`（Gitea 连接适配）、`app/review/`（AI 审查编排）、`app/services/`（纯数据基础设施），消除模块边界混淆，提升代码内聚性
+
+## [2.0.7] - 2026-05-13
+
+### 新增功能 (Added)
+
+- **仓库配置 4-Tab 布局**: 仓库配置页面恢复 4-Tab 布局（自动审查 / 审查方向 / 场景配置 / 最新 PR），替代原单页平铺表单
+
+## [2.0.6] - 2026-05-11
+
+### 移除 (Removed)
+
+- **删除 ConfigTemplate 层**: 删除 ConfigTemplate（系统级可复用模板）层，仓库配置回归直接管理方式，无需从模板初始化
+- **清理模板端点**: 清理前后端全部模板相关端点（GET/POST/PUT/DELETE `/config-templates`、`from-template`、`apply-template`）
+
+### 修复 (Fixed)
+
+- **权限检查 token 修正**: `/repos/{owner}/{repo}/permissions` 改为使用当前登录用户的 OAuth token 进行权限检查，修复始终返回 `admin=true` 导致只读模式从未生效的 bug
+
+### 数据迁移 (Database)
+
+- 新增 Alembic 迁移 `e1f2a3b4c5d6`，DROP `config_templates` 表并删除 `repository_configs` 的 `source_template_id` / `template_version_copied_at` 字段
 
 ## [2.0.5] - 2026-05-11
 
@@ -155,6 +231,60 @@
 
 - **版本一致性**: 同步更新后端与前端版本号到 `2.0.0`
 
+## [1.30.0] - 2026-04-30
+
+### 变更 (Changed)
+
+- 新增：ForgeSession 数据模型，记录 Forge agentic loop 完整运行状态（scenario、status、turns、tool_calls_count、messages_json、token 用量）
+- 新增：DB Service 提供 Provider run 创建、完成、列表与详情查询方法
+- 新增：webhook_handler 与 issue_analysis_service 在调用 Forge 前创建 ForgeSession，完成后记录 messages 与用量
+- 新增：API 端点 GET /api/forge/sessions（列表）与 GET /api/forge/sessions/{session_id}（详情含完整 messages）
+- 新增：前端 /forge 页面，展示 Forge 会话列表，支持 all/review/issue 筛选，可展开查看完整思维链与工具调用历史
+- 新增：前端导航栏新增 Forge 会话入口（Cpu 图标）
+- 新增：ForgeProvider 在 usage_metadata 中传递 forge_messages，供上层记录
+- 新增：Alembic 迁移 b9e4f1a2c3d5，创建 forge_sessions 表及索引
+- 维护：同步更新前后端版本号到 1.30.0
+## [1.29.1] - 2026-04-29
+
+### 变更 (Changed)
+
+- 优化：个人设置页将 AI 审查配置与 Issue 分析配置改为横向 Tab 切换，减少页面滚动
+- 新增：Tab 内顶部新增跨配置同步按钮，可一键将对侧 Base URL 与 Model ID 复制到当前配置
+- 维护：同步更新前后端版本号到 1.29.1
+## [1.29.0] - 2026-04-29
+
+### 变更 (Changed)
+
+- 重构：统一路由命名，review/issue 配置改用 ?type=review|issue 查询参数
+- 重构：/config/global?type=review|issue 替代原 provider-global / issue-global 三套路由
+- 重构：/repos/{owner}/{repo}/config?type=review|issue 替代原 claude-config / provider-config / issue-config
+- 新增：scripts/fix-permissions.sh 一键修复 review-workspace 目录权限
+- 维护：前端类型重命名 GlobalProviderConfig→GlobalReviewConfig、RepoProviderConfig→RepoReviewConfig
+## [1.28.3] - 2026-04-29
+
+### 变更 (Changed)
+
+- 修复：Docker named volume 初始化为 root 属主导致容器无法创建数据库文件
+- 修复：docker-compose 改用 bind mount 消除卷权限不匹配
+- 优化：Issue 分析重点设置从文本框改为卡片切换（缺陷排查/重复检测/设计分析/性能评估/问题解答），点击即时保存
+- 优化：默认分析重点移至仓库配置页（仓库级别），从全局个人设置中移除
+- 维护：加密服务 PermissionError 增加详细诊断与恢复指引
+- 维护：Dockerfile 显式指定 appuser UID=1000 对齐 compose 的 user 设置
+- 维护：同步更新后端与前端版本号到 1.28.3
+## [1.28.2] - 2026-04-29
+
+### 变更 (Changed)
+
+- 优化：Issue 配置区域新增状态横幅，继承模式下展示只读摘要卡片，全局无配置时自动展开本地配置表单
+- 新增：个人设置页面新增「全局 Issue 分析配置」，支持配置 Forge Base URL / API Key / 模型 / 分析重点 / 自定义提示词
+- 新增：后端配置健康检查接口 GET /api/repos/{owner}/{repo}/config-health，返回 PR 审查与 Issue 分析的配置状态
+- 维护：同步更新后端与前端版本号到 1.28.2
+## [1.28.1] - 2026-04-29
+
+### 变更 (Changed)
+
+- 修复：组织仓库权限检查支持团队级仓库管理员，通过团队获得仓库 admin 权限的成员现在可以配置 webhook/审查设置/Provider 配置
+- 维护：同步更新后端与前端版本号到 1.28.1
 ## [1.28.0] - 2026-04-24
 
 ### 安全 (Security)
@@ -333,6 +463,14 @@
 
 - **版本一致性**: 同步更新后端与前端版本号到 `1.26.0`
 
+## [1.25.0] - 2026-04-13
+
+### 变更 (Changed)
+
+- 新增：运行时配置热更新机制，8 个行为配置字段（default_provider、default_review_focus、auto_request_reviewer、bot_username、claude_usage_proxy_enabled/debug、webhook_log_retention_days[_failed]）现可在管理后台 /admin/config 直接修改，无需重启
+- 新增：app/core/runtime_settings.py 模块级缓存，启动时从 DB 加载配置，前端写入后立即同步生效
+- 新增：应用启动时自动将上述字段的 .env 默认值 seed 至 AdminSettings 表
+- 维护：同步更新后端与前端版本号到 1.25.0
 ## [1.24.0] - 2026-04-10
 
 ### 重构 (Refactored)
@@ -376,6 +514,28 @@
 
 - **版本一致性**: 同步更新后端与前端版本号到 `1.23.3`
 
+## [1.23.2] - 2026-04-08
+
+### 变更 (Changed)
+
+- 修复：ClaudeCodeProvider 将 diff 内容直接嵌入 prompt，不再依赖 stdin 传递，确保 Claude Code CLI 能读取到完整 diff
+- 新增：Claude Code CLI 调用时以 INFO 级别记录完整输入 prompt 与输出内容，便于排查审查质量问题
+- 维护：同步更新后端与前端版本号到 1.23.2
+## [1.23.1] - 2026-04-08
+
+### 变更 (Changed)
+
+- 修复：更新日志时间线最后一个版本卡片底部悬线问题，时间线现在正确截止
+- 修复：版本历史排序改为语义化版本排序（semver），修复 1.9.x 排在 1.10.x 之后的顺序错误
+- 维护：同步更新后端与前端版本号到 1.23.1
+## [1.23.0] - 2026-04-08
+
+### 变更 (Changed)
+
+- 新增：更新日志时间线页面（/changelog），以版本卡片形式展示完整变更历史
+- 新增：后端 /changelog/json 公开端点，返回结构化版本历史 JSON
+- 优化：侧边栏/移动端头像下拉菜单新增「更新日志」入口，支持快速跳转
+- 维护：同步更新后端与前端版本号到 1.23.0
 ## [1.22.10] - 2026-04-08
 
 ### 优化 (Improved)
@@ -390,6 +550,16 @@
 
 - **版本一致性**: 同步更新后端与前端版本号到 `1.22.10`
 
+## [1.22.9] - 2026-04-08
+
+### 变更 (Changed)
+
+- 修复：仓库级配置存在但未设置 api_url 时，自动从全局配置继承 api_url 和 api_key，解决已有全局配置仍报错'未配置 api_url'的问题
+- 安全：ClaudeCodeProvider 环境变量传递策略改为白名单，防止 DATABASE_URL/SECRET_KEY 等应用敏感配置泄露给 CLI 子进程
+- 安全：CLI 子进程的 stdout/stderr 写入日志前进行脱敏处理，防止 API key 等凭证信息进入日志
+- 重构：提取 _run_cli 私有方法消除 analyze_pr 与 analyze_pr_simple 约 90% 重复代码
+- 修复：diff 截断改为按 UTF-8 字节数计算（MAX_DIFF_BYTES），避免中文内容超限 3 倍
+- 修复：JSON 提取的 markdown 代码块解析改用 brace scanner，避免非贪婪 regex 在嵌套结构中提前截断
 ## [1.22.8] - 2026-04-03
 
 ### 修复 (Fixed)
@@ -519,6 +689,13 @@
 
 - **版本一致性**: 同步更新后端与前端版本号到 `1.22.1`
 
+## [1.22.0] - 2026-03-27
+
+### 变更 (Changed)
+
+- 新增：Claude Provider 通过嵌入式 HTTP 代理拦截 Anthropic API 响应，捕获真实 input_tokens / output_tokens
+- 优化：用量统计从粗略估算（diff_size//4+500）升级为 API 真实 token 数据
+- 维护：同步更新前后端版本号到 1.22.0
 ## [1.21.6] - 2026-03-20
 
 ### 安全 (Security)
@@ -835,6 +1012,48 @@
 - **审查历史信息完整性**: 列表页补充“审查方向”与“失败原因”展示，展开详情移除 `main <- feature` 分支信息，仅保留必要的 Commit 信息
 - **审查方向落库时机修复**: 调整审查会话创建顺序，先解析并确定 focus/features 再持久化，避免方向显示为空
 
+## [1.17.0] - 2026-02-14
+
+### 变更 (Changed)
+
+- 调整：全局 AI 审查配置从用户中心拆分到独立的个人设置页面
+- 优化：新增侧边栏“个人设置”入口，并同步仓库页文案引用
+- 修复：移除 model_configs.anthropic_auth_token 旧字段映射，避免 SQLite 列不存在错误
+## [1.16.0] - 2026-02-14
+
+### 变更 (Changed)
+
+- 新增：前端引擎下拉选择器，全局设置和仓库配置页均可选择审查引擎
+- 调整：全局 AI 审查配置从用户中心拆分到独立的个人设置页面
+- 新增：GET /api/providers 端点，返回已注册的审查引擎列表
+- 新增：provider_name 字段贯穿后端 API 与前端状态
+- 优化：Base URL / API Key 占位符随引擎选择动态切换
+- 优化：Docker 镜像同时预装 Claude Code CLI 和 Codex CLI
+## [1.15.0] - 2026-02-14
+
+### 变更 (Changed)
+
+- 新增：CodexProvider（OpenAI Codex CLI）审查引擎实现
+- 新增：CODEX_CLI_PATH / CODEX_API_KEY 配置项
+- 优化：ReviewEngine 支持多 CLI 路径动态选择
+## [1.14.0] - 2026-02-14
+
+### 变更 (Changed)
+
+- 重构：引入 Provider/Adapter 模式，支持多审查引擎（Claude Code、Codex 等）
+- 新增：ReviewProvider 抽象基类、ClaudeCodeProvider 实现、ProviderRegistry 注册表
+- 新增：ReviewEngine 统一入口，根据配置路由到对应 Provider
+- 新增：API 端点 /api/config/provider-global 与 /api/repos/{owner}/{repo}/provider-config
+- 重构：数据库字段重命名 anthropic_* → provider_*，claude_api_calls → provider_api_calls
+- 优化：保留旧 API 端点与字段别名，确保向后兼容
+- 优化：前端 AI 审查配置 Tab 更新为 Provider 抽象命名
+## [1.13.1] - 2026-02-13
+
+### 变更 (Changed)
+
+- 优化：移动端导航改为顶部标题栏 + 下拉菜单，避免侧边栏挤压页面
+- 优化：移动端导航下拉增加过渡动画并采用悬浮层显示，不再推动正文下移
+- 优化：增强导航玻璃层不透明度，提升可读性
 ## [1.13.0] - 2026-02-13
 
 ### 优化 (Improved)
@@ -1344,3 +1563,4 @@
 ---
 
 **注**: 未来版本的更新日志将在此文件顶部按时间倒序添加。
+

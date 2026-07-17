@@ -1,20 +1,22 @@
-# LCPU AI Reviewer
+# Gitea TLDR
 
-基于多引擎（Forge / Claude Code / Codex CLI）的 Gitea Pull Request 自动审查 & Issue 分析工具。
+基于多引擎的 Gitea Pull Request 自动审查 & Issue 分析工具。默认使用 **Forge** 引擎（原生 Anthropic Messages API agentic loop，无需安装任何 CLI）；`claude_code` / `codex_cli` 作为 legacy extras，按需启用。
 
-**当前版本**: v1.27.0 | **发布日期**: 2026-04-20
+**当前版本**: v2.4.0 | **发布日期**: 2026-07-17
 
 ## 功能特性
 
 - **PR 自动审查**: 接收 Gitea webhook，PR 创建/更新时自动触发
-- **Issue 智能分析**: 对 Issue 进行 AI 分析，自动归类、提供解决方案、支持 `/issue --focus bug,duplicate,design` 参数
-- **手动触发**: PR 评论中使用 `/review` 命令触发审查，Issue 评论中使用 `/issue` 触发分析
-- **多审查引擎**: 支持 Forge、Claude Code、Codex CLI，可按仓库灵活配置；Issue 分析目前仅 Forge 引擎支持
+- **Issue 智能分析**: 对 Issue 进行 AI 分析，自动归类、提供解决方案，支持 `/issue --focus bug,duplicate,design` 参数
+- **手动触发**: PR 评论中用 `/review` 触发审查，Issue 评论中用 `/issue` 触发分析
+- **Forge 默认引擎**: 基于 Anthropic Messages API 的原生 agentic 审查引擎，支持工具调用循环（`read_file` / `search_code` / `list_directory` / `submit_review`），无需依赖 Claude Code CLI 或 Codex CLI 中间层
+- **Legacy CLI extras**: `claude_code` / `codex_cli` 仍可用，需 `ENABLE_LEGACY_PROVIDERS=true` 并用对应 Docker 镜像 target 构建
 - **完整上下文**: 克隆完整代码库，为 AI 提供充分的项目上下文
 - **多维度审查**: 代码质量、安全漏洞、性能问题、逻辑错误
-- **灵活输出**: PR 评论、PR 审查、提交状态（可通过标头或命令参数控制）
+- **灵活输出**: PR 评论（变更概览 + 审查发现两条）、PR 行内 Review、提交状态
 - **管理后台**: Dashboard、用户管理、仓库管理、配置管理、Webhook 日志
 - **OAuth 登录**: 支持使用 Gitea 账号登录前端
+- **用量统计**: 真实 token 用量（input/output/cache）落库与可视化
 
 ## 技术栈
 
@@ -23,31 +25,33 @@
 | 后端 | FastAPI + SQLAlchemy/Alembic + PyNaCl 加密 |
 | 前端 | Next.js (Pages Router) + HeroUI + Tailwind CSS |
 | 数据库 | SQLite（默认）+ aiosqlite 异步引擎 |
-| 审查引擎 | Forge（内置）/ Claude Code CLI / Codex CLI |
+| 审查引擎 | Forge（默认，内置）/ Claude Code CLI / Codex CLI（legacy extras） |
 | 部署 | Docker + Docker Compose |
+| 依赖管理 | uv（lockfile 可复现） |
 
 ## 安装部署
 
 ### 环境要求
 
-- Python 3.11+、Node.js 20+、Git
-- Forge 无需额外安装；如需 Claude Code / Codex CLI 请自行安装
+- Python 3.11+、Node.js 20+、Git、[uv](https://docs.astral.sh/uv/)
+- Forge 无需额外安装；如需 legacy CLI provider 请自行安装 Claude Code / Codex CLI
 
-### 快速开始
+### 快速开始（uv 流程）
 
 ```bash
 git clone <repository-url> && cd gitea-tldr
 
-# 安装依赖
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cd frontend && npm install && npm run build && cd ..
+# 安装依赖（uv 会按 uv.lock 锁定版本，自动管理 Python 3.11）
+uv sync --extra dev
+
+# 构建前端静态产物
+cd frontend && npm ci && npm run build && cd ..
 
 # 配置
 cp .env.example .env   # 编辑 .env 填写必要配置
 
 # 启动（数据库迁移自动执行）
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 前端控制台地址：`http://localhost:8000/ui`
@@ -62,9 +66,14 @@ GITEA_TOKEN=your_gitea_access_token_here
 # 可选
 WEBHOOK_SECRET=your_webhook_secret_here
 DEFAULT_PROVIDER=forge          # 默认 forge；启用 legacy 后还可选 claude_code / codex_cli
-ENABLE_LEGACY_PROVIDERS=false   # 默认关闭。开启后才会注册 claude_code/codex_cli CLI provider
+ENABLE_LEGACY_PROVIDERS=false   # 默认关闭。开启后才会注册 CLI provider
 BOT_USERNAME=pr-reviewer-bot
 WORK_DIR=./review-workspace
+
+# Forge 引擎（使用 Forge 作为审查引擎时配置）
+FORGE_BASE_URL=https://api.anthropic.com
+FORGE_API_KEY=your_anthropic_api_key_here
+FORGE_MODEL=claude-sonnet-4-20250514
 
 # OAuth（前端登录）
 OAUTH_CLIENT_ID=...
@@ -107,14 +116,20 @@ X-Review-Focus: quality,security,performance,logic
 ### Docker 部署
 
 ```bash
-# Docker Compose（推荐）
+# Docker Compose（推荐，默认 runtime target，仅 Forge）
 cp .env.example .env
 docker compose -f docker/docker-compose.yml up -d
 
 # 或拉取预构建镜像
 docker pull ghcr.io/lynnguo666/gitea-tldr:main
 docker run -d --name gitea-tldr -p 8000:8000 --env-file .env \
-  -v $(pwd)/data:/tmp/gitea-tldr ghcr.io/lynnguo666/gitea-tldr:main
+  -v $(pwd)/review-workspace:/app/review-workspace ghcr.io/lynnguo666/gitea-tldr:main
+```
+
+需要 legacy CLI provider（`claude_code` / `codex_cli`）时，改用 `runtime-with-legacy` target 自行构建镜像：
+
+```bash
+docker build -f docker/Dockerfile --target runtime-with-legacy -t gitea-tldr:legacy .
 ```
 
 ## 安全特性
@@ -123,28 +138,19 @@ docker run -d --name gitea-tldr -p 8000:8000 --env-file .env \
 - **Webhook 签名验证**: HMAC-SHA256 校验
 - **权限控制**: 管理接口强校验身份，Fail-Closed 原则
 - **API 响应脱敏**: 敏感字段返回掩码
+- **子进程凭证隔离**: CLI provider 子进程环境白名单传递，过滤父进程凭证
 
 ## 开发
 
+详见 [CONTRIBUTING.md](CONTRIBUTING.md)。开发验证命令：
+
 ```bash
-# 安装开发测试依赖
-python -m pip install -r requirements-dev.txt
+# 后端
+uv run ruff check app && uv run mypy app && uv run pytest -m "not live"
 
-# 测试
-pytest
-
-# 代码检查
-ruff check app tests
-mypy app
+# 前端
 cd frontend && npm run lint && npx tsc --noEmit && npm run build
 ```
-
-## 2.0 数据库迁移说明
-
-- 业务 API 统一使用 `/api/v2/*`。
-- 运行时配置不再从全局配置继承，仓库必须先从模板初始化 `repository_configs`。
-- API Key 只存放在 `provider_credentials`，仓库配置只引用 `credential_id`。
-- Alembic 迁移会在 SQLite 下自动备份数据库，并将旧表重命名为 `legacy_*`。
 
 ## 故障排查
 
@@ -152,10 +158,11 @@ cd frontend && npm run lint && npx tsc --noEmit && npm run build
 |------|----------|
 | Webhook 未触发 | 检查 Gitea Webhook 配置、端口可达性、WEBHOOK_SECRET 一致性 |
 | 仓库克隆失败 | 确认 GITEA_TOKEN 权限充足、磁盘空间足够 |
-| 审查引擎调用失败 | 确认 CLI 已安装（`claude --version`/`codex --version`），路径配置正确 |
+| Forge 调用失败 | 检查 FORGE_BASE_URL / FORGE_API_KEY / FORGE_MODEL 配置 |
+| Legacy CLI 调用失败 | 确认用 `runtime-with-legacy` target 构建镜像、CLI 已安装、`ENABLE_LEGACY_PROVIDERS=true` |
 | OAuth 登录失败 | 检查 OAUTH_CLIENT_ID/SECRET/REDIRECT_URL 配置 |
-| 数据库迁移失败 | 确保数据库目录有写入权限，查看 alembic 日志 |
+| 数据库迁移失败 | 确保数据库目录有写入权限，查看 alembic 日志；entrypoint 已对 v2.3.0 回退环境容错 |
 
 ## 许可证
 
-MIT License — 如有问题请提交 Issue。
+[MIT License](LICENSE) — 如有问题请提交 Issue。
