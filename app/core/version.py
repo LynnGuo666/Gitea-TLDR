@@ -2,8 +2,8 @@
 版本信息模块
 """
 
-__version__ = "2.2.6"
-__release_date__ = "2026-05-25"
+__version__ = "2.4.0"
+__release_date__ = "2026-07-17"
 __author__ = "LynnGuo666"
 
 
@@ -17,6 +17,20 @@ def _semver_key(v: str) -> tuple[int, ...]:
 
 # 版本历史
 VERSION_HISTORY = {
+    "2.4.0": {
+        "date": "2026-07-17",
+        "changes": [
+            "修复：v2.3.0（tag 区间审查 + 飞书推送）已在 4f3e23e 永久回退，但原 0003 迁移文件一并删除导致曾升级环境的 alembic 版本号悬空，启动报 Can't locate revision identified by '0003'——新建迁移 0004 幂等 drop analysis_runs.from_tag/to_tag，entrypoint 容错 stamp 0002 --purge 后重试，DATABASE_SCHEMA.md 补回退指引",
+            "优化：迁移 0005 补齐 6 个高频索引（analysis_runs.started_at/completed_at、webhook_events.created_at、audit_events.created_at、provider_runs.started_at、复合索引 repository_id+kind+external_number+head_sha）、删除 repositories 冗余单列索引、删除 usage_events.provider_run_id 死列",
+            "重构：DBService 按职责拆分为 AuditRepository / WebhookRepository / UsageRepository 三个独立 Repository（各注入 AsyncSession），DBService 从 818 行/46 方法降至 634 行/36 方法；AuditService 改依赖 AsyncSession 消除反向依赖",
+            "重构：database.py 加回 SQLite FK PRAGMA（event.listens_for connect 设 PRAGMA foreign_keys=ON），让 ondelete=CASCADE/SET NULL 真正生效",
+            "重构：清理模型层技术债——删 AnalysisRun 13 个零引用兼容 property、AnalysisAnnotation path/comment、Actor.is_super_admin、Repository.repo_name、User=Actor 兼容别名、DBService.get_usage_stats/update_issue_settings 死方法；list_repositories/list_provider_credentials/list_usage_events 加 limit/offset 分页",
+            "前端：tsconfig target es5→es2020、moduleResolution node→bundler；移除未用的 @radix-ui/react-select/@radix-ui/react-slot/class-variance-authority 与 shadcn components.json、GiteaLogo 死代码",
+            "修复：settings 页 reviewCount 读 events 字段（原误读 details 永远 0）；repo 配置页 saveConfig 不再硬编码 engine=forge/wire_api=null，改读表单；apiFetch 默认 credentials:include + 新增 apiFetchJson 统一 JSON 解析与 401 处理",
+            "前端：新增 useApiFetch hook + EmptyState/ErrorState 组件，issues/reviews/forge/usage/admin 子页统一接入 loading/error/empty 三态，消除静默吞错",
+            "前端：admin dashboard 补 6 个子页面导航卡片；issues/reviews 列表项可点击弹出 RunDetailModal 查看摘要与行级注释；暗色硬编码 -50 色统一改 alpha token；页面标题统一为 'XXX - Gitea TLDR'",
+        ],
+    },
     "2.2.6": {
         "date": "2026-05-25",
         "changes": [

@@ -4,6 +4,40 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
+## [2.4.0] - 2026-07-17
+
+### 概述
+
+开源前的前端 + 数据库健康度优化。基于 `2.2.6` 基线，分 5 个阶段落地；v2.3.0（tag 区间审查 + 飞书推送）已在 `4f3e23e` 永久回退，本次不复用 2.3.0 版本号。
+
+### 数据库 (Database)
+
+- **修回退运维坑 (P0)**：曾升级到 v2.3.0(0003) 又 revert 的环境，`alembic_version` 悬停在 0003 但迁移文件已删除，启动报 `Can't locate revision identified by '0003'`。新建迁移 `0004` 幂等 drop `analysis_runs.from_tag`/`to_tag`；`docker-entrypoint.sh` 检测到此错误自动 `alembic stamp 0002 --purge` 后重试，环境自愈无需人工干预。
+- **DB 优化 (迁移 0005)**：补齐 6 个高频排序/过滤索引（`analysis_runs.started_at`/`completed_at`、`webhook_events.created_at`、`audit_events.created_at`、`provider_runs.started_at`、复合索引 `repository_id+kind+external_number+head_sha` 优化 `get_review_run_by_head`）；删除 `repositories` 冗余单列索引（UQ 已覆盖）；删除 `usage_events.provider_run_id` 死列（永远 NULL）。
+- **FK PRAGMA 生效**：`database.py` 通过 `event.listens_for(sync_engine, "connect")` 为每条 SQLite 连接设 `PRAGMA foreign_keys=ON`，让 `ondelete=CASCADE/SET NULL` 真正生效。
+
+### 重构 (Refactored)
+
+- **DBService 拆分三个 Repository**：按职责拆出 `AuditRepository` / `WebhookRepository` / `UsageRepository`（各注入 `AsyncSession`，与 `DBService(session)` 对称），DBService 从 818 行/46 方法降至 634 行/36 方法，audit/webhook/usage 方法清零。`AuditService` 改依赖 `AsyncSession` 消除对 `DBService` 的反向依赖。
+- **模型技术债清理**：删 `AnalysisRun` 13 个零引用兼容 property、`AnalysisAnnotation.path`/`comment`、`Actor.is_super_admin`、`Repository.repo_name`、`User = Actor` 兼容别名、`AuthSession.session_token_hash` 冗余 `index`；删 `DBService.get_usage_stats`/`update_issue_settings` 死方法；`list_repositories`/`list_provider_credentials`/`list_usage_events` 加 `limit`/`offset` 分页。
+
+### 前端 (Frontend)
+
+- **技术栈对齐**：`tsconfig` target `es5→es2020`、moduleResolution `node→bundler`。
+- **修 bug**：settings 页 `reviewCount` 读 `events` 字段（原误读 `details` 永远 0）；repo 配置页 `saveConfig` 不再硬编码 `engine=forge`/`wire_api=null`，改读表单；`apiFetch` 默认 `credentials:'include'` + 新增 `apiFetchJson` 统一 JSON 解析与 401 处理。
+- **统一三态**：新增 `useApiFetch` hook + `EmptyState`/`ErrorState` 组件，issues/reviews/forge/usage/admin 子页统一接入 loading/error/empty，消除 `.catch(()=>setX([]))` 静默吞错。
+- **补全空壳页面**：admin dashboard 补 6 个子页面导航卡片；issues/reviews 列表项可点击弹出 `RunDetailModal` 查看摘要与行级注释。
+- **体验打磨**：暗色硬编码 `-50` 色阶统一改 alpha token；页面标题统一为 `XXX - Gitea TLDR`；repo 详情页 PR 头像改用 `next/image`。
+- **清死代码**：删 `GiteaLogo`、shadcn `components.json`、未用的 `@radix-ui/react-select`/`@radix-ui/react-slot`/`class-variance-authority`、`Skeleton`/`CardSkeleton`（仅留 `RepoSkeleton`）。
+
+### 移除 (Removed)
+
+- v2.3.0 的 tag 区间审查、飞书推送功能（已在 `4f3e23e` 回退，本次仅清理遗留 schema 与兼容代码，不恢复功能）。
+
+### 维护 (Maintenance)
+
+- **版本一致性**：同步后端 `app/core/version.py`、前端 `package.json`、`frontend/lib/version.ts` 到 `2.4.0`。
+
 ## [2.2.6] - 2026-05-25
 
 ### 变更 (Changed)
