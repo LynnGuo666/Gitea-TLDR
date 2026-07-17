@@ -69,28 +69,6 @@ class Actor(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    @property
-    def username(self) -> str:
-        """兼容旧权限/认证代码中的 username 命名。"""
-        return self.external_username
-
-    @username.setter
-    def username(self, value: str) -> None:
-        self.external_username = value
-
-    @property
-    def permissions(self) -> Optional[str]:
-        """兼容旧权限服务中的 permissions 命名。"""
-        return self.permissions_json
-
-    @permissions.setter
-    def permissions(self, value: Optional[str]) -> None:
-        self.permissions_json = value
-
-    @property
-    def is_super_admin(self) -> bool:
-        return self.role == "super_admin"
-
 
 class AuthSession(Base, TimestampMixin):
     """登录会话。cookie token 只存 hash。"""
@@ -99,7 +77,7 @@ class AuthSession(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     session_token_hash: Mapped[str] = mapped_column(
-        String(64), unique=True, nullable=False, index=True
+        String(64), unique=True, nullable=False
     )
     actor_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("actors.id", ondelete="SET NULL"), nullable=True, index=True
@@ -162,16 +140,6 @@ class Repository(Base, TimestampMixin):
     full_name: Mapped[str] = mapped_column(String(511), nullable=False, index=True)
     webhook_secret_enc: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-
-    @property
-    def repo_name(self) -> str:
-        """兼容少量尚未清理的旧调用。"""
-        return self.name
-
-    @repo_name.setter
-    def repo_name(self, value: str) -> None:
-        self.name = value
-        self.full_name = f"{self.owner}/{value}"
 
     @property
     def webhook_secret(self) -> Optional[str]:
@@ -373,64 +341,6 @@ class AnalysisRun(Base, TimestampMixin):
 
     repository: Mapped[Repository] = relationship("Repository")
 
-    @property
-    def pr_number(self) -> int:
-        return self.external_number
-
-    @property
-    def issue_number(self) -> int:
-        return self.external_number
-
-    @property
-    def pr_title(self) -> Optional[str]:
-        return self.external_title
-
-    @property
-    def issue_title(self) -> Optional[str]:
-        return self.external_title
-
-    @property
-    def pr_author(self) -> Optional[str]:
-        return self.external_author
-
-    @property
-    def issue_author(self) -> Optional[str]:
-        return self.external_author
-
-    @property
-    def issue_state(self) -> Optional[str]:
-        return self.external_state
-
-    @property
-    def head_branch(self) -> Optional[str]:
-        return self.source_branch
-
-    @property
-    def base_branch(self) -> Optional[str]:
-        return self.target_branch
-
-    @property
-    def engine(self) -> Optional[str]:
-        return self.effective_engine
-
-    @property
-    def model(self) -> Optional[str]:
-        return self.effective_model
-
-    @property
-    def model_name(self) -> Optional[str]:
-        return self.effective_model
-
-    @property
-    def config_source(self) -> Optional[str]:
-        data = self.get_analysis_payload()
-        value = data.get("config_source")
-        return value if isinstance(value, str) else None
-
-    @property
-    def analysis_payload(self) -> Optional[str]:
-        return self.result_payload_json
-
     def get_analysis_payload(self) -> dict:
         import json
 
@@ -472,14 +382,6 @@ class AnalysisAnnotation(Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     suggestion: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-
-    @property
-    def path(self) -> Optional[str]:
-        return self.file_path
-
-    @property
-    def comment(self) -> str:
-        return self.body
 
 
 class ProviderRun(Base, TimestampMixin):

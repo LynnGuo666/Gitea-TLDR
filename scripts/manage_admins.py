@@ -25,10 +25,10 @@ async def add_admin(
 
     async with database.session() as session:
         # 检查用户是否已存在
-        from app.models import User
+        from app.models import Actor
         from sqlalchemy import select
 
-        stmt = select(User).where(User.username == username)
+        stmt = select(Actor).where(Actor.external_username == username)
         result = await session.execute(stmt)
         existing = result.scalar_one_or_none()
 
@@ -40,7 +40,7 @@ async def add_admin(
             return
 
         # 创建新管理员
-        admin = await create_user(
+        await create_user(
             session=session, username=username, email=email, role=role
         )
         await session.commit()
@@ -59,10 +59,10 @@ async def list_admins():
     await database.init()
 
     async with database.session() as session:
-        from app.models import User
+        from app.models import Actor
         from sqlalchemy import select
 
-        stmt = select(User).order_by(User.created_at.desc())
+        stmt = select(Actor).order_by(Actor.created_at.desc())
         result = await session.execute(stmt)
         admins = result.scalars().all()
 
@@ -73,7 +73,7 @@ async def list_admins():
         print(f"\n📋 当前管理员列表 ({len(admins)} 人):\n")
         for admin in admins:
             status = "✅ 激活" if admin.is_active else "❌ 未激活"
-            print(f"  - {admin.username}")
+            print(f"  - {admin.external_username}")
             print(f"    角色: {admin.role}")
             print(f"    状态: {status}")
             print(f"    创建时间: {admin.created_at}")

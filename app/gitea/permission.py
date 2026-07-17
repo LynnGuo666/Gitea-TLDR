@@ -7,12 +7,12 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.models import Actor as User
+    from app.models import Actor
 
 logger = logging.getLogger(__name__)
 
 
-def has_permission(user: "User", resource: str, action: str) -> bool:
+def has_permission(user: "Actor", resource: str, action: str) -> bool:
     """
     检查用户是否拥有指定资源的操作权限。
 
@@ -27,12 +27,12 @@ def has_permission(user: "User", resource: str, action: str) -> bool:
     if user.role == "super_admin":
         return True
 
-    if not user.permissions:
+    if not user.permissions_json:
         return action in ["read"]
 
     try:
-        perms = json.loads(user.permissions)
+        perms = json.loads(user.permissions_json)
         return action in perms.get(resource, [])
     except (json.JSONDecodeError, TypeError):
-        logger.warning("用户 %s 的 permissions 字段格式无效", user.username)
+        logger.warning("用户 %s 的 permissions 字段格式无效", user.external_username)
         return False

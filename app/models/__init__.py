@@ -27,16 +27,12 @@ from .schema import (
     WEBHOOK_STATUS_SUCCESS,
 )
 
-# 兼容还未完全清理的权限/依赖注入类型名；表和语义已经是 Actor。
-User = Actor
-
 DEFAULT_ISSUE_FOCUS = ["bug", "duplicate", "design"]
 
 __all__ = [
     "Base",
     "TimestampMixin",
     "Actor",
-    "User",
     "AuthSession",
     "AppSetting",
     "Repository",

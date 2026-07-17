@@ -7,13 +7,13 @@ from fastapi import HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Actor as User
+from app.models import Actor
 from app.gitea.permission import has_permission as check_permission
 
 logger = logging.getLogger(__name__)
 
 
-async def get_admin_user(session: AsyncSession, username: str) -> Optional[User]:
+async def get_admin_user(session: AsyncSession, username: str) -> Optional[Actor]:
     """获取管理员用户。
 
     Args:
@@ -23,11 +23,11 @@ async def get_admin_user(session: AsyncSession, username: str) -> Optional[User]
     Returns:
         可能为空的结果。
     """
-    stmt = select(User).where(
-        User.external_provider == "gitea",
-        User.external_username == username,
-        User.role.in_(["admin", "super_admin"]),
-        User.is_active.is_(True),
+    stmt = select(Actor).where(
+        Actor.external_provider == "gitea",
+        Actor.external_username == username,
+        Actor.role.in_(["admin", "super_admin"]),
+        Actor.is_active.is_(True),
     )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
@@ -39,7 +39,7 @@ async def create_user(
     email: Optional[str] = None,
     role: str = "user",
     permissions: Optional[str] = None,
-) -> User:
+) -> Actor:
     """创建用户。
 
     Args:
@@ -50,9 +50,9 @@ async def create_user(
         permissions: 权限字符串。
 
     Returns:
-        User 类型结果。
+        Actor 类型结果。
     """
-    user = User(
+    user = Actor(
         external_provider="gitea",
         external_username=username,
         display_name=username,
@@ -82,19 +82,19 @@ async def ensure_initial_admin(
     if not initial_username:
         return
 
-    stmt = select(User).where(
-        User.role == "super_admin",
-        User.is_active.is_(True),
+    stmt = select(Actor).where(
+        Actor.role == "super_admin",
+        Actor.is_active.is_(True),
     ).limit(1)
     result = await session.execute(stmt)
     existing = result.scalar_one_or_none()
 
     if not existing:
         initial_user_stmt = (
-            select(User)
+            select(Actor)
             .where(
-                User.external_provider == "gitea",
-                User.external_username == initial_username,
+                Actor.external_provider == "gitea",
+                Actor.external_username == initial_username,
             )
             .limit(1)
         )
@@ -115,7 +115,7 @@ async def check_admin_permission(
     request: Request,
     required_resource: Optional[str] = None,
     required_action: Optional[str] = None,
-) -> User:
+) -> Actor:
     """检查管理员权限。
 
     Args:
@@ -124,7 +124,7 @@ async def check_admin_permission(
         required_action: 需要校验的权限动作。
 
     Returns:
-        User 类型结果。
+        Actor 类型结果。
     """
     auth_status = getattr(request.state, "auth_status", None)
     if not auth_status or not auth_status.get("loggedIn"):
@@ -169,7 +169,7 @@ def admin_required(resource: Optional[str] = None, action: Optional[str] = None)
     Returns:
         可注入 FastAPI 路由的依赖函数。
     """
-    async def dependency(request: Request) -> User:
+    async def dependency(request: Request) -> Actor:
         """执行管理员权限校验。
 
         Args:

@@ -177,7 +177,7 @@ def _serialize_run(run) -> dict[str, Any]:
         "effective_model": run.effective_model,
         "engine": run.effective_engine,
         "model": run.effective_model,
-        "config_source": run.config_source,
+        "config_source": payload.get("config_source") if isinstance(payload.get("config_source"), str) else None,
         "overall_success": run.overall_success,
         "overall_severity": run.overall_severity,
         "summary_markdown": run.summary_markdown,
