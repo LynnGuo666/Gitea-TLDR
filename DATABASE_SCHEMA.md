@@ -446,3 +446,18 @@ Webhook 事件处理记录，用于追踪 Gitea webhook 的处理状态和重放
 4. 多个 JSON 字段使用 `Text` 保存，便于 SQLite 兼容，但复杂查询和数据校验依赖应用层。
 5. 审计表刻意弱化部分资源外键，以保留删除后的历史上下文。
 6. SQLite 默认部署时，需要额外关注外键 PRAGMA、并发写锁、大 JSON 字段增长和历史数据保留策略。
+
+## 从 v2.3.0 回退的迁移指引
+
+v2.3.0 引入的 tag 区间审查与飞书推送已在 `4f3e23e` 永久回退，其对应的迁移文件（原 `0003`）也已删除。曾升级到 v2.3.0 的环境，`alembic_version` 表仍停留在 `0003`，物理 schema 仍残留 `analysis_runs.from_tag` / `to_tag` 列。直接 `alembic upgrade head` 会报 `Can't locate revision identified by '0003'`。
+
+`0004` 迁移负责收敛这一差异：
+
+- **Docker 部署**：`docker/docker-entrypoint.sh` 已内置容错——`alembic upgrade head` 失败且 stderr 含 `Can't locate revision` 时，自动 `alembic stamp 0002 --purge` 后重试，无需人工干预。
+- **手动部署 / 本地**：执行一次即可自愈：
+  ```bash
+  uv run alembic stamp 0002 --purge   # 把版本号从 0003 重置到 0002
+  uv run alembic upgrade head         # 跑到 0004，幂等 drop from_tag/to_tag
+  ```
+
+`0004` 的 `upgrade()` 用 `_has_column` 幂等检查：从未升级到 v2.3.0 的环境（无 from_tag/to_tag 列）会安全跳过，曾升级的环境会实际 drop。`downgrade()` 为 no-op——tag_review 功能已永久移除，不还原这两列。
