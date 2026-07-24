@@ -1,8 +1,8 @@
 aiosqlite==0.22.1
 alembic==1.18.5
-fastapi==0.109.0
-greenlet==3.5.3
-httpx==0.26.0
+fastapi==0.140.0
+greenlet==3.5.4
+httpx==0.28.1
 
 # Chinese tokenization (for Issue similarity scoring)
 jieba==0.42.1
@@ -11,8 +11,8 @@ pydantic-settings==2.14.2
 
 # Encryption
 PyNaCl==1.6.2
-python-dotenv==1.0.0
+python-dotenv==1.2.2
 
 # Database
 sqlalchemy==2.0.51
-uvicorn[standard]==0.27.0
+uvicorn[standard]==0.51.0
